@@ -3,6 +3,7 @@ import '../models/auth_models.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/signalr_service.dart';
+import '../services/account_service.dart';
 
 class AuthState {
   final bool isLoading;
@@ -72,16 +73,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Save token
       await StorageService.saveToken(response.data!);
       
-      // Initialize SignalR with retry logic
-      try {
-        await SignalRService.init();
-        print('SignalR initialized successfully during login');
-      } catch (e) {
-        print('SignalR initialization failed: $e');
-        // Continue with login, SignalR will retry connection automatically
-      }
-
-      // For now, create dummy user data. In real app, you'd fetch this from API
+      // Create user data with proper structure
       final userData = UserData(
         userId: 1,
         displayName: username,
@@ -89,12 +81,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
         channels: [],
       );
 
-      await StorageService.saveUserData({
+      // Save user data with account mapping structure
+      final userDataMap = {
         'UserId': userData.userId,
         'DisplayName': userData.displayName,
         'TenantId': userData.tenantId,
         'Channels': [],
-      });
+        'CurrentUserId': userData.userId.toString(),
+      };
+      
+      await StorageService.saveUserData(userDataMap);
+      
+      // Initialize account mappings using the new service
+      try {
+        print('🔄 Initializing account mappings...');
+        await AccountService().initializeAccountMappings();
+        print('✅ Account mappings initialized successfully');
+      } catch (e) {
+        print('❌ Failed to initialize account mappings: $e');
+        // Continue with login even if account mapping fails
+      }
+      
+      // Initialize SignalR AFTER user data is saved
+      try {
+        print('🔌 Initializing SignalR after login...');
+        await SignalRService.init();
+        print('✅ SignalR initialized successfully during login');
+      } catch (e) {
+        print('❌ SignalR initialization failed during login: $e');
+        // Continue with login, SignalR will retry connection automatically
+      }
 
       state = state.copyWith(
         isLoading: false,

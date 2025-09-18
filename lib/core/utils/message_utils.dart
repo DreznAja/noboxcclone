@@ -33,7 +33,7 @@ class MessageUtils {
       case 1:
         return 'Text';
       case 2:
-        return '🔊 Audio';
+        return '🔊 Voice Note';
       case 3:
         return '🖼 Photo';
       case 4:
@@ -81,11 +81,37 @@ class MessageUtils {
     }
   }
 
+  static bool isLocationMessage(String? messageText) {
+    if (messageText == null) return false;
+    return messageText.contains('Location:') && 
+           messageText.contains('https://maps.google.com/maps?q=');
+  }
+
+  static Map<String, double>? parseLocationFromMessage(String messageText) {
+    final locationRegex = RegExp(r'Location: (-?\d+\.\d+), (-?\d+\.\d+)');
+    final match = locationRegex.firstMatch(messageText);
+    
+    if (match != null) {
+      final latitude = double.tryParse(match.group(1)!);
+      final longitude = double.tryParse(match.group(2)!);
+      
+      if (latitude != null && longitude != null) {
+        return {
+          'latitude': latitude,
+          'longitude': longitude,
+        };
+      }
+    }
+    
+    return null;
+  }
   static String getChannelName(int channelId) {
     switch (channelId) {
       case 1:
-      case 1557:
         return 'WhatsApp';
+      case 1557:
+      case 1561:
+        return 'WhatsApp Business';
       case 2:
         return 'Telegram';
       case 3:

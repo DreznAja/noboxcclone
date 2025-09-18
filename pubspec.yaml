@@ -42,7 +42,7 @@ dependencies:
   # Media and files
   video_player: ^2.8.1
   audioplayers: ^5.2.1
-  record: ^5.1.0
+  record: ^6.1.1
   path_provider: ^2.1.1
   
   # Location
@@ -69,13 +69,19 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   hive_generator: ^2.0.1
   build_runner: ^2.4.7
+  flutter_launcher_icons: ^0.14.4
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/nobox2.png"
 
 flutter:
   uses-material-design: true
   
-  # assets:
-  #   - assets/images/
-  #   - assets/animations/
+  assets:
+    - assets/nobox2.png
+    - assets/nobox.png
   #   - assets/icons/
   
   # fonts:

@@ -18,6 +18,8 @@ class Room {
   final bool isMuteBot;
   final List<String> tags;
   final String? funnel;
+  final String? funnelId;
+  final List<String> tagIds;
 
   Room({
     required this.id,
@@ -39,6 +41,8 @@ class Room {
     this.isMuteBot = false,
     this.tags = const [],
     this.funnel,
+    this.funnelId,
+    this.tagIds = const [],
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -64,6 +68,8 @@ class Room {
       isMuteBot: json['IsMuteBot'] == 1,
       tags: (json['Tags'] as String?)?.split(',').where((t) => t.isNotEmpty).toList() ?? [],
       funnel: json['Fn'],
+      funnelId: json['FnId']?.toString(),
+      tagIds: (json['TagsIds'] as String?)?.split(',').where((t) => t.isNotEmpty).toList() ?? [],
     );
   }
 
@@ -87,6 +93,7 @@ class ChatMessage {
   final String? replyFrom;
   final String? replyMessage;
   final String? replyFiles;
+  final String? replyGrpMember;
   final bool isEdited;
   final String? note;
 
@@ -107,10 +114,35 @@ class ChatMessage {
     this.replyFrom,
     this.replyMessage,
     this.replyFiles,
+    this.replyGrpMember,
     this.isEdited = false,
     this.note,
   });
 
+  // Helper method to convert to JSON for compatibility checks
+  Map<String, dynamic> toJson() {
+    return {
+      'Id': id,
+      'RoomId': roomId,
+      'From': from,
+      'To': to,
+      'AgentId': agentId,
+      'Type': type,
+      'Msg': message,
+      'File': file,
+      'Files': files,
+      'In': timestamp.toIso8601String(),
+      'Ack': ack,
+      'ReplyId': replyId,
+      'ReplyType': replyType,
+      'ReplyFrom': replyFrom,
+      'ReplyMsg': replyMessage,
+      'ReplyFiles': replyFiles,
+      'ReplyGrpMember': replyGrpMember,
+      'InteractiveType': isEdited ? 99 : null,
+      'Note': note,
+    };
+  }
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     print('Parsing message: $json');
     
@@ -131,6 +163,7 @@ class ChatMessage {
       replyFrom: json['ReplyFrom']?.toString(),
       replyMessage: json['ReplyMsg'],
       replyFiles: json['ReplyFiles'],
+      replyGrpMember: json['ReplyGrpMember'],
       isEdited: json['InteractiveType'] == 99,
       note: json['Note'],
     );
@@ -237,8 +270,8 @@ class UploadedFile {
 
   factory UploadedFile.fromJson(Map<String, dynamic> json) {
     return UploadedFile(
-      filename: json['Filename'] ?? '',
-      originalName: json['OriginalName'] ?? '',
+      filename: json['Filename'] ?? json['filename'] ?? '',
+      originalName: json['OriginalName'] ?? json['originalName'] ?? json['OriginalName'] ?? '',
     );
   }
 

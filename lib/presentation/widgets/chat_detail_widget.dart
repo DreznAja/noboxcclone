@@ -180,6 +180,7 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
                       message: message,
                       onReply: () => _handleReply(message),
                       onDelete: () => _handleDelete(message),
+                      showSenderInfo: true,
                     );
                   },
                 ),
@@ -239,14 +240,18 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
   }
 
   Widget _getChannelIcon(int channelId) {
-    Color color;
-    IconData icon;
+    Color color = AppTheme.textSecondary;
+    IconData icon = Icons.chat_bubble;
 
     switch (channelId) {
       case 1:
-      case 1557:
         color = const Color(0xFF25D366);
         icon = Icons.chat;
+        break;
+      case 1557:
+      case 1561:
+        color = const Color(0xFF25D366);
+        icon = Icons.business;
         break;
       case 2:
         color = const Color(0xFF0088CC);
@@ -264,9 +269,6 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
         color = const Color(0xFFEA4335);
         icon = Icons.email;
         break;
-      default:
-        color = AppTheme.textSecondary;
-        icon = Icons.chat_bubble;
     }
 
     return Icon(icon, size: 12, color: color);

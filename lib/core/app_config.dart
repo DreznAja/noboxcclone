@@ -4,6 +4,7 @@ class AppConfig {
   static const String authUrl = '${baseUrl}AccountAPI/';
   static const String inboxUrl = '${baseUrl}Inbox/';
   static const String signalRUrl = '${baseUrl}messagehub';
+  static const String uploadUrl = '${baseUrl}upload/';
   
   // API Endpoints
   static const String generateTokenEndpoint = 'AccountAPI/GenerateToken';
@@ -11,7 +12,7 @@ class AppConfig {
   static const String channelListEndpoint = 'Services/Master/Channel/List';
   static const String accountListEndpoint = 'Services/Nobox/Account/List';
   static const String inboxSendEndpoint = 'Inbox/Send';
-  static const String uploadBase64Endpoint = 'Inbox/UploadFile/UploadBase64';
+  static const String uploadBase64Endpoint = 'Inbox/UploadFile/ConvertBase64ToFile';
   
   // Storage Keys
   static const String tokenKey = 'auth_token';
@@ -53,6 +54,7 @@ class AppConfig {
   // Channel IDs
   static const Map<String, int> channelIds = {
     'whatsapp': 1,
+    'whatsappBusiness': 1561, // WhatsApp Business API channel ID
     'telegram': 2,
     'instagram': 3,
     'messenger': 4,
@@ -65,7 +67,6 @@ class AppConfig {
     'tokopedia': 1505,
     'olx': 1532,
     'blibliseller': 1556,
-    'whatsappBusiness': 1557,
     'tokopediaSeller': 1562,
     'noboxchat': 1569,
   };

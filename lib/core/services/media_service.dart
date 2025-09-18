@@ -2,14 +2,78 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:nobox_chat/core/models/chat_models.dart';
 import 'package:record/record.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../app_config.dart';
+import 'api_service.dart';
 
 class MediaService {
   static final ImagePicker _picker = ImagePicker();
   static final AudioRecorder _recorder = AudioRecorder();
+
+  // Upload base64 file using the correct endpoint
+  static Future<ApiResponse<UploadedFile>> uploadBase64({
+    required String filename,
+    required String mimetype,
+    required String base64Data,
+  }) async {
+    try {
+      final requestData = {
+        'media': {
+          'filename': filename,
+          'mimetype': mimetype,
+          'data': base64Data,
+        },
+      };
+
+      print('Uploading file: $filename with mimetype: $mimetype');
+
+      final response = await ApiService.dio.post(
+        'Inbox/UploadFile/ConvertBase64ToFile',
+        data: requestData,
+      );
+
+      print('Upload response: ${response.data}');
+
+      if (response.statusCode == 200) {
+        // Handle both boolean and null cases for IsError
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError && response.data['Data'] != null) {
+          final data = response.data['Data'];
+          final uploadedFile = UploadedFile.fromJson(data);
+          
+          return ApiResponse(
+            isError: false,
+            data: uploadedFile,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          return ApiResponse(
+            isError: true,
+            error: response.data['Error'] ?? response.data['ErrorMessage'] ?? 'Upload failed',
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'Upload failed with status: ${response.statusCode}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('Error in uploadBase64: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
 
   // Image picking
   static Future<String?> pickImageAsBase64(ImageSource source) async {
@@ -174,5 +238,12 @@ class MediaService {
   static bool isAudioFile(String filename) {
     final extension = filename.split('.').last.toLowerCase();
     return ['mp3', 'wav', 'aac', 'ogg', 'm4a'].contains(extension);
+  }
+
+  static String formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }
