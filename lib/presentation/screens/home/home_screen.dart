@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/services/signalr_service.dart';
 import '../../../core/services/account_service.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/chat_provider.dart';
 import '../../../core/theme/app_theme.dart';
@@ -15,6 +17,7 @@ import '../auth/login_screen.dart';
 import '../chat/chat_screen.dart';
 import '../debug/whatsapp_debug_screen.dart';
 import 'arsip_contact_screen.dart';
+import 'dart:async';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -23,7 +26,7 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _selectedTab = 'all';
@@ -33,38 +36,149 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // Selection mode states
   bool _isSelectionMode = false;
   Set<String> _selectedRoomIds = {};
+  
+  // Real-time update management
+  StreamSubscription<String>? _connectionSubscription;
 
   @override
   void initState() {
     super.initState();
-    
-    // Load initial data and ensure SignalR connection
+    WidgetsBinding.instance.addObserver(this);
+
+    // Setup realtime listeners immediately
+    _setupRealtimeListeners();
+
+    // Load initial data
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(chatProvider.notifier).loadRooms();
-      ref.read(chatProvider.notifier).loadArchivedRooms(); // Also load archived rooms for count
-      _ensureSignalRConnection();
+      _loadInitialData();
     });
-    
-    // Listen to chat state changes for real-time updates
-    // This ensures the UI updates when new messages arrive
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _cancelRealtimeListeners();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // App resumed, ensure SignalR is connected and refresh data
+      print('🔄 App resumed, refreshing connection and data');
+      _ensureSignalRConnection();
+      _handleRefresh();
+    }
+  }
+
+  void _loadInitialData() async {
+    // Refresh AccountService to get latest account names from backend
+    try {
+      print('🔄 Refreshing account mappings...');
+      await AccountService().refreshAccountMappings();
+      print('✅ Account mappings refreshed');
+    } catch (e) {
+      print('⚠️ Failed to refresh account mappings: $e');
+    }
+
+    // Ensure SignalR is connected FIRST before loading rooms
+    await _ensureSignalRConnection();
+
+    // Force re-subscribe to ensure listeners are active
+    // This fixes the bug where realtime only works after entering chat screen
+    await _forceResubscribe();
+
+    // Then load rooms
+    ref.read(chatProvider.notifier).loadRooms();
+    ref.read(chatProvider.notifier).loadArchivedRooms();
+  }
+
+  Future<void> _forceResubscribe() async {
+    try {
+      print('🔄 Force re-subscribing to SignalR to activate listeners...');
+      await SignalRService.forceResubscribe();
+      print('✅ SignalR re-subscription complete - realtime updates now active');
+    } catch (e) {
+      print('⚠️ Failed to force re-subscribe: $e');
+    }
+  }
+
+  void _setupRealtimeListeners() {
+    print('🎧 HOME SCREEN: Setting up real-time listeners');
+
+    // Cancel existing subscriptions
+    _cancelRealtimeListeners();
+
+    // IMPORTANT: We don't need to listen to SignalR streams here anymore
+    // because ChatProvider already handles all SignalR events and updates the state
+    // The home screen will automatically rebuild when chatProvider state changes
+
+    // We only need to listen to connection status for reconnection handling
+    _connectionSubscription = SignalRService.connectionStatus.listen((status) {
+      print('📡 HOME SCREEN: Connection status changed to: $status');
+
+      if (status == 'connected' && mounted) {
+        // When reconnected, refresh data
+        print('✅ HOME SCREEN: Connected! Refreshing data in 500ms...');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _handleRefresh();
+          }
+        });
+      }
+    });
+
+    print('✅ HOME SCREEN: Real-time listeners set up successfully');
+    print('✅   - ChatProvider handles room updates automatically');
+    print('✅   - ChatProvider handles message updates automatically');
+    print('✅   - Connection status listener: ACTIVE');
+  }
+
+  void _cancelRealtimeListeners() {
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
+  }
+
+  Map<String, dynamic>? _getCurrentFilters() {
+    final tabFilters = _getFiltersForTab(_selectedTab);
+    final additionalFilters = _filterOptions.toMap();
+    
+    if (tabFilters.isEmpty && additionalFilters.isEmpty) {
+      return null;
+    }
+    
+    final mergedFilters = <String, dynamic>{};
+    mergedFilters.addAll(tabFilters);
+    
+    if (additionalFilters.containsKey('St')) {
+      final userSelectedStatuses = additionalFilters['St'] as List<dynamic>;
+      final filteredStatuses = userSelectedStatuses.where((status) => status != 4).toList();
+      if (filteredStatuses.isNotEmpty) {
+        mergedFilters['St'] = filteredStatuses;
+      }
+    }
+    
+    additionalFilters.forEach((key, value) {
+      if (key != 'St') {
+        mergedFilters[key] = value;
+      }
+    });
+    
+    return mergedFilters.isNotEmpty ? mergedFilters : null;
+  }
+
+
   Future<void> _ensureSignalRConnection() async {
-    // Ensure SignalR is connected when home screen loads
     try {
       print('🔌 Ensuring SignalR connection on home screen...');
       await SignalRService.ensureConnection();
       print('✅ SignalR connection ensured on home screen');
       
-      // Also ensure account mappings are up to date
-      try {
-        final accountService = AccountService();
-        final availableChannels = accountService.getAvailableChannels();
-        print('📊 User has accounts for ${availableChannels.length} channels: $availableChannels');
-      } catch (e) {
-        print('⚠️ Could not check account mappings: $e');
-      }
-      
+      final accountService = AccountService();
+      final availableChannels = accountService.getAvailableChannels();
+      print('📱 User has accounts for ${availableChannels.length} channels: $availableChannels');
     } catch (e) {
       print('❌ Failed to ensure SignalR connection on home screen: $e');
     }
@@ -83,33 +197,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // Add this helper method to your _HomeScreenState class:
-int _getSelectedIndex() {
-  switch (_selectedTab) {
-    case 'all':
-      return 0;
-    case 'unassigned':
-      return 1;
-    case 'assigned':
-      return 2;
-    case 'resolved':
-      return 3;
-    default:
-      return 0;
+  int _getSelectedIndex() {
+    switch (_selectedTab) {
+      case 'all':
+        return 0;
+      case 'unassigned':
+        return 1;
+      case 'assigned':
+        return 2;
+      case 'resolved':
+        return 3;
+      default:
+        return 0;
+    }
   }
-}
 
   Map<String, dynamic> _getFiltersForTab(String tab) {
-    // FIXED: Ensure archived rooms (status 4) are never shown in home screen
     switch (tab) {
       case 'unassigned':
-        return {'St': [1]}; // Only unassigned
+        return {'St': [1]};
       case 'assigned':
-        return {'St': [2]}; // Only assigned
+        return {'St': [2]};
       case 'resolved':
-        return {'St': [3]}; // Only resolved
+        return {'St': [3]};
       default:
-        return {'St': [1, 2, 3]}; // All active statuses, explicitly exclude archived (4)
+        return {'St': [1, 2, 3]};
     }
   }
 
@@ -117,42 +229,40 @@ int _getSelectedIndex() {
     setState(() {
       _selectedTab = tab;
     });
-    
-    // Apply filters when tab is selected
     _applyFilters();
   }
 
   void _applyFilters({String? searchQuery}) {
-    // Get base filters for selected tab (this excludes archived by default)
     final tabFilters = _getFiltersForTab(_selectedTab);
-    
-    // Get additional filters from filter options
     final additionalFilters = _filterOptions.toMap();
-    
-    // Merge filters - additionalFilters override tabFilters for same keys
     final mergedFilters = <String, dynamic>{};
+    
+    // Start with tab filters as base
     mergedFilters.addAll(tabFilters);
     
-    // Handle special case for status (St) - ensure archived is never included
-    if (additionalFilters.containsKey('St')) {
-      final userSelectedStatuses = additionalFilters['St'] as List<dynamic>;
-      // Filter out archived status (4) even if user somehow selected it
-      final filteredStatuses = userSelectedStatuses.where((status) => status != 4).toList();
-      if (filteredStatuses.isNotEmpty) {
-        mergedFilters['St'] = filteredStatuses;
-      }
-    }
-    
-    // Add all other filters
+    // Add all additional filters from FilterDialog
     additionalFilters.forEach((key, value) {
-      if (key != 'St') { // Skip St as we handled it above
+      if (key == 'St') {
+        // For status filter, if user has selected specific status in filter dialog,
+        // it should override tab filter
+        final userSelectedStatuses = value as List<dynamic>;
+        final filteredStatuses = userSelectedStatuses.where((status) => status != 4).toList();
+        if (filteredStatuses.isNotEmpty) {
+          mergedFilters['St'] = filteredStatuses; // Override tab filter
+        }
+      } else {
+        // For other filters, just add them
         mergedFilters[key] = value;
       }
     });
 
-    print('Applying filters (excluding archived): $mergedFilters'); // Debug print
+    print('🔍 Filter Debug:');
+    print('  - Selected Tab: $_selectedTab');
+    print('  - Tab Filters: $tabFilters');
+    print('  - User Filters: $additionalFilters');
+    print('  - Merged Filters: $mergedFilters');
+    print('  - Search Query: $searchQuery');
     
-    // Apply to chat provider
     ref.read(chatProvider.notifier).loadRooms(
       search: searchQuery?.isNotEmpty == true ? searchQuery : null,
       filters: mergedFilters.isNotEmpty ? mergedFilters : null,
@@ -169,9 +279,7 @@ int _getSelectedIndex() {
             _filterOptions = filters;
           });
           
-          print('Filter applied: ${filters.toMap()}'); // Debug print
-          
-          // Apply filters immediately
+          print('Filter applied: ${filters.toMap()}');
           _applyFilters(
             searchQuery: _searchController.text.isNotEmpty ? _searchController.text : null,
           );
@@ -180,12 +288,56 @@ int _getSelectedIndex() {
     );
   }
 
-  void _navigateToChat(room) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ChatScreen(room: room),
-      ),
-    );
+  void _navigateToChat(room) async {
+    // Fetch complete room data before navigating, like notification does
+    try {
+      print('🔍 Fetching complete room data for roomId: ${room.id}');
+      
+      final response = await ApiService.dio.post(
+        'Services/Chat/Chatrooms/DetailRoom',
+        data: {
+          'EntityId': room.id,
+        },
+      );
+      
+      Room roomToNavigate = room; // Fallback to current room
+      
+      if (response.statusCode == 200 && 
+          response.data['IsError'] != true && 
+          response.data['Data'] != null) {
+        final roomData = response.data['Data']['Room'];
+        roomToNavigate = Room.fromJson(roomData);
+        print('✅ Got complete room data: ${roomToNavigate.name}, AccountName: ${roomToNavigate.accountName}, BotName: ${roomToNavigate.botName}');
+      } else {
+        print('⚠️ Failed to fetch complete room data, using list data');
+      }
+      
+      if (!mounted) return;
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(room: roomToNavigate),
+        ),
+      ).then((_) {
+        // Refresh data when returning from chat screen
+        print('🔄 Returned from chat, refreshing data');
+        _handleRefresh();
+      });
+    } catch (e) {
+      print('❌ Error fetching complete room data: $e');
+      
+      // Fallback to using the list data if API fails
+      if (!mounted) return;
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(room: room),
+        ),
+      ).then((_) {
+        print('🔄 Returned from chat, refreshing data');
+        _handleRefresh();
+      });
+    }
   }
 
   void _navigateToArchive() {
@@ -193,10 +345,13 @@ int _getSelectedIndex() {
       MaterialPageRoute(
         builder: (context) => const ArsipContactScreen(),
       ),
-    );
+    ).then((_) {
+      // Refresh when returning from archive
+      print('🔄 Returned from archive, refreshing data');
+      _handleRefresh();
+    });
   }
 
-  // Selection mode functions
   void _enterSelectionMode(String roomId) {
     setState(() {
       _isSelectionMode = true;
@@ -249,7 +404,6 @@ int _getSelectedIndex() {
   void _archiveSelectedRooms() async {
     final selectedRoomIdsList = _selectedRoomIds.toList();
     
-    // Show loading indicator
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Archiving conversations...'),
@@ -258,12 +412,10 @@ int _getSelectedIndex() {
       ),
     );
     
-    // Archive rooms
     await ref.read(chatProvider.notifier).archiveRooms(selectedRoomIdsList);
     
     _exitSelectionMode();
     
-    // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${selectedRoomIdsList.length} conversation(s) archived'),
@@ -272,43 +424,24 @@ int _getSelectedIndex() {
     );
   }
 
-  // Pull to refresh function
   Future<void> _handleRefresh() async {
     try {
-      // Refresh rooms with current filters
+      // Refresh AccountService to get latest account names
+      try {
+        await AccountService().refreshAccountMappings();
+        print('✅ Account mappings refreshed on pull-to-refresh');
+      } catch (e) {
+        print('⚠️ Failed to refresh account mappings: $e');
+      }
+      
       await ref.read(chatProvider.notifier).loadRooms(
         search: _searchController.text.isNotEmpty ? _searchController.text : null,
-        filters: _getFiltersForTab(_selectedTab).isNotEmpty || _filterOptions.hasActiveFilters
-            ? (() {
-                final tabFilters = _getFiltersForTab(_selectedTab);
-                final additionalFilters = _filterOptions.toMap();
-                final mergedFilters = <String, dynamic>{};
-                mergedFilters.addAll(tabFilters);
-                
-                if (additionalFilters.containsKey('St')) {
-                  final userSelectedStatuses = additionalFilters['St'] as List<dynamic>;
-                  final filteredStatuses = userSelectedStatuses.where((status) => status != 4).toList();
-                  if (filteredStatuses.isNotEmpty) {
-                    mergedFilters['St'] = filteredStatuses;
-                  }
-                }
-                
-                additionalFilters.forEach((key, value) {
-                  if (key != 'St') {
-                    mergedFilters[key] = value;
-                  }
-                });
-                
-                return mergedFilters.isNotEmpty ? mergedFilters : null;
-              })()
-            : null,
+        filters: _getCurrentFilters(),
       );
       
-      // Also refresh archived rooms count
       await ref.read(chatProvider.notifier).loadArchivedRooms();
     } catch (e) {
       print('Error refreshing data: $e');
-      // Show error message if needed
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -320,7 +453,6 @@ int _getSelectedIndex() {
     }
   }
 
-  // FloatingActionButton onPressed function - Updated to show new conversation dialog
   void _onFloatingActionButtonPressed() {
     showDialog(
       context: context,
@@ -331,21 +463,17 @@ int _getSelectedIndex() {
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
-    final authState = ref.watch(authProvider);
 
-    // Listen for real-time updates and refresh UI
+    // Listen for state changes and handle errors
     ref.listen<ChatState>(chatProvider, (previous, next) {
-      // Log when rooms are updated for debugging
       if (previous != null && next.rooms.length != previous.rooms.length) {
         print('🏠 HOME: Room count changed from ${previous.rooms.length} to ${next.rooms.length}');
       }
       
-      // If archived rooms count decreased (items were unarchived), refresh regular rooms
       if (previous != null && 
           previous.archivedRooms.length > next.archivedRooms.length &&
           !next.isLoading) {
         print('Archived rooms count decreased, refreshing regular rooms');
-        // Small delay to ensure backend has processed the unarchive
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
             ref.read(chatProvider.notifier).loadRooms();
@@ -353,7 +481,6 @@ int _getSelectedIndex() {
         });
       }
       
-      // Show error messages if any
       if (next.error != null && next.error != previous?.error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -392,69 +519,7 @@ int _getSelectedIndex() {
           backgroundColor: Colors.white,
           child: Column(
             children: [
-              // Connection status and filter indicator
-              // Container(
-              //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              //   color: Colors.white,
-              //   child: Row(
-              //     children: [
-              //       Consumer(
-              //         builder: (context, ref, child) {
-              //           final chatState = ref.watch(chatProvider);
-              //           final isConnected = chatState.connectionStatus == 'connected';
-              //           final isConnecting = chatState.connectionStatus == 'connecting';
-                        
-              //           return Row(
-              //             children: [
-              //               Container(
-              //                 width: 8,
-              //                 height: 8,
-              //                 decoration: BoxDecoration(
-              //                   color: isConnected 
-              //                       ? Colors.green 
-              //                       : (isConnecting ? Colors.orange : Colors.red),
-              //                   shape: BoxShape.circle,
-              //                 ),
-              //               ),
-              //               const SizedBox(width: 6),
-              //               Text(
-              //                 isConnected 
-              //                     ? 'Connected' 
-              //                     : (isConnecting ? 'Connecting...' : 'Disconnected'),
-              //                 style: TextStyle(
-              //                   fontSize: 12,
-              //                   color: isConnected 
-              //                       ? Colors.green 
-              //                       : (isConnecting ? Colors.orange : Colors.red),
-              //                   fontWeight: FontWeight.w500,
-              //                 ),
-              //               ),
-              //             ],
-              //           );
-              //         },
-              //       ),
-              //       const Spacer(),
-              //       if (_filterOptions.hasActiveFilters)
-              //         Container(
-              //           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              //           decoration: BoxDecoration(
-              //             color: AppTheme.primaryColor.withOpacity(0.1),
-              //             borderRadius: BorderRadius.circular(12),
-              //           ),
-              //           child: Text(
-              //             'Filtered',
-              //             style: TextStyle(
-              //               fontSize: 11,
-              //               color: AppTheme.primaryColor,
-              //               fontWeight: FontWeight.w500,
-              //             ),
-              //           ),
-              //         ),
-              //     ],
-              //   ),
-              // ),
-            
-              // Tabs - tetap tampil meskipun selection mode
+              // Tabs
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: const BoxDecoration(
@@ -473,10 +538,10 @@ int _getSelectedIndex() {
                 ),
               ),
 
-              // Archived Conversation Section - aligned with contact list layout
+              // Archived Conversation Section
               Container(
                 color: Colors.white,
-                padding: const EdgeInsets.only(bottom: 6), // Reduced spacing between archived and contact list
+                padding: const EdgeInsets.only(bottom: 6),
                 child: InkWell(
                   onTap: _navigateToArchive,
                   child: Container(
@@ -484,7 +549,6 @@ int _getSelectedIndex() {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Archive icon - aligned with avatar (same size as avatar area)
                         Container(
                           width: 44,
                           height: 44,
@@ -495,10 +559,7 @@ int _getSelectedIndex() {
                             size: 35,
                           ),
                         ),
-                        
-                        const SizedBox(width: 12), // Same spacing as in RoomListItem
-                        
-                        // Text - aligned with contact name
+                        const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
                             'Archived Conversation',
@@ -509,8 +570,6 @@ int _getSelectedIndex() {
                             ),
                           ),
                         ),
-                        
-                        // Arrow at the right
                         const Icon(
                           Icons.chevron_right,
                           color: Colors.grey,
@@ -522,7 +581,7 @@ int _getSelectedIndex() {
                 ),
               ),
               
-              // Room List with Pull to Refresh
+              // Room List
               Expanded(
                 child: RoomListWidget(
                   rooms: chatState.rooms,
@@ -538,7 +597,6 @@ int _getSelectedIndex() {
             ],
           ),
         ),
-        // Updated FloatingActionButton to show new conversation dialog
         floatingActionButton: Container(
           margin: const EdgeInsets.only(bottom: 20, right: 10),
           child: SizedBox(
@@ -549,10 +607,7 @@ int _getSelectedIndex() {
               backgroundColor: AppTheme.primaryColor,
               foregroundColor: Colors.white,
               elevation: 6,
-              child: const Icon(
-                Icons.add,
-                size: 30,
-              ),
+              child: const Icon(Icons.add, size: 30),
             ),
           ),
         ),
@@ -561,61 +616,36 @@ int _getSelectedIndex() {
     );
   }
 
+  // AppBar widgets remain the same...
   Widget _buildNormalAppBar() {
     return Container(
       color: AppTheme.primaryColor,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-      ),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       child: SizedBox(
         height: 60,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(width: 12),
-            Image.asset(
-              'assets/nobox.png',
-              width: 40,
-              height: 40,
-              fit: BoxFit.contain,
-            ),
+            Image.asset('assets/nobox.png', width: 40, height: 40, fit: BoxFit.contain),
             const SizedBox(width: 16),
-
-            // Title
             const Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'NoBox Chat',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
+                  Text('NoBox Chat', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: 'Poppins')),
                 ],
               ),
             ),
-
-            // Compact icon group
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Search icon
                 IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _isSearchMode = true;
-                    });
-                  },
+                  onPressed: () => setState(() => _isSearchMode = true),
                   icon: const Icon(Icons.search, color: Colors.white, size: 27),
                   padding: const EdgeInsets.all(8),
                 ),
-
-                // Filter icon
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -624,65 +654,29 @@ int _getSelectedIndex() {
                       icon: const Icon(Icons.filter_alt, color: Colors.white, size: 27),
                       padding: const EdgeInsets.all(8),
                     ),
-                    // Show active filter indicator
                     if (_filterOptions.hasActiveFilters)
                       Positioned(
-                        right: 6,
-                        top: 6,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                        right: 6, top: 6,
+                        child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
                       ),
                   ],
                 ),
               ],
             ),
-
-            // More menu dengan hanya logout
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: Colors.white, size: 27),
               color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               onSelected: (value) async {
                 if (value == 'logout') {
                   _handleLogout();
                 } else if (value == 'debug') {
-                  // Navigate to debug screen for testing
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const WhatsAppDebugScreen(),
-                    ),
-                  );
+                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const WhatsAppDebugScreen()));
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'debug',
-                  child: Row(
-                    children: [
-                      Icon(Icons.bug_report, color: Colors.orange),
-                      SizedBox(width: 12),
-                      Text('Debug Tools'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'logout',
-                  child: Row(
-                    children: [
-                      Icon(Icons.logout, color: Colors.red),
-                      SizedBox(width: 12),
-                      Text('Logout', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
+                const PopupMenuItem(value: 'debug', child: Row(children: [Icon(Icons.bug_report, color: Colors.orange), SizedBox(width: 12), Text('Debug Tools')])),
+                const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 12), Text('Logout', style: TextStyle(color: Colors.red))])),
               ],
               padding: const EdgeInsets.all(8),
             ),
@@ -700,56 +694,20 @@ int _getSelectedIndex() {
 
     return Container(
       color: AppTheme.primaryColor,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-      ),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       child: SizedBox(
         height: 60,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(width: 4),
-            
-            // Back button
-            IconButton(
-              onPressed: _exitSelectionMode,
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-              padding: const EdgeInsets.all(8),
-            ),
-
-            // Selection count
-            Expanded(
-              child: Text(
-                '${_selectedRoomIds.length} selected',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-
-            // Action icons
+            IconButton(onPressed: _exitSelectionMode, icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24), padding: const EdgeInsets.all(8)),
+            Expanded(child: Text('${_selectedRoomIds.length} selected', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500))),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Pin/Unpin icon
-                IconButton(
-                  onPressed: _pinSelectedRooms,
-                  icon: Icon(
-                    allSelectedRoomsPinned ? Icons.push_pin_outlined : Icons.push_pin,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  padding: const EdgeInsets.all(8),
-                ),
-
-                // Archive icon
-                IconButton(
-                  onPressed: _archiveSelectedRooms,
-                  icon: const Icon(Icons.archive, color: Colors.white, size: 24),
-                  padding: const EdgeInsets.all(8),
-                ),
+                IconButton(onPressed: _pinSelectedRooms, icon: Icon(allSelectedRoomsPinned ? Icons.push_pin_outlined : Icons.push_pin, color: Colors.white, size: 24), padding: const EdgeInsets.all(8)),
+                IconButton(onPressed: _archiveSelectedRooms, icon: const Icon(Icons.archive, color: Colors.white, size: 24), padding: const EdgeInsets.all(8)),
               ],
             ),
             const SizedBox(width: 8),
@@ -762,17 +720,12 @@ int _getSelectedIndex() {
   Widget _buildSearchAppBar() {
     return Container(
       color: AppTheme.primaryColor,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-      ),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       child: SizedBox(
         height: 60,
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
           child: TextField(
             controller: _searchController,
             focusNode: _searchFocusNode,
@@ -780,12 +733,7 @@ int _getSelectedIndex() {
             textAlignVertical: TextAlignVertical.center,
             decoration: InputDecoration(
               hintText: 'Search conversations...',
-              hintStyle: const TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-                fontFamily: 'Poppins',
-                fontStyle: FontStyle.normal,
-              ),
+              hintStyle: const TextStyle(color: Colors.grey, fontSize: 16, fontFamily: 'Poppins'),
               border: InputBorder.none,
               isDense: true,
               prefixIcon: IconButton(
@@ -794,25 +742,15 @@ int _getSelectedIndex() {
                     _isSearchMode = false;
                     _searchController.clear();
                   });
-                  _applyFilters(); // Reapply filters without search
+                  _applyFilters();
                 },
                 icon: const Icon(Icons.arrow_back_ios_new, color: AppTheme.primaryColor, size: 24),
               ),
               suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      onPressed: () {
-                        _searchController.clear();
-                        _applyFilters(); // Clear search but keep other filters
-                      },
-                      icon: const Icon(Icons.clear, color: Colors.grey),
-                    )
+                  ? IconButton(onPressed: () { _searchController.clear(); _applyFilters(); }, icon: const Icon(Icons.clear, color: Colors.grey))
                   : null,
             ),
-            style: const TextStyle(
-              fontSize: 16,
-              fontFamily: 'Poppins',
-              color: Colors.black,
-            ),
+            style: const TextStyle(fontSize: 16, fontFamily: 'Poppins', color: Colors.black),
             onChanged: _handleSearch,
           ),
         ),
@@ -822,29 +760,13 @@ int _getSelectedIndex() {
 
   Widget _buildTab(String value, String label) {
     final isSelected = _selectedTab == value;
-    
     return Expanded(
       child: GestureDetector(
         onTap: () => _selectTab(value),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isSelected ? AppTheme.primaryColor : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
-              fontSize: 14,
-            ),
-          ),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isSelected ? AppTheme.primaryColor : Colors.transparent, width: 2))),
+          child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary, fontSize: 14)),
         ),
       ),
     );

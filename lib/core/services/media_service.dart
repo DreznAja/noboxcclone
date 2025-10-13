@@ -214,6 +214,10 @@ class MediaService {
         return 'audio/mp3';
       case 'wav':
         return 'audio/wav';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'aac':
+        return 'audio/aac';
       case 'pdf':
         return 'application/pdf';
       case 'doc':

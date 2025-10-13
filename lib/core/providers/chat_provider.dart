@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/services/media_service.dart';
+import 'package:nobox_chat/core/theme/app_theme.dart';
 import 'dart:convert';
 import '../services/account_service.dart';
 import '../models/chat_models.dart';
@@ -65,6 +67,138 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _setupSignalRListeners();
   }
 
+  // Create note for active room
+  Future<bool> createNote(String content) async {
+    final activeRoom = state.activeRoom;
+    if (activeRoom == null) {
+      state = state.copyWith(error: 'No active room');
+      return false;
+    }
+
+    final roomId = activeRoom.id;
+    print('📝 [Create Note] Creating note for room: $roomId');
+
+    try {
+      final response = await ApiService.createNote(
+        roomId: roomId,
+        content: content,
+      );
+
+      if (response.isError) {
+        print('❌ [Create Note] Failed: ${response.error}');
+        state = state.copyWith(error: response.error);
+        return false;
+      }
+
+      print('✅ [Create Note] Note created successfully');
+      print('📝 [Create Note] Response: ${response.data}');
+      
+      // Clear any previous error
+      state = state.copyWith(error: null);
+      return true;
+    } catch (e) {
+      print('❌ [Create Note] Exception: $e');
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  // Mark an active room as resolved (status = 3)
+  Future<bool> markActiveRoomResolved() async {
+    final activeRoom = state.activeRoom;
+    if (activeRoom == null) return false;
+
+    final roomId = activeRoom.id;
+    print('🟢 Marking room as resolved: $roomId');
+
+    // Optimistic update: set status to 3 on rooms and activeRoom
+    final prevRooms = List<Room>.from(state.rooms);
+    final prevActive = state.activeRoom;
+
+    try {
+      // Update rooms list
+      final rooms = List<Room>.from(state.rooms);
+      final idx = rooms.indexWhere((r) => r.id == roomId);
+      if (idx != -1) {
+        final r = rooms[idx];
+        rooms[idx] = Room(
+          id: r.id,
+          ctId: r.ctId,
+          ctRealId: r.ctRealId,
+          grpId: r.grpId,
+          name: r.name,
+          lastMessage: r.lastMessage,
+          lastMessageTime: DateTime.now(),
+          unreadCount: 0,
+          status: 3,
+          channelId: r.channelId,
+          channelName: r.channelName,
+          accountName: r.accountName,
+          botName: r.botName,
+          contactImage: r.contactImage,
+          linkImage: r.linkImage,
+          isGroup: r.isGroup,
+          isPinned: r.isPinned,
+          isBlocked: r.isBlocked,
+          isMuteBot: r.isMuteBot,
+          tags: r.tags,
+          messageTags: r.messageTags,
+          funnel: r.funnel,
+          funnelId: r.funnelId,
+          tagIds: r.tagIds,
+          needReply: r.needReply,
+        );
+      }
+
+      // Update activeRoom
+      final updatedActive = Room(
+        id: activeRoom.id,
+        ctId: activeRoom.ctId,
+        ctRealId: activeRoom.ctRealId,
+        grpId: activeRoom.grpId,
+        name: activeRoom.name,
+        lastMessage: activeRoom.lastMessage,
+        lastMessageTime: DateTime.now(),
+        unreadCount: 0,
+        status: 3,
+        channelId: activeRoom.channelId,
+        channelName: activeRoom.channelName,
+        accountName: activeRoom.accountName,
+        botName: activeRoom.botName,
+        contactImage: activeRoom.contactImage,
+        linkImage: activeRoom.linkImage,
+        isGroup: activeRoom.isGroup,
+        isPinned: activeRoom.isPinned,
+        isBlocked: activeRoom.isBlocked,
+        isMuteBot: activeRoom.isMuteBot,
+        tags: activeRoom.tags,
+        messageTags: activeRoom.messageTags,
+        funnel: activeRoom.funnel,
+        funnelId: activeRoom.funnelId,
+        tagIds: activeRoom.tagIds,
+        needReply: activeRoom.needReply,
+      );
+
+      state = state.copyWith(rooms: rooms, activeRoom: updatedActive, error: null);
+
+      // Call API
+      final apiResp = await ApiService.markRoomResolved(roomId);
+      if (apiResp.isError) {
+        print('❌ Failed to resolve room via API: ${apiResp.error}');
+        // revert
+        state = state.copyWith(rooms: prevRooms, activeRoom: prevActive, error: apiResp.error);
+        return false;
+      }
+
+      print('✅ Room $roomId marked as resolved');
+      return true;
+    } catch (e) {
+      print('❌ Exception while resolving room: $e');
+      state = state.copyWith(rooms: prevRooms, activeRoom: prevActive, error: e.toString());
+      return false;
+    }
+  }
+
   void _setupSignalRListeners() {
     // Listen to connection status
     SignalRService.connectionStatus.listen((status) {
@@ -90,76 +224,109 @@ class ChatNotifier extends StateNotifier<ChatState> {
     });
   }
 
-  Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
-    state = state.copyWith(isLoading: true, error: null);
+Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
+  // CRITICAL FIX: Store current active room state BEFORE loading
+  final preserveActiveRoom = state.activeRoom;
+  final preserveMessages = state.messages;
+  final preserveHasMore = state.hasMoreMessages;
+  
+  // Always show loading state (for shimmer effect)
+  state = state.copyWith(
+    isLoading: true,
+    error: null,
+  );
+  
+  print('🔍 [CHAT PROVIDER] Loading rooms with search: "$search"');
+  print('🔍 [CHAT PROVIDER] Received filters: $filters');
+
+  try {
+    print('🔍 [CHAT PROVIDER] Step 1: Cleaning filters...');
+    final cleanedFilters = filters != null ? _cleanFilters(filters) : null;
+    print('🔍 [CHAT PROVIDER] Cleaned filters: $cleanedFilters');
     
-    print('Loading rooms with search: "$search" and filters: $filters');
-
-    try {
-      // Clean and validate filters before sending to API
-      final cleanedFilters = filters != null ? _cleanFilters(filters) : null;
-      
-      // IMPORTANT FIX: Ensure we exclude archived rooms (status 4) from regular room list
-      Map<String, dynamic>? finalFilters;
-      if (cleanedFilters != null) {
-        finalFilters = Map<String, dynamic>.from(cleanedFilters);
-      } else {
-        finalFilters = {};
-      }
-      
-      // If no specific status filter is applied, exclude archived rooms by default
-      if (!finalFilters.containsKey('St')) {
-        // Only show Unassigned (1), Assigned (2), and Resolved (3) - exclude Archived (4)
-        finalFilters['St'] = [1, 2, 3];
-      } else {
-        // If status filter exists, ensure it doesn't include archived status
-        final currentStatuses = finalFilters['St'] as List<dynamic>;
-        final filteredStatuses = currentStatuses.where((status) => status != 4).toList();
-        if (filteredStatuses.isNotEmpty) {
-          finalFilters['St'] = filteredStatuses;
-        } else {
-          // If all statuses were archived, show unassigned instead
-          finalFilters['St'] = [1];
-        }
-      }
-      
-      if (finalFilters.isNotEmpty) {
-        print('Final filters for regular rooms (excluding archived): $finalFilters');
-      }
-
-      final response = await ApiService.getRoomList(
-        search: search,
-        filters: finalFilters,
-      );
-
-      if (response.isError) {
-        state = state.copyWith(
-          isLoading: false,
-          error: response.error,
-        );
-        print('API Error loading rooms: ${response.error}');
-        return;
-      }
-
-      final rooms = response.data ?? [];
-      
-      // Additional client-side filter to ensure no archived rooms slip through
-      final nonArchivedRooms = rooms.where((room) => room.status != 4).toList();
-      
-      print('Successfully loaded ${nonArchivedRooms.length} non-archived rooms (filtered from ${rooms.length} total)');
-      
-      state = state.copyWith(
-        isLoading: false,
-        rooms: nonArchivedRooms,
-      );
-    } catch (e) {
-      print('Exception loading rooms: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+    Map<String, dynamic>? finalFilters;
+    if (cleanedFilters != null) {
+      finalFilters = Map<String, dynamic>.from(cleanedFilters);
+    } else {
+      finalFilters = {};
     }
+    
+    print('🔍 [CHAT PROVIDER] Step 2: Processing status filter...');
+    if (!finalFilters.containsKey('St')) {
+      finalFilters['St'] = [1, 2, 3];
+      print('🔍 [CHAT PROVIDER] No status filter provided, using default: [1, 2, 3]');
+    } else {
+      final currentStatuses = finalFilters['St'] as List<dynamic>;
+      print('🔍 [CHAT PROVIDER] Status filter before filtering: $currentStatuses');
+      final filteredStatuses = currentStatuses.where((status) => status != 4).toList();
+      if (filteredStatuses.isNotEmpty) {
+        finalFilters['St'] = filteredStatuses;
+        print('🔍 [CHAT PROVIDER] Status filter after filtering archived: $filteredStatuses');
+      } else {
+        finalFilters['St'] = [1];
+        print('🔍 [CHAT PROVIDER] All statuses were archived, using default: [1]');
+      }
+    }
+    
+    print('🔍 [CHAT PROVIDER] Step 3: Final filters to be sent to API: $finalFilters');
+
+    final response = await ApiService.getRoomList(
+      search: search,
+      filters: finalFilters,
+    );
+
+    if (response.isError) {
+      state = state.copyWith(
+        isLoading: false,
+        error: response.error,
+        // CRITICAL: Restore active room state even on error
+        activeRoom: preserveActiveRoom,
+        messages: preserveMessages,
+        hasMoreMessages: preserveHasMore,
+      );
+      print('API Error loading rooms: ${response.error}');
+      return;
+    }
+
+    var rooms = response.data ?? [];
+    
+    // IMPORTANT: Client-side filtering for Private chats
+    // Backend might not support IsGrp=[0] filter, so we filter here
+    if (filters != null && filters.containsKey('ChatTypeFilter')) {
+      final chatTypeFilter = filters['ChatTypeFilter'];
+      if (chatTypeFilter == 'Private') {
+        print('🔍 [CHAT PROVIDER] Applying client-side Private chat filter');
+        rooms = rooms.where((room) => !room.isGroup).toList();
+        print('🔍 [CHAT PROVIDER] After Private filter: ${rooms.length} rooms');
+      }
+      // Remove the temporary filter key before continuing
+      finalFilters.remove('ChatTypeFilter');
+    }
+    
+    final nonArchivedRooms = rooms.where((room) => room.status != 4).toList();
+    
+    print('Successfully loaded ${nonArchivedRooms.length} non-archived rooms');
+    
+    // CRITICAL FIX: ALWAYS preserve active room and messages during loadRooms
+    state = state.copyWith(
+      isLoading: false,
+      rooms: nonArchivedRooms,
+      activeRoom: preserveActiveRoom, // Keep active room unchanged
+      messages: preserveMessages, // Keep messages unchanged
+      hasMoreMessages: preserveHasMore, // Keep pagination state
+    );
+  } catch (e) {
+    print('Exception loading rooms: $e');
+    state = state.copyWith(
+      isLoading: false,
+      error: e.toString(),
+      // CRITICAL: Restore active room state even on exception
+      activeRoom: preserveActiveRoom,
+      messages: preserveMessages,
+      hasMoreMessages: preserveHasMore,
+    );
   }
+}
 
   Future<void> loadArchivedRooms({String? search}) async {
     state = state.copyWith(isLoadingArchived: true, error: null);
@@ -189,9 +356,19 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final archivedRooms = response.data ?? [];
       
       // Additional client-side filter to ensure only archived rooms
+      print('📦 Raw archived rooms from API: ${archivedRooms.length}');
+      for (final room in archivedRooms) {
+        print('📦 Room: ${room.id} - ${room.name} - Status: ${room.status}');
+      }
+      
       final onlyArchivedRooms = archivedRooms.where((room) => room.status == 4).toList();
       
-      print('Successfully loaded ${onlyArchivedRooms.length} archived rooms');
+      print('Successfully loaded ${onlyArchivedRooms.length} archived rooms (filtered)');
+      
+      // Log each archived room for debugging
+      for (final room in onlyArchivedRooms) {
+        print('✅ Archived Room: ${room.id} - ${room.name} - Status: ${room.status}');
+      }
       
       state = state.copyWith(
         isLoadingArchived: false,
@@ -295,6 +472,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
             status: room.status,
             channelId: room.channelId,
             channelName: room.channelName,
+            accountName: room.accountName,
+            botName: room.botName,
             contactImage: room.contactImage,
             linkImage: room.linkImage,
             isGroup: room.isGroup,
@@ -303,6 +482,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
             isMuteBot: room.isMuteBot,
             tags: room.tags,
             funnel: room.funnel,
+            funnelId: room.funnelId,
+            tagIds: room.tagIds,
           );
         }
         return room;
@@ -332,11 +513,19 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   // Clean and validate filter data before sending to API
   Map<String, dynamic> _cleanFilters(Map<String, dynamic> filters) {
+    print('🧹 [_cleanFilters] Input filters: $filters');
     final cleanedFilters = <String, dynamic>{};
     
     for (final entry in filters.entries) {
       final key = entry.key;
       final value = entry.value;
+      print('🧹 [_cleanFilters] Processing key: $key, value: $value (type: ${value.runtimeType})');
+      
+      // Skip ChatTypeFilter - this is for client-side filtering only
+      if (key == 'ChatTypeFilter') {
+        print('   🚫 Skipping ChatTypeFilter (client-side only)');
+        continue;
+      }
       
       // Skip null or empty values
       if (value == null) continue;
@@ -345,6 +534,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (value is List) {
         if (value.isNotEmpty) {
           cleanedFilters[key] = value;
+          print('   ✅ Added as list: $key = $value');
+        } else {
+          print('   ⚠️ Skipped empty list for key: $key');
         }
       }
       // Handle string values
@@ -355,26 +547,34 @@ class ChatNotifier extends StateNotifier<ChatState> {
             final intValue = int.tryParse(value);
             if (intValue != null) {
               cleanedFilters[key] = [intValue];
+              print('   ✅ Converted string to int list: $key = [$intValue]');
             }
           } else {
             cleanedFilters[key] = [value];
+            print('   ✅ Added string as list: $key = [$value]');
           }
+        } else {
+          print('   ⚠️ Skipped empty string for key: $key');
         }
       }
       // Handle int values
       else if (value is int) {
         cleanedFilters[key] = [value];
+        print('   ✅ Converted int to list: $key = [$value]');
       }
       // Handle bool values
       else if (value is bool) {
         cleanedFilters[key] = [value ? 1 : 0];
+        print('   ✅ Converted bool to int list: $key = [${value ? 1 : 0}]');
       }
       else {
         // Keep other types as is
         cleanedFilters[key] = value;
+        print('   ℹ️ Kept as-is: $key = $value');
       }
     }
     
+    print('🧹 [_cleanFilters] Output cleanedFilters: $cleanedFilters');
     return cleanedFilters;
   }
   
@@ -386,70 +586,120 @@ class ChatNotifier extends StateNotifier<ChatState> {
     return numericFilters.contains(key);
   }
 
-  Future<void> selectRoom(Room room) async {
+  Future<void> selectRoom(Room room, {bool? isArchived}) async {
     state = state.copyWith(isLoading: true, error: null);
-    print('Selecting room: ${room.id} - ${room.name}');
+    final isRoomArchived = isArchived ?? (room.status == 4);
+    print('Selecting room: ${room.id} - ${room.name} (Status: ${room.status}, IsArchived: $isRoomArchived)');
 
     try {
-      // Leave previous room if exists
-      if (state.activeRoom != null && SignalRService.isConnected) {
+      // Leave previous room if exists (only for non-archived rooms)
+      if (state.activeRoom != null && SignalRService.isConnected && !isRoomArchived) {
         await SignalRService.leaveConversation(state.activeRoom!.id);
       }
 
-      // FIXED: Handle new conversations better
-      try {
-        // Load initial messages (most recent)
-        final messagesResponse = await ApiService.getMessages(
-          roomId: room.id,
-          take: 20, // Load 20 most recent messages initially
-          skip: 0,
-        );
-        
-        if (!messagesResponse.isError && messagesResponse.data != null) {
-          // Sort messages by timestamp (newest first from API, then reverse for display)
-          final sortedMessages = List<ChatMessage>.from(messagesResponse.data!);
-          sortedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Newest first
-          final displayMessages = sortedMessages.reversed.toList(); // Oldest first for display
+      // Get detailed room information including funnel data (skip for archived)
+      Room updatedRoom = room;
+      if (!isRoomArchived) { // Only get details for non-archived rooms
+        try {
+          final roomDetailResponse = await _getRoomDetail(room.id);
+          if (roomDetailResponse != null) {
+            // Update room with detailed information including funnel
+            updatedRoom = Room(
+              id: room.id,
+              ctId: room.ctId,
+              ctRealId: room.ctRealId,
+              grpId: room.grpId,
+              name: room.name,
+              lastMessage: room.lastMessage,
+              lastMessageTime: room.lastMessageTime,
+              unreadCount: room.unreadCount,
+              status: room.status,
+              channelId: room.channelId,
+              channelName: room.channelName,
+              accountName: room.accountName,
+              botName: room.botName,
+              contactImage: room.contactImage,
+              linkImage: room.linkImage,
+              isGroup: room.isGroup,
+              isPinned: room.isPinned,
+              isBlocked: room.isBlocked,
+              isMuteBot: room.isMuteBot,
+              tags: room.tags,
+              funnel: roomDetailResponse['Room']?['Fn'] ?? roomDetailResponse['Room']?['FnNm'] ?? room.funnel,
+              funnelId: roomDetailResponse['Room']?['FnId']?.toString() ?? roomDetailResponse['Room']?['FunnelId']?.toString() ?? room.funnelId,
+              tagIds: room.tagIds,
+            );
+            print('✅ Updated room with detailed funnel info: ${updatedRoom.funnel} (ID: ${updatedRoom.funnelId})');
+          }
+        } catch (detailError) {
+          print('⚠️ Could not get room detail, using original room data: $detailError');
+        }
+      } else {
+        print('📦 Archived room detected, skipping detail fetch');
+      }
+
+      // Load messages - use specialized method for archived conversations
+      if (isRoomArchived) {
+        // For archived conversations, use the specialized loading method
+        print('📦 Using specialized archived loading method');
+        await loadArchivedRoomMessages(updatedRoom);
+      } else {
+        // For active conversations, use standard loading
+        try {
+          print('Loading messages for active room ${updatedRoom.id}');
           
-          print('Loaded ${displayMessages.length} messages for room ${room.id}');
-          
-          state = state.copyWith(
-            activeRoom: room,
-            messages: displayMessages,
-            isLoading: false,
-            hasMoreMessages: messagesResponse.data!.length >= 20, // Has more if we got full page
+          final messagesResponse = await ApiService.getMessages(
+            roomId: updatedRoom.id,
+            take: 20,
+            skip: 0,
           );
-        } else {
-          // FIXED: Handle case where room has no messages (normal for new conversations)
-          print('No messages found for room ${room.id}, this is normal for new conversations');
+          
+          if (!messagesResponse.isError && messagesResponse.data != null) {
+            // Sort messages by timestamp (newest first from API, then reverse for display)
+            final sortedMessages = List<ChatMessage>.from(messagesResponse.data!);
+            sortedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Newest first
+            final displayMessages = sortedMessages.reversed.toList(); // Oldest first for display
+            
+            print('Successfully loaded ${displayMessages.length} messages for active room ${updatedRoom.id}');
+            
+            state = state.copyWith(
+              activeRoom: updatedRoom,
+              messages: displayMessages,
+              isLoading: false,
+              hasMoreMessages: messagesResponse.data!.length >= 20,
+            );
+          } else {
+            print('No messages found for active room ${updatedRoom.id}, this is normal for new conversations');
+            state = state.copyWith(
+              activeRoom: updatedRoom,
+              messages: [],
+              isLoading: false,
+              hasMoreMessages: false,
+              error: null,
+            );
+          }
+        } catch (messagesError) {
+          print('Error loading messages for active room ${updatedRoom.id}: $messagesError');
           state = state.copyWith(
-            activeRoom: room,
-            messages: [], // Empty messages list is OK for new conversations
+            activeRoom: updatedRoom,
+            messages: [],
             isLoading: false,
             hasMoreMessages: false,
-            error: null, // Don't set error for empty message list
+            error: null,
           );
         }
-      } catch (messagesError) {
-        print('Error loading messages for room ${room.id}: $messagesError');
-        // FIXED: Don't treat missing messages as an error for new conversations
-        state = state.copyWith(
-          activeRoom: room,
-          messages: [], // Start with empty messages
-          isLoading: false,
-          hasMoreMessages: false,
-          error: null, // Clear any previous errors
-        );
       }
       
-      // Join new room for real-time updates after successfully setting up
-      if (SignalRService.isConnected) {
+      // Join new room for real-time updates after successfully setting up (only for non-archived)
+      if (SignalRService.isConnected && !isRoomArchived) {
         try {
-          await SignalRService.joinConversation(room.id, null);
-          print('✅ Joined room ${room.id} for real-time updates');
+          await SignalRService.joinConversation(updatedRoom.id, null);
+          print('✅ Joined room ${updatedRoom.id} for real-time updates');
         } catch (joinError) {
           print('Failed to join room after selection: $joinError');
         }
+      } else if (isRoomArchived) {
+        print('📦 Archived room: skipping SignalR join');
       }
       
     } catch (e) {
@@ -462,8 +712,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         error: null, // Don't show error to user for room selection issues
       );
       
-      // Still try to join room for real-time updates
-      if (SignalRService.isConnected) {
+      // Still try to join room for real-time updates (only for non-archived)
+      if (SignalRService.isConnected && !isRoomArchived) {
         try {
           await SignalRService.joinConversation(room.id, null);
         } catch (joinError) {
@@ -473,6 +723,187 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  // Helper method to get detailed room information
+  Future<Map<String, dynamic>?> _getRoomDetail(String roomId) async {
+    try {
+      final response = await ApiService.dio.post(
+        'Services/Chat/Chatrooms/DetailRoom',
+        data: {
+          'EntityId': roomId,
+        },
+      );
+
+      if (response.statusCode == 200 && response.data['IsError'] != true) {
+        print('✅ Got room detail for room $roomId: ${response.data['Data']}');
+        return response.data['Data'];
+      } else {
+        print('❌ Failed to get room detail: ${response.data}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception getting room detail: $e');
+      return null;
+    }
+  }
+
+  // Specialized method for loading archived conversation messages with enhanced error handling
+  Future<void> loadArchivedRoomMessages(Room room) async {
+    // FIXED: Don't check status here since room might not have correct status when passed from UI
+    print('📦 loadArchivedRoomMessages called for room: ${room.id} - ${room.name} (Status: ${room.status})');
+    
+    // Continue regardless of status - let the specialized loading handle it
+
+    state = state.copyWith(isLoading: true, error: null);
+    print('📦 Loading archived room messages for: ${room.id} - ${room.name}');
+    
+    try {
+      // Use special endpoint for archived conversations
+      print('🔄 Using DetailArchived endpoint for archived room');
+      
+      final archivedDetailResponse = await ApiService.getArchivedRoomDetail(
+        roomId: room.id,
+      );
+      
+      print('📨 API Response - IsError: ${archivedDetailResponse.isError}');
+      
+      List<ChatMessage> loadedMessages = [];
+      
+      if (!archivedDetailResponse.isError && archivedDetailResponse.data != null) {
+        final data = archivedDetailResponse.data!;
+        print('📦 Archived detail data keys: ${data.keys}');
+        
+        // Try to extract messages from the response
+        // The structure might be different, let's check multiple possible keys
+        dynamic messagesData;
+        
+        if (data.containsKey('Messages')) {
+          messagesData = data['Messages'];
+          print('📦 Found Messages key');
+        } else if (data.containsKey('ChatMessages')) {
+          messagesData = data['ChatMessages'];
+          print('📦 Found ChatMessages key');
+        } else if (data.containsKey('Entities')) {
+          messagesData = data['Entities'];
+          print('📦 Found Entities key');
+        } else if (data.containsKey('Data')) {
+          messagesData = data['Data'];
+          print('📦 Found Data key');
+        }
+        
+        if (messagesData != null) {
+          if (messagesData is List) {
+            print('📦 Messages is a List with ${messagesData.length} items');
+            loadedMessages = messagesData.map((e) => ChatMessage.fromJson(e as Map<String, dynamic>)).toList();
+            print('✅ Successfully loaded ${loadedMessages.length} messages for archived room');
+          } else if (messagesData is Map) {
+            print('📦 Messages is a Map, looking for nested list...');
+            print('📦 Messages Map keys: ${messagesData.keys}');
+            
+            // Try to find list inside the Map
+            dynamic nestedList;
+            final messagesMap = messagesData as Map<String, dynamic>;
+            
+            // Common keys that might contain the actual messages list
+            final possibleKeys = ['Entities', 'Data', 'Items', 'List', 'Messages', 'ChatMessages', 'Msgs'];
+            
+            for (final key in possibleKeys) {
+              if (messagesMap.containsKey(key)) {
+                final value = messagesMap[key];
+                
+                // Check if it's already a list
+                if (value is List) {
+                  nestedList = value;
+                  print('✅ Found messages list in key: $key');
+                  break;
+                }
+                // Check if it's a JSON string that needs parsing
+                else if (value is String && value.isNotEmpty) {
+                  print('📦 Key "$key" is a String, attempting to parse as JSON...');
+                  try {
+                    final parsed = jsonDecode(value);
+                    if (parsed is List) {
+                      nestedList = parsed;
+                      print('✅ Successfully parsed JSON string to list with ${parsed.length} items');
+                      break;
+                    } else {
+                      print('⚠️ Parsed JSON is not a List: ${parsed.runtimeType}');
+                    }
+                  } catch (e) {
+                    print('❌ Failed to parse JSON string: $e');
+                  }
+                }
+              }
+            }
+            
+            if (nestedList != null && nestedList is List) {
+              print('📦 Found nested list with ${nestedList.length} items');
+              loadedMessages = nestedList.map((e) => ChatMessage.fromJson(e as Map<String, dynamic>)).toList();
+              print('✅ Successfully loaded ${loadedMessages.length} messages for archived room');
+            } else {
+              print('❌ Could not find messages list in Map structure');
+              print('📦 Messages Map keys: ${messagesMap.keys.toList()}');
+              
+              // Print each key and its type for debugging
+              messagesMap.forEach((key, value) {
+                print('📦 Key "$key": type=${value.runtimeType}, isNull=${value == null}');
+                if (value is List) {
+                  print('   -> List with ${value.length} items');
+                } else if (value is Map) {
+                  print('   -> Map with keys: ${value.keys}');
+                }
+              });
+            }
+          } else {
+            print('⚠️ Messages data is not a List or Map: ${messagesData.runtimeType}');
+            print('📦 Messages data: $messagesData');
+          }
+        } else {
+          print('⚠️ No messages found in response. Available keys: ${data.keys}');
+          print('📦 Full data structure: $data');
+        }
+      } else {
+        print('❌ Error loading archived detail: ${archivedDetailResponse.error}');
+      }
+      
+      if (loadedMessages.isNotEmpty) {
+        // Sort messages by timestamp (newest first from API, then reverse for display)
+        final sortedMessages = List<ChatMessage>.from(loadedMessages);
+        sortedMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        final displayMessages = sortedMessages.reversed.toList();
+        
+        state = state.copyWith(
+          activeRoom: room,
+          messages: displayMessages,
+          isLoading: false,
+          hasMoreMessages: loadedMessages.length >= 20,
+          error: null,
+        );
+        
+        print('✅ Archived conversation loaded successfully with ${displayMessages.length} messages');
+      } else {
+        // No messages found with any approach
+        state = state.copyWith(
+          activeRoom: room,
+          messages: [],
+          isLoading: false,
+          hasMoreMessages: false,
+          error: null, // Don't treat empty archived conversation as error
+        );
+        
+        print('⚠️ No messages found for archived conversation ${room.id} with any approach');
+      }
+      
+    } catch (e) {
+      print('❌ Exception loading archived room messages: $e');
+      state = state.copyWith(
+        activeRoom: room,
+        messages: [],
+        isLoading: false,
+        hasMoreMessages: false,
+        error: 'Failed to load archived conversation: ${e.toString()}',
+      );
+    }
+  }
   Future<void> loadMoreMessages() async {
     final activeRoom = state.activeRoom;
     if (activeRoom == null || state.isLoadingMore || !state.hasMoreMessages) {
@@ -557,29 +988,73 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // Add optimistic message first
     final tempId = _addOptimisticMessage(locationText, replyId: replyId);
 
-    // Validate replyId before sending
-    String? validatedReplyId = replyId;
+    // CRITICAL FIX: For location with reply, use SignalR only
     if (replyId != null && replyId.isNotEmpty) {
-      final replyMessage = state.messages.firstWhere(
-        (msg) => msg.id == replyId,
-        orElse: () => ChatMessage(
-          id: '',
-          roomId: '',
-          from: '',
-          agentId: 0,
-          type: 1,
-          timestamp: DateTime.now(),
-        ),
-      );
-      
-      if (replyMessage.id.isEmpty) {
-        print('⚠️ Reply message not found for location message, removing ReplyId');
-        validatedReplyId = null;
-      }
+      await _sendLocationViaSignalR(locationText, tempId: tempId, replyId: replyId);
+    } else {
+      // Send via API as text message (type 1) with location content
+      await _sendMessageViaAPI(locationText, tempId: tempId, replyId: replyId);
     }
+  }
+  
+  Future<void> _sendLocationViaSignalR(String locationText, {required String tempId, String? replyId}) async {
+    final activeRoom = state.activeRoom;
+    if (activeRoom == null) return;
 
-    // Send via API as text message (type 1) with location content
-    await _sendMessageViaAPI(locationText, tempId: tempId, replyId: validatedReplyId);
+    try {
+      // Get the agent account ID using the correct channel mapping
+      final effectiveChannelId = _getEffectiveChannelId(activeRoom.channelId);
+      final accountId = await _getAgentAccountId(effectiveChannelId);
+      if (accountId == null) {
+        _updateOptimisticMessage(tempId, 4); // Mark as failed
+        state = state.copyWith(error: 'Unable to determine agent account ID');
+        return;
+      }
+      
+      final linkId = activeRoom.ctId ?? activeRoom.id;
+      
+      // Enhanced ReplyId validation for location messages
+      String? validatedReplyId;
+      if (replyId != null && replyId.isNotEmpty) {
+        final numericReplyId = int.tryParse(replyId);
+        if (numericReplyId != null && numericReplyId > 0) {
+          validatedReplyId = numericReplyId.toString();
+          print('✅ Using validated ReplyId for location via SignalR: $validatedReplyId');
+        } else {
+          print('⚠️ Invalid ReplyId format for location: $replyId');
+        }
+      }
+      
+      if (SignalRService.isConnected && validatedReplyId != null) {
+        final signalRData = {
+          'Room': {
+            'IdLink': linkId,
+            'IdGroup': activeRoom.grpId,
+            'IdAccount': int.tryParse(accountId) ?? 1,
+            'IdRoom': activeRoom.id,
+          },
+          'Msg': {
+            'Type': '1', // Send as text message with location content
+            'Msg': locationText,
+            'File': '',
+            'Files': '',
+            'ReplyId': validatedReplyId,
+          },
+        };
+        
+        print('Sending location reply via SignalR: ${jsonEncode(signalRData)}');
+        await SignalRService.sendMessage(signalRData);
+        _updateOptimisticMessage(tempId, 2); // Mark as sent
+        print('✅ Location reply sent successfully via SignalR');
+      } else {
+        _updateOptimisticMessage(tempId, 4); // Mark as failed
+        state = state.copyWith(error: 'Cannot send location reply. Connection not available or invalid reply ID.');
+      }
+    } catch (e) {
+      _updateOptimisticMessage(tempId, 4); // Mark as failed
+      print('❌ Location reply via SignalR failed: $e');
+      state = state.copyWith(error: 'Failed to send location reply: $e');
+    }
   }
   Future<void> _sendMessageViaAPI(String text, {required String tempId, String? replyId}) async {
     final activeRoom = state.activeRoom;
@@ -610,16 +1085,85 @@ class ChatNotifier extends StateNotifier<ChatState> {
       
       print('Room channelId: ${activeRoom.channelId}, Effective channelId: $channelId');
       
-      // Format data for Inbox API
+      // CRITICAL FIX: For reply messages, use SignalR only (no API)
+      // Backend confirmed that reply feature only works via WebSocket
+      if (replyId != null && replyId.isNotEmpty) {
+        print('🔄 Reply message detected, using SignalR only (API does not support reply)');
+        
+        // Enhanced ReplyId validation for SignalR
+        String? validatedReplyId;
+        
+        // Find the reply message in our local message list
+        final replyMessage = state.messages.firstWhere(
+          (msg) => msg.id == replyId,
+          orElse: () => ChatMessage(
+            id: '',
+            roomId: '',
+            from: '',
+            agentId: 0,
+            type: 1,
+            timestamp: DateTime.now(),
+          ),
+        );
+        
+        if (replyMessage.id.isEmpty) {
+          print('⚠️ Reply message not found in local messages, removing ReplyId');
+        } else {
+          // Validate ReplyId format - must be numeric and positive
+          final numericReplyId = int.tryParse(replyId);
+          if (numericReplyId != null && numericReplyId > 0) {
+            validatedReplyId = numericReplyId.toString();
+            print('✅ Using validated ReplyId for SignalR: $validatedReplyId');
+          } else {
+            print('⚠️ Invalid ReplyId format for SignalR: $replyId');
+          }
+        }
+        
+        // Send ONLY via SignalR for reply messages
+        if (SignalRService.isConnected && validatedReplyId != null) {
+          try {
+            final signalRData = {
+              'Room': {
+                'IdLink': linkId,
+                'IdGroup': activeRoom.grpId,
+                'IdAccount': int.tryParse(accountId) ?? 1,
+                'IdRoom': activeRoom.id,
+              },
+              'Msg': {
+                'Type': '1',
+                'Msg': text.trim(),
+                'File': '',
+                'Files': '',
+                'ReplyId': validatedReplyId,
+              },
+            };
+            
+            print('Sending reply message via SignalR only: ${jsonEncode(signalRData)}');
+            await SignalRService.sendMessage(signalRData);
+            _updateOptimisticMessage(tempId, 2); // Mark as sent
+            print('✅ Reply message sent successfully via SignalR');
+            return; // Exit early for reply messages
+          } catch (signalRError) {
+            _updateOptimisticMessage(tempId, 4); // Mark as failed
+            print('❌ SignalR reply failed: $signalRError');
+            state = state.copyWith(error: 'Failed to send reply message. Reply feature requires active connection.');
+            return;
+          }
+        } else {
+          _updateOptimisticMessage(tempId, 4); // Mark as failed
+          state = state.copyWith(error: 'Cannot send reply message. Connection not available or invalid reply ID.');
+          return;
+        }
+      }
+      
+      // For non-reply messages, use API as primary method
       final apiMessageData = {
         'LinkId': int.tryParse(linkId),
         'ChannelId': channelId,
         'AccountIds': accountId,
         'BodyType': 1,
-        'Body': text.trim(), // Ensure text is properly trimmed
+        'Body': text.trim(),
         'Attachment': '',
-        // Only include ReplyId if it's not null and not empty
-        if (replyId != null && replyId.isNotEmpty) 'ReplyId': replyId,
       };
       
       // Validate required fields
@@ -635,48 +1179,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         return;
       }
       
-      // Additional validation for reply messages
-      if (replyId != null && replyId.isNotEmpty) {
-        // Validate that the reply message exists in our message list
-        final replyMessage = state.messages.firstWhere(
-          (msg) => msg.id == replyId,
-          orElse: () => ChatMessage(
-            id: '',
-            roomId: '',
-            from: '',
-            agentId: 0,
-            type: 1,
-            timestamp: DateTime.now(),
-          ),
-        );
-        
-        if (replyMessage.id.isEmpty) {
-          print('⚠️ Reply message not found in local messages, removing ReplyId');
-          apiMessageData.remove('ReplyId');
-        } else {
-          print('✅ Reply message found: ${replyMessage.id} - ${replyMessage.message}');
-          
-          // Additional validation: Check if ReplyId is too long or has invalid format
-          if (replyId.length > 20) {
-            print('⚠️ ReplyId too long (${replyId.length} chars), removing ReplyId');
-            apiMessageData.remove('ReplyId');
-          } else {
-            // For WhatsApp Business, try to ensure ReplyId is in correct format
-            if (channelId == 1561) {
-              // Check if ReplyId looks like a valid message ID
-              final isValidFormat = RegExp(r'^\d+$').hasMatch(replyId);
-              if (!isValidFormat) {
-                print('⚠️ Invalid ReplyId format for WhatsApp Business: $replyId, removing');
-                apiMessageData.remove('ReplyId');
-              } else {
-                print('✅ Valid ReplyId format for WhatsApp Business: $replyId');
-              }
-            }
-          }
-        }
-      }
-      
-      print('Sending message via API: ${jsonEncode(apiMessageData)}');
+      print('Sending regular message via API: ${jsonEncode(apiMessageData)}');
       
       final response = await ApiService.sendMessage(apiMessageData);
       if (response.isError) {
@@ -684,12 +1187,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
         state = state.copyWith(error: response.error ?? 'Failed to send message');
       } else {
         _updateOptimisticMessage(tempId, 2); // Mark as sent
-        print('Message sent successfully via API');
-        print('API Response Data: ${response.data}');
+        print('Regular message sent successfully via API');
         
-        // Also try SignalR for real-time updates
+        // Also send via SignalR for real-time updates (without ReplyId)
         try {
-          // Only try SignalR if we're actually connected
           if (SignalRService.isConnected) {
             final signalRData = {
               'Room': {
@@ -703,17 +1204,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 'Msg': text.trim(),
                 'File': '',
                 'Files': '',
-                if (replyId != null && replyId.isNotEmpty) 'ReplyId': replyId,
               },
             };
-            print('Sending SignalR notification: ${jsonEncode(signalRData)}');
+            print('Sending SignalR notification for regular message: ${jsonEncode(signalRData)}');
             await SignalRService.sendMessage(signalRData);
             print('SignalR notification sent successfully');
           } else {
             print('ℹ️ SignalR not connected, skipping real-time notification');
           }
         } catch (e) {
-          print('SignalR notification failed: $e');
+          print('SignalR notification failed (this is OK): $e');
         }
       }
     } catch (apiError) {
@@ -751,17 +1251,32 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
       print('Upload successful: ${uploadResponse.data?.filename}');
       
-      // Send media message via API
-      await _sendMediaMessageViaAPI(type, caption, uploadResponse.data!, replyId: replyId);
+      // Add optimistic media message (pending single-check)
+      final tempId = _addOptimisticMediaMessage(
+        type: type,
+        uploadedFile: uploadResponse.data!,
+        caption: caption,
+        replyId: replyId,
+      );
+      
+      // Send media message via API or SignalR (depending on reply)
+      await _sendMediaMessageViaAPI(type, caption, uploadResponse.data!, replyId: replyId, tempId: tempId);
     } catch (e) {
       print('Error sending media message: $e');
       state = state.copyWith(error: 'Failed to send media message: $e');
     }
   }
 
-  Future<void> _sendMediaMessageViaAPI(String type, String? caption, UploadedFile uploadedFile, {String? replyId}) async {
+  Future<void> _sendMediaMessageViaAPI(String type, String? caption, UploadedFile uploadedFile, {String? replyId, String? tempId}) async {
     final activeRoom = state.activeRoom;
     if (activeRoom == null) return;
+
+    // CRITICAL FIX: For media messages with reply, use SignalR only
+    if (replyId != null && replyId.isNotEmpty) {
+      print('🔄 Media reply message detected, using SignalR only (API does not support reply)');
+      await _sendMediaReplyViaSignalR(type, caption, uploadedFile, replyId: replyId, tempId: tempId);
+      return;
+    }
 
     try {
       // Get the agent account ID using the correct channel mapping
@@ -788,6 +1303,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
         'OriginalName': uploadedFile.originalName,
       };
       
+      // Some channels (e.g., WhatsApp Business) expect caption inside attachment object
+      if (bodyText.isNotEmpty && (type == '3' || type == '4')) {
+        attachmentMap['Caption'] = bodyText;
+      }
+      
       attachmentData = jsonEncode([attachmentMap]);
       
       // Format data for Inbox API
@@ -798,47 +1318,37 @@ class ChatNotifier extends StateNotifier<ChatState> {
         'BodyType': int.parse(type),
         'Body': bodyText,
         'Attachment': attachmentData,
-        // Only include ReplyId if it's not null and not empty
-        if (replyId != null && replyId.isNotEmpty) 'ReplyId': replyId,
       };
-      
-      // Additional validation for reply messages
-      if (replyId != null && replyId.isNotEmpty) {
-        // Validate that the reply message exists in our message list
-        final replyMessage = state.messages.firstWhere(
-          (msg) => msg.id == replyId,
-          orElse: () => ChatMessage(
-            id: '',
-            roomId: '',
-            from: '',
-            agentId: 0,
-            type: 1,
-            timestamp: DateTime.now(),
-          ),
-        );
-        
-        if (replyMessage.id.isEmpty) {
-          print('⚠️ Reply message not found for media message, removing ReplyId');
-          apiMessageData.remove('ReplyId');
-        } else {
-          print('✅ Reply message found for media: ${replyMessage.id}');
-        }
-      }
       
       print('Sending media message via API: ${jsonEncode(apiMessageData)}');
       
       final response = await ApiService.sendMessage(apiMessageData);
       if (response.isError) {
         state = state.copyWith(error: response.error ?? 'Failed to send media message');
+        if (tempId != null && tempId.isNotEmpty) {
+          _updateOptimisticMessage(tempId, 4); // failed
+        }
       } else {
         print('Media message sent successfully via API');
         print('Media message with caption sent successfully');
+        if (tempId != null && tempId.isNotEmpty) {
+          _updateOptimisticMessage(tempId, 2); // sent
+        }
         
         // Also send via SignalR for real-time updates
         try {
           // Only try SignalR if we're actually connected
           if (SignalRService.isConnected) {
             // For SignalR, send media message with caption
+            // Build file map with caption for SignalR as well
+            final fileMap = {
+              'Filename': uploadedFile.filename,
+              'OriginalName': uploadedFile.originalName,
+            };
+            if ((caption ?? '').trim().isNotEmpty) {
+              fileMap['Caption'] = caption!.trim();
+            }
+
             final signalRData = {
               'Room': {
                 'IdLink': linkId,
@@ -850,8 +1360,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 'Type': type,
                 'Msg': caption?.trim(), // Include caption in SignalR message
                 'File': uploadedFile.filename,
-                'Files': jsonEncode([uploadedFile.toJson()]),
-                if (replyId != null && replyId.isNotEmpty) 'ReplyId': replyId,
+                'Files': jsonEncode([fileMap]),
               },
             };
             await SignalRService.sendMessage(signalRData);
@@ -866,6 +1375,81 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (apiError) {
       print('Media API fallback failed: $apiError');
       state = state.copyWith(error: 'Failed to send media message: $apiError');
+      if (tempId != null && tempId.isNotEmpty) {
+        _updateOptimisticMessage(tempId, 4);
+      }
+    }
+  }
+  
+  Future<void> _sendMediaReplyViaSignalR(String type, String? caption, UploadedFile uploadedFile, {String? replyId, String? tempId}) async {
+    final activeRoom = state.activeRoom;
+    if (activeRoom == null) return;
+
+    try {
+      // Get the agent account ID using the correct channel mapping
+      final effectiveChannelId = _getEffectiveChannelId(activeRoom.channelId);
+      final accountId = await _getAgentAccountId(effectiveChannelId);
+      if (accountId == null) {
+        state = state.copyWith(error: 'Unable to determine agent account ID');
+        return;
+      }
+      
+      final linkId = activeRoom.ctId ?? activeRoom.id;
+      
+      // Enhanced ReplyId validation for media reply messages
+      String? validatedReplyId;
+      if (replyId != null && replyId.isNotEmpty) {
+        final numericReplyId = int.tryParse(replyId);
+        if (numericReplyId != null && numericReplyId > 0) {
+          validatedReplyId = numericReplyId.toString();
+          print('✅ Using validated ReplyId for media reply via SignalR: $validatedReplyId');
+        } else {
+          print('⚠️ Invalid ReplyId format for media reply: $replyId');
+        }
+      }
+      
+      if (SignalRService.isConnected && validatedReplyId != null) {
+        // Build file map with caption for SignalR reply
+        final fileMap = {
+          'Filename': uploadedFile.filename,
+          'OriginalName': uploadedFile.originalName,
+        };
+        if ((caption ?? '').trim().isNotEmpty) {
+          fileMap['Caption'] = caption!.trim();
+        }
+
+        final signalRData = {
+          'Room': {
+            'IdLink': linkId,
+            'IdGroup': activeRoom.grpId,
+            'IdAccount': int.tryParse(accountId) ?? 1,
+            'IdRoom': activeRoom.id,
+          },
+          'Msg': {
+            'Type': type,
+            'Msg': caption?.trim(),
+            'File': uploadedFile.filename,
+            'Files': jsonEncode([fileMap]),
+            'ReplyId': validatedReplyId,
+          },
+        };
+        
+        print('Sending media reply via SignalR: ${jsonEncode(signalRData)}');
+        await SignalRService.sendMessage(signalRData);
+        print('✅ Media reply sent successfully via SignalR');
+        if (tempId != null && tempId.isNotEmpty) {
+          _updateOptimisticMessage(tempId, 2);
+        }
+        
+        // Media reply sent successfully, you can update the state or use a callback to notify UI
+        print('Media reply sent successfully');
+        state = state.copyWith(error: null); // Optionally clear any previous error
+      } else {
+        state = state.copyWith(error: 'Cannot send media reply. Connection not available or invalid reply ID.');
+      }
+    } catch (e) {
+      print('❌ Media reply via SignalR failed: $e');
+      state = state.copyWith(error: 'Failed to send media reply: $e');
     }
   }
   
@@ -930,151 +1514,165 @@ class ChatNotifier extends StateNotifier<ChatState> {
     return null;
   }
 
-  void _updateRoom(Room room) {
-    // Only update non-archived rooms in the regular rooms list
-    if (room.status != 4) {
-      final rooms = List<Room>.from(state.rooms);
-      final index = rooms.indexWhere((r) => r.id == room.id);
-      
-      if (index != -1) {
-        print('🔄 Updating existing room: ${room.name}');
-        rooms[index] = room;
-      } else {
-        print('➕ Adding new room to list: ${room.name}');
-        rooms.insert(0, room);
-      }
+ void _updateRoom(Room room) {
+  if (room.status != 4) {
+    final rooms = List<Room>.from(state.rooms);
+    final index = rooms.indexWhere((r) => r.id == room.id);
 
-      // Sort rooms again (pinned first, then by last message time)
-      rooms.sort((a, b) {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        
-        if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
-        if (a.lastMessageTime == null) return 1;
-        if (b.lastMessageTime == null) return -1;
-        return b.lastMessageTime!.compareTo(a.lastMessageTime!);
-      });
-      state = state.copyWith(rooms: rooms);
-      print('✅ Room list updated, total rooms: ${rooms.length}');
+    if (index != -1) {
+      print('🔄 Updating existing room: ${room.name}');
+      rooms[index] = room;
     } else {
-      // If it's archived, update archived rooms list
-      final archivedRooms = List<Room>.from(state.archivedRooms);
-      final index = archivedRooms.indexWhere((r) => r.id == room.id);
-      
-      if (index != -1) {
-        print('🔄 Updating existing archived room: ${room.name}');
-        archivedRooms[index] = room;
-      } else {
-        print('➕ Adding new room to archived list: ${room.name}');
-        archivedRooms.insert(0, room);
-      }
-
-      state = state.copyWith(archivedRooms: archivedRooms);
+      print('➕ Adding new room to list: ${room.name}');
+      rooms.insert(0, room);
     }
-  }
 
-  void _addMessage(ChatMessage message) {
-    print('📨 New message received: ${message.id} for room ${message.roomId}');
-    
-    // Always update the room list with new message info
-    _updateRoomWithNewMessage(message);
-    
-    // Add message to active room if it matches
-    if (state.activeRoom?.id == message.roomId) {
-      print('📨 Adding message to active room messages list');
-      final messages = List<ChatMessage>.from(state.messages);
-      
-      // Check if message already exists to avoid duplicates
-      final existingIndex = messages.indexWhere((m) => m.id == message.id);
-      if (existingIndex == -1) {
-        // Check if this is a real message that should replace an optimistic message
-        final optimisticIndex = messages.indexWhere((m) => 
-            m.id.startsWith('temp_') && 
-            m.message == message.message &&
-            m.timestamp.difference(message.timestamp).abs().inMinutes < 5);
-        
-        if (optimisticIndex != -1) {
-          // Replace optimistic message with real message
-          messages[optimisticIndex] = message;
-          print('🔄 Replaced optimistic message with real message');
-        } else {
-          // Add new message normally
-          messages.add(message);
-          print('➕ Added new message to active room');
-        }
-        
-        // Sort messages by timestamp
-        messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        state = state.copyWith(messages: messages);
-      } else {
-        // Update existing message if it's an optimistic message being replaced
-        if (messages[existingIndex].id.startsWith('temp_') && !message.id.startsWith('temp_')) {
-          messages[existingIndex] = message;
-          state = state.copyWith(messages: messages);
-          print('🔄 Updated existing optimistic message');
-        }
-      }
+    rooms.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+
+      if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
+      if (a.lastMessageTime == null) return 1;
+      if (b.lastMessageTime == null) return -1;
+      return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+    });
+
+    // CRITICAL: If this room is active, update activeRoom object reference
+    // but DON'T change messages or trigger reload
+    Room? updatedActiveRoom = state.activeRoom;
+    if (state.activeRoom?.id == room.id) {
+      updatedActiveRoom = room;
+      print('🔄 Updated active room metadata (no reload)');
+    }
+
+    state = state.copyWith(
+      rooms: rooms,
+      activeRoom: updatedActiveRoom,
+      // CRITICAL: Don't touch messages during room update
+    );
+    print('✅ Room list updated, total rooms: ${rooms.length}');
+  } else {
+    final archivedRooms = List<Room>.from(state.archivedRooms);
+    final index = archivedRooms.indexWhere((r) => r.id == room.id);
+
+    if (index != -1) {
+      print('🔄 Updating existing archived room: ${room.name}');
+      archivedRooms[index] = room;
     } else {
-      print('📨 Message for different room, only updating room list');
+      print('➕ Adding new room to archived list: ${room.name}');
+      archivedRooms.insert(0, room);
     }
+
+    state = state.copyWith(archivedRooms: archivedRooms);
   }
+}
+
+
+ void _addMessage(ChatMessage message) {
+  print('📨 New message received: ${message.id} for room ${message.roomId}');
+  
+  // ALWAYS update room list metadata
+  _updateRoomWithNewMessage(message);
+  
+  // CRITICAL: Only modify messages if this is the ACTIVE room
+  if (state.activeRoom?.id == message.roomId) {
+    print('📨 Message for active room, adding to messages list');
+    final messages = List<ChatMessage>.from(state.messages);
+    
+    final existingIndex = messages.indexWhere((m) => m.id == message.id);
+    if (existingIndex == -1) {
+      // Check for optimistic message to replace
+      final optimisticIndex = messages.indexWhere((m) => 
+          m.id.startsWith('temp_') && 
+          m.message == message.message &&
+          m.timestamp.difference(message.timestamp).abs().inMinutes < 5);
+      
+      if (optimisticIndex != -1) {
+        messages[optimisticIndex] = message;
+        print('🔄 Replaced optimistic message');
+      } else {
+        messages.add(message);
+        print('➕ Added new message');
+      }
+      
+      messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      
+      // CRITICAL: ONLY update messages, nothing else
+      state = state.copyWith(messages: messages);
+    } else if (messages[existingIndex].id.startsWith('temp_')) {
+      messages[existingIndex] = message;
+      state = state.copyWith(messages: messages);
+      print('🔄 Updated optimistic message');
+    }
+  } else {
+    print('📨 Message for different room, room list already updated');
+  }
+}
 
   void _updateRoomWithNewMessage(ChatMessage message) {
-    final rooms = List<Room>.from(state.rooms);
-    final roomIndex = rooms.indexWhere((r) => r.id == message.roomId);
+  final rooms = List<Room>.from(state.rooms);
+  final roomIndex = rooms.indexWhere((r) => r.id == message.roomId);
+  
+  if (roomIndex != -1) {
+    final room = rooms[roomIndex];
+    final shouldIncreaseUnread = !_isMessageFromCurrentAgent(message);
     
-    if (roomIndex != -1) {
-      final room = rooms[roomIndex];
+    final updatedRoom = Room(
+      id: room.id,
+      ctId: room.ctId,
+      ctRealId: room.ctRealId,
+      grpId: room.grpId,
+      name: room.name,
+      lastMessage: message.message ?? _getMessageTypeDescription(message.type),
+      lastMessageTime: message.timestamp,
+      unreadCount: shouldIncreaseUnread ? room.unreadCount + 1 : room.unreadCount,
+      status: room.status,
+      channelId: room.channelId,
+      channelName: room.channelName,
+      accountName: room.accountName,
+      botName: room.botName,
+      contactImage: room.contactImage,
+      linkImage: room.linkImage,
+      isGroup: room.isGroup,
+      isPinned: room.isPinned,
+      isBlocked: room.isBlocked,
+      isMuteBot: room.isMuteBot,
+      tags: room.tags,
+      funnel: room.funnel,
+      funnelId: room.funnelId,
+      tagIds: room.tagIds,
+    );
+    
+    rooms[roomIndex] = updatedRoom;
+    
+    rooms.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
       
-      // Determine if this message should increase unread count
-      final shouldIncreaseUnread = !_isMessageFromCurrentAgent(message);
-      
-      // Create updated room with new message info
-      final updatedRoom = Room(
-        id: room.id,
-        ctId: room.ctId,
-        ctRealId: room.ctRealId,
-        grpId: room.grpId,
-        name: room.name,
-        lastMessage: message.message ?? _getMessageTypeDescription(message.type),
-        lastMessageTime: message.timestamp,
-        unreadCount: shouldIncreaseUnread ? room.unreadCount + 1 : room.unreadCount,
-        status: room.status,
-        channelId: room.channelId,
-        channelName: room.channelName,
-        contactImage: room.contactImage,
-        linkImage: room.linkImage,
-        isGroup: room.isGroup,
-        isPinned: room.isPinned,
-        isBlocked: room.isBlocked,
-        isMuteBot: room.isMuteBot,
-        tags: room.tags,
-        funnel: room.funnel,
-        funnelId: room.funnelId,
-        tagIds: room.tagIds,
-      );
-      
-      rooms[roomIndex] = updatedRoom;
-      
-      // Sort rooms again (pinned first, then by last message time)
-      rooms.sort((a, b) {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        
-        if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
-        if (a.lastMessageTime == null) return 1;
-        if (b.lastMessageTime == null) return -1;
-        return b.lastMessageTime!.compareTo(a.lastMessageTime!);
-      });
-      
-      state = state.copyWith(rooms: rooms);
-      print('🔍 Updated room ${room.name} with new message from ${message.from}');
-    } else {
-      print('⚠️ Room ${message.roomId} not found in current room list');
-      // Optionally reload rooms if room not found
-      loadRooms();
+      if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
+      if (a.lastMessageTime == null) return 1;
+      if (b.lastMessageTime == null) return -1;
+      return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+    });
+    
+    // CRITICAL: Update activeRoom metadata if same room
+    Room? newActiveRoom = state.activeRoom;
+    if (state.activeRoom?.id == message.roomId) {
+      newActiveRoom = updatedRoom;
+      print('🔄 Updated active room metadata from message');
     }
+    
+    // CRITICAL: Only update rooms and activeRoom, NOT messages
+    state = state.copyWith(
+      rooms: rooms,
+      activeRoom: newActiveRoom,
+    );
+    print('🔄 Room ${room.name} updated with new message');
+  } else {
+    print('⚠️ Room ${message.roomId} not found');
+    // DON'T call loadRooms here - it causes refresh loop
   }
+}
 
   String _getCurrentAgentId() {
     final userData = StorageService.getUserData();
@@ -1149,6 +1747,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (replyId != null) {
       try {
         replyToMessage = state.messages.firstWhere((m) => m.id == replyId);
+        print('✅ Found reply message for optimistic message: ${replyToMessage.id} - ${replyToMessage.message}');
       } catch (e) {
         print('Reply message not found: $replyId');
       }
@@ -1177,8 +1776,72 @@ class ChatNotifier extends StateNotifier<ChatState> {
     messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     
     state = state.copyWith(messages: messages);
-    print('Added optimistic message with from: $fromId (channel: ${activeRoom.channelId})');
+    print('Added optimistic message with reply info - from: $fromId, replyId: $replyId, replyMessage: ${replyToMessage?.message}');
     
+    return tempId;
+  }
+
+  // Add optimistic media message (image/video/document/audio)
+  String _addOptimisticMediaMessage({
+    required String type,
+    required UploadedFile uploadedFile,
+    String? caption,
+    String? replyId,
+  }) {
+    final activeRoom = state.activeRoom;
+    if (activeRoom == null) return '';
+
+    // Resolve sender (same logic as text)
+    final accountService = AccountService();
+    final agentAccountId = accountService.getAccountIdForChannel(activeRoom.channelId);
+    final userData = StorageService.getUserData();
+    final fallbackId = userData?['CurrentUserId']?.toString() ?? userData?['UserId']?.toString() ?? 'agent';
+    final fromId = agentAccountId ?? fallbackId;
+
+    final now = DateTime.now();
+    final tempId = 'temp_${now.millisecondsSinceEpoch}_${uploadedFile.filename.hashCode}';
+
+    // Build file payload for optimistic display
+    final fileMap = {
+      'Filename': uploadedFile.filename,
+      'OriginalName': uploadedFile.originalName,
+      if ((caption ?? '').trim().isNotEmpty) 'Caption': caption!.trim(),
+    };
+
+    // Reply info if any
+    ChatMessage? replyToMessage;
+    if (replyId != null) {
+      try {
+        replyToMessage = state.messages.firstWhere((m) => m.id == replyId);
+      } catch (_) {}
+    }
+
+    final optimisticMessage = ChatMessage(
+      id: tempId,
+      roomId: activeRoom.id,
+      from: fromId,
+      agentId: int.tryParse(userData?['UserId']?.toString() ?? '1') ?? 1,
+      type: int.tryParse(type) ?? 1,
+      message: caption?.trim(),
+      file: jsonEncode(fileMap),
+      files: jsonEncode([fileMap]),
+      timestamp: now,
+      ack: 1, // pending single check
+      replyId: replyId,
+      replyType: replyToMessage?.type,
+      replyFrom: replyToMessage?.from,
+      replyMessage: replyToMessage?.message,
+      replyFiles: replyToMessage?.files,
+      replyGrpMember: replyToMessage?.from != fromId ? 'Customer' : null,
+    );
+
+    final messages = List<ChatMessage>.from(state.messages);
+    messages.add(optimisticMessage);
+    messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    state = state.copyWith(messages: messages);
+
+    print('🖼 Added optimistic media message: ${uploadedFile.originalName} (type=$type)');
+
     return tempId;
   }
 
@@ -1187,7 +1850,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final index = messages.indexWhere((m) => m.id == messageId);
     
     if (index != -1) {
-      print('Updating optimistic message $messageId with ack status: $ackStatus');
+      print('Updating optimistic message $messageId with ack status: $ackStatus, preserving reply data');
       final updatedMessage = ChatMessage(
         id: messages[index].id,
         roomId: messages[index].roomId,
@@ -1205,26 +1868,90 @@ class ChatNotifier extends StateNotifier<ChatState> {
         replyFrom: messages[index].replyFrom,
         replyMessage: messages[index].replyMessage,
         replyFiles: messages[index].replyFiles,
+        replyGrpMember: messages[index].replyGrpMember,
         isEdited: messages[index].isEdited,
         note: messages[index].note,
       );
       
       messages[index] = updatedMessage;
       state = state.copyWith(messages: messages);
+      print('✅ Updated optimistic message, reply data preserved: replyId=${updatedMessage.replyId}');
     } else {
       print('Optimistic message $messageId not found for update');
     }
   }
 
   void _updateMessageAck(Map<String, dynamic> ackData) {
+    // Check if this is a NeedReply update
+    if (ackData['type'] == 'needReply') {
+      _handleNeedReplyUpdate(ackData);
+      return;
+    }
+
     if (state.activeRoom?.id == ackData['roomId']) {
       final messages = List<ChatMessage>.from(state.messages);
       final index = messages.indexWhere((m) => m.id == ackData['messageId']);
-      
+
       if (index != -1) {
         // Update message ack status
         // This would require updating the ChatMessage model to be mutable or creating a new instance
       }
+    }
+  }
+
+  void _handleNeedReplyUpdate(Map<String, dynamic> data) {
+    final roomId = data['roomId'] as String;
+    final needReply = data['needReply'] as bool;
+
+    print('🔔 Handling NeedReply update: Room $roomId, NeedReply: $needReply');
+
+    // Update the room in the rooms list
+    final rooms = List<Room>.from(state.rooms);
+    final roomIndex = rooms.indexWhere((r) => r.id == roomId);
+
+    if (roomIndex != -1) {
+      final updatedRoom = Room(
+        id: rooms[roomIndex].id,
+        ctId: rooms[roomIndex].ctId,
+        ctRealId: rooms[roomIndex].ctRealId,
+        grpId: rooms[roomIndex].grpId,
+        name: rooms[roomIndex].name,
+        lastMessage: rooms[roomIndex].lastMessage,
+        lastMessageTime: rooms[roomIndex].lastMessageTime,
+        unreadCount: rooms[roomIndex].unreadCount,
+        status: rooms[roomIndex].status,
+        channelId: rooms[roomIndex].channelId,
+        channelName: rooms[roomIndex].channelName,
+        accountName: rooms[roomIndex].accountName,
+        botName: rooms[roomIndex].botName,
+        contactImage: rooms[roomIndex].contactImage,
+        linkImage: rooms[roomIndex].linkImage,
+        isGroup: rooms[roomIndex].isGroup,
+        isPinned: rooms[roomIndex].isPinned,
+        isBlocked: rooms[roomIndex].isBlocked,
+        isMuteBot: rooms[roomIndex].isMuteBot,
+        tags: rooms[roomIndex].tags,
+        messageTags: rooms[roomIndex].messageTags,
+        funnel: rooms[roomIndex].funnel,
+        funnelId: rooms[roomIndex].funnelId,
+        tagIds: rooms[roomIndex].tagIds,
+        needReply: needReply, // Update the needReply field
+      );
+
+      rooms[roomIndex] = updatedRoom;
+
+      // Also update active room if this is the active room
+      Room? updatedActiveRoom = state.activeRoom;
+      if (state.activeRoom?.id == roomId) {
+        updatedActiveRoom = updatedRoom;
+      }
+
+      state = state.copyWith(
+        rooms: rooms,
+        activeRoom: updatedActiveRoom,
+      );
+
+      print('✅ NeedReply status updated for room $roomId');
     }
   }
 
@@ -1262,6 +1989,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
         return 'video/mp4';
       case 'mp3':
         return 'audio/mp3';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'aac':
+        return 'audio/aac';
+      case 'wav':
+        return 'audio/wav';
       case 'pdf':
         return 'application/pdf';
       default:
@@ -1311,7 +2044,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         return 1569;
       default:
         return displayChannelId; // Use as-is if no mapping found
-    }
+    } 
   }
 }
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/chat_provider.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/models/chat_models.dart';
 import 'package:nobox_chat/presentation/widgets/room_list_widget.dart';
+import '../chat/chat_screen.dart';
 
 class ArsipContactScreen extends ConsumerStatefulWidget {
   const ArsipContactScreen({super.key});
@@ -174,7 +176,58 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
                           rooms: chatState.archivedRooms,
                           isLoading: false,
                           selectedRoomId: null,
-                          onRoomTap: null, // Disabled tap for archived rooms
+                          onRoomTap: (room) async {
+                            // Fetch complete room data before navigating
+                            try {
+                              print('🔍 Fetching complete archived room data for roomId: ${room.id}');
+                              
+                              final response = await ApiService.dio.post(
+                                'Services/Chat/Chatrooms/DetailRoom',
+                                data: {
+                                  'EntityId': room.id,
+                                },
+                              );
+                              
+                              Room roomToNavigate = room; // Fallback to current room
+                              
+                              if (response.statusCode == 200 && 
+                                  response.data['IsError'] != true && 
+                                  response.data['Data'] != null) {
+                                final roomData = response.data['Data']['Room'];
+                                roomToNavigate = Room.fromJson(roomData);
+                                print('✅ Got complete archived room data: ${roomToNavigate.name}, AccountName: ${roomToNavigate.accountName}, BotName: ${roomToNavigate.botName}');
+                              } else {
+                                print('⚠️ Failed to fetch complete archived room data, using list data');
+                              }
+                              
+                              if (!mounted) return;
+                              
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatScreen(
+                                    room: roomToNavigate,
+                                    isArchived: true,
+                                  ),
+                                ),
+                              );
+                            } catch (e) {
+                              print('❌ Error fetching complete archived room data: $e');
+                              
+                              // Fallback to using the list data if API fails
+                              if (!mounted) return;
+                              
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatScreen(
+                                    room: room,
+                                    isArchived: true,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
                           isSelectionMode: _isSelectionMode,
                           selectedRoomIds: _selectedRoomIds,
                           onRoomLongPress: _enterSelectionMode,

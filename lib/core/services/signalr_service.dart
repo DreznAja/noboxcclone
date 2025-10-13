@@ -4,6 +4,8 @@ import 'package:signalr_netcore/signalr_client.dart';
 import '../app_config.dart';
 import '../models/chat_models.dart';
 import 'storage_service.dart';
+import 'push_notification_service.dart';
+import 'api_service.dart';
 
 class SignalRService {
   static HubConnection? _connection;
@@ -63,10 +65,13 @@ class SignalRService {
       await _connection!.start()!.timeout(const Duration(seconds: 15));
       _reconnectAttempts = 0;
       print('🔌 SignalR connection established successfully');
-      
+
+      // CRITICAL: Verify event handlers are registered
+      print('📡 Verifying event handlers are registered...');
+
       // Don't mark as connected until subscription is complete
       print('📡 Subscribing user to SignalR...');
-      
+
       try {
         await _subscribeUser();
         _connectionStatusController.add('connected');
@@ -145,8 +150,18 @@ class SignalRService {
           final messageData = arguments[1] as String;
           final parsedData = jsonDecode(messageData);
           final message = ChatMessage.fromJson(parsedData);
-          print('📨 SignalR TerimaPesan: ${message.id} for room ${message.roomId}');
+          print('📨 ═══════════════════════════════════════════════════════');
+          print('📨 SignalR: TerimaPesan received!');
+          print('📨   Message ID: ${message.id}');
+          print('📨   Room ID: ${message.roomId}');
+          print('📨   Message: ${message.message}');
+          print('📨   From: ${message.from}');
+          print('📨   Broadcasting to ${_messageController.hasListener ? "ACTIVE" : "NO"} listeners');
+          print('📨 ═══════════════════════════════════════════════════════');
           _messageController.add(message);
+
+          // Show push notification for new messages
+          _handleNewMessageNotification(message);
         } catch (e) {
           print('❌ Error parsing TerimaPesan: $e');
         }
@@ -159,7 +174,13 @@ class SignalRService {
         try {
           final roomData = arguments[1] as String;
           final room = Room.fromJson(jsonDecode(roomData));
-          print('📨 SignalR TerimaSubSpv: ${room.id} - ${room.name}');
+          print('🏠 ═══════════════════════════════════════════════════════');
+          print('🏠 SignalR: TerimaSubSpv received!');
+          print('🏠   Room ID: ${room.id}');
+          print('🏠   Room Name: ${room.name}');
+          print('🏠   Last Message: ${room.lastMessage}');
+          print('🏠   Broadcasting to ${_roomUpdateController.hasListener ? "ACTIVE" : "NO"} listeners');
+          print('🏠 ═══════════════════════════════════════════════════════');
           _roomUpdateController.add(room);
         } catch (e) {
           print('❌ Error parsing TerimaSubSpv: $e');
@@ -172,7 +193,13 @@ class SignalRService {
         try {
           final roomData = arguments[1] as String;
           final room = Room.fromJson(jsonDecode(roomData));
-          print('📨 SignalR TerimaSubAgent: ${room.id} - ${room.name}');
+          print('🏠 ═══════════════════════════════════════════════════════');
+          print('🏠 SignalR: TerimaSubAgent received!');
+          print('🏠   Room ID: ${room.id}');
+          print('🏠   Room Name: ${room.name}');
+          print('🏠   Last Message: ${room.lastMessage}');
+          print('🏠   Broadcasting to ${_roomUpdateController.hasListener ? "ACTIVE" : "NO"} listeners');
+          print('🏠 ═══════════════════════════════════════════════════════');
           _roomUpdateController.add(room);
         } catch (e) {
           print('❌ Error parsing TerimaSubAgent: $e');
@@ -186,7 +213,13 @@ class SignalRService {
         try {
           final roomData = arguments[1] as String;
           final room = Room.fromJson(jsonDecode(roomData));
-          print('📨 SignalR TerimaRoomBaru: ${room.id} - ${room.name}');
+          print('🆕 ═══════════════════════════════════════════════════════');
+          print('🆕 SignalR: TerimaRoomBaru (New Room) received!');
+          print('🆕   Room ID: ${room.id}');
+          print('🆕   Room Name: ${room.name}');
+          print('🆕   Last Message: ${room.lastMessage}');
+          print('🆕   Broadcasting to ${_roomUpdateController.hasListener ? "ACTIVE" : "NO"} listeners');
+          print('🆕 ═══════════════════════════════════════════════════════');
           _roomUpdateController.add(room);
         } catch (e) {
           print('❌ Error parsing TerimaRoomBaru: $e');
@@ -216,6 +249,93 @@ class SignalRService {
     });
   }
 
+  static Future<void> _handleNewMessageNotification(ChatMessage message) async {
+    // Don't show notification for own messages
+    final userData = StorageService.getUserData();
+    final currentUserId = userData?['UserId']?.toString();
+    
+    if (message.agentId.toString() == currentUserId || message.agentId > 0) {
+      return; // Skip notifications for agent messages
+    }
+    
+    // Get actual contact name from room detail
+    String senderName = 'Customer';
+    String roomName = 'New Message';
+    
+    try {
+      // Fetch room detail to get actual contact name
+      final contactName = await _getRoomNameForNotification(message.roomId);
+      if (contactName != null && contactName.isNotEmpty) {
+        senderName = contactName;
+        roomName = contactName;
+        print('✅ Got actual contact name for notification: $contactName');
+      }
+    } catch (e) {
+      print('⚠️ Could not fetch contact name, using fallback: $e');
+    }
+    
+    // Show notification for customer messages
+    await PushNotificationService.showChatNotification(
+      roomId: message.roomId,
+      roomName: roomName,
+      senderName: senderName,
+      message: _getNotificationText(message),
+    );
+  }
+  
+  static String _getNotificationText(ChatMessage message) {
+    switch (message.type) {
+      case 1: // Text
+        return message.message ?? 'New message';
+      case 2: // Audio
+        return '🔊 Voice message';
+      case 3: // Image
+        final caption = message.message?.trim();
+        return caption?.isNotEmpty == true ? '📷 $caption' : '📷 Photo';
+      case 4: // Video
+        final caption = message.message?.trim();
+        return caption?.isNotEmpty == true ? '🎥 $caption' : '🎥 Video';
+      case 5: // Document
+        return '📄 Document';
+      case 7: // Sticker
+        return '🌟 Sticker';
+      case 9: // Location
+        return '📍 Location';
+      default:
+        return 'New message';
+    }
+  }
+
+  // Helper function to get actual contact name from room detail
+  static Future<String?> _getRoomNameForNotification(String roomId) async {
+    try {
+      final response = await ApiService.dio.post(
+        'Services/Chat/Chatrooms/DetailRoom',
+        data: {
+          'EntityId': roomId,
+        },
+      );
+
+      if (response.statusCode == 200 && 
+          response.data['IsError'] != true && 
+          response.data['Data'] != null) {
+        final roomData = response.data['Data']['Room'];
+        
+        // Get the actual contact name from the room data
+        // Priority: CtRealNm > Ct > Grp
+        final contactName = roomData['CtRealNm'] ?? 
+                           roomData['Ct'] ?? 
+                           roomData['Grp'] ?? 
+                           roomData['Name'];
+        
+        return contactName;
+      }
+    } catch (e) {
+      print('❌ Error fetching room name for notification: $e');
+    }
+    return null;
+  }
+
   static void _startHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (timer) {
@@ -237,7 +357,7 @@ class SignalRService {
       print('❌ SignalR not connected for user subscription');
       throw Exception('SignalR not connected');
     }
-    
+
     final userData = StorageService.getUserData();
     if (userData == null) {
       print('❌ No user data available for subscription');
@@ -247,22 +367,36 @@ class SignalRService {
     try {
       final userId = userData['UserId']?.toString() ?? '1';
       final tenantId = userData['TenantId']?.toString() ?? '1';
-      
+
       print('📡 Subscribing SignalR user - UserId: $userId, TenantId: $tenantId');
-      
-      // Use only the subscription methods that definitely exist
-      await _connection!.invoke('SubscribeUserAgent', args: [userId, tenantId]);
+
+      // CRITICAL FIX: Subscribe to both Agent AND Supervisor channels for complete coverage
+      // This ensures we receive ALL room updates and messages, not just when in a specific room
+
+      // 1. Subscribe as Agent (for messages and rooms assigned to this agent)
+      await _connection!.invoke('SubscribeUserAgent', args: [userId, tenantId]).timeout(
+        const Duration(seconds: 5),
+      );
       print('✅ SignalR subscribed as agent successfully');
-      
-      // Try supervisor subscription as fallback (optional)
+
+      // 2. Subscribe as Supervisor (for ALL rooms in tenant - critical for home screen updates!)
       try {
-        await _connection!.invoke('SubscribeUserSpv', args: [tenantId]);
-        print('✅ SignalR also subscribed as supervisor');
+        await _connection!.invoke('SubscribeUserSpv', args: [tenantId]).timeout(
+          const Duration(seconds: 5),
+        );
+        print('✅ SignalR subscribed as supervisor - will receive ALL tenant room updates');
       } catch (e) {
-        // This is optional, so ignore errors
-        print('ℹ️ SignalR supervisor subscription not available (this is normal)');
+        print('⚠️ SignalR supervisor subscription failed: $e');
+        print('⚠️ Will only receive agent-specific updates, not all room updates');
       }
-      
+
+      print('🎉 SignalR subscription complete - ready to receive real-time updates on home screen');
+
+      // Verify subscription by checking listener status
+      print('📊 Post-subscription listener status:');
+      print('   - Message controller has listeners: ${_messageController.hasListener}');
+      print('   - Room update controller has listeners: ${_roomUpdateController.hasListener}');
+
     } catch (e) {
       print('❌ Failed to subscribe SignalR user: $e');
       throw Exception('Failed to subscribe user: $e');
@@ -326,7 +460,30 @@ class SignalRService {
 
   static Map<String, dynamic> _cleanMessageData(Map<String, dynamic> data) {
     if (data.containsKey('Room') && data.containsKey('Msg')) {
-      return Map<String, dynamic>.from(data);
+      // CRITICAL FIX: Enhanced ReplyId validation for SignalR (reply only works via WebSocket)
+      final cleanedData = Map<String, dynamic>.from(data);
+      
+      if (cleanedData['Msg'] != null && cleanedData['Msg']['ReplyId'] != null) {
+        final replyId = cleanedData['Msg']['ReplyId'].toString().trim();
+        
+        if (replyId.isNotEmpty && !replyId.startsWith('temp_')) {
+          // Validate ReplyId format - must be numeric and positive
+          final numericReplyId = int.tryParse(replyId);
+          if (numericReplyId != null && numericReplyId > 0) {
+            // CRITICAL FIX: Keep ReplyId as string format for SignalR (reply feature only works here)
+            cleanedData['Msg']['ReplyId'] = numericReplyId.toString();
+            print('✅ SignalR: Using validated ReplyId (reply only works via WebSocket): $replyId');
+          } else {
+            cleanedData['Msg'].remove('ReplyId');
+            print('⚠️ SignalR: Removed invalid ReplyId format: $replyId (not positive numeric)');
+          }
+        } else {
+          cleanedData['Msg'].remove('ReplyId');
+          print('⚠️ SignalR: Removed empty or temporary ReplyId: $replyId');
+        }
+      }
+      
+      return cleanedData;
     }
     
     return {
@@ -341,7 +498,22 @@ class SignalRService {
         'Msg': data['Msg']?.toString() ?? '',
         'File': data['File']?.toString() ?? '',
         'Files': data['Files']?.toString() ?? '',
-        if (data['ReplyId'] != null) 'ReplyId': data['ReplyId'].toString(),
+        // CRITICAL FIX: Enhanced ReplyId handling for SignalR (only method that supports reply)
+        if (data['ReplyId'] != null) ...() {
+          final replyId = data['ReplyId'].toString().trim();
+          if (replyId.isNotEmpty && !replyId.startsWith('temp_')) {
+            final numericReplyId = int.tryParse(replyId);
+            if (numericReplyId != null && numericReplyId > 0) {
+              // CRITICAL FIX: SignalR expects ReplyId as string (only method supporting reply)
+              return {'ReplyId': numericReplyId.toString()};
+            } else {
+              print('⚠️ SignalR: Invalid ReplyId format, skipping: $replyId (not positive numeric)');
+            }
+          } else {
+            print('⚠️ SignalR: Empty or temporary ReplyId, skipping: $replyId');
+          }
+          return <String, dynamic>{};
+        }(),
       },
     };
   }
@@ -397,13 +569,27 @@ class SignalRService {
 
   static Future<void> ensureConnection() async {
     if (_connection?.state == HubConnectionState.Connected && _isFullyInitialized) {
-      print('✅ SignalR already connected and initialized');
-      return; // Already connected
+      print('✅ SignalR already connected and fully initialized');
+
+      // CRITICAL FIX: Verify subscription is actually working by checking if we have listeners
+      if (_messageController.hasListener && _roomUpdateController.hasListener) {
+        print('✅ SignalR listeners are active');
+        return; // Already connected and working
+      } else {
+        print('⚠️ SignalR connected but listeners inactive, re-subscribing...');
+        try {
+          await _subscribeUser();
+          print('✅ Re-subscription successful');
+          return;
+        } catch (e) {
+          print('❌ Re-subscription failed: $e, will reinitialize');
+        }
+      }
     }
-    
+
     print('🔄 Ensuring SignalR connection...');
     _connectionStatusController.add('connecting');
-    
+
     if (_isReconnecting) {
       print('⏳ Waiting for ongoing reconnection...');
       // Wait for ongoing reconnection
@@ -417,7 +603,7 @@ class SignalRService {
         return;
       }
     }
-    
+
     // Try to reconnect
     try {
       if (_connection == null) {
@@ -430,11 +616,60 @@ class SignalRService {
         _connectionStatusController.add('connected');
         _isFullyInitialized = true;
         _startHeartbeat();
-        print('✅ SignalR connection restarted successfully');
+        print('✅ SignalR connection restarted and subscribed successfully');
       }
     } catch (e) {
       print('❌ Failed to ensure SignalR connection: $e');
       throw Exception('SignalR connection failed: $e');
+    }
+  }
+
+  /// Force re-subscribe to SignalR to ensure listeners are active
+  /// This fixes the bug where realtime updates only work after entering chat screen
+  static Future<void> forceResubscribe() async {
+    print('🔄 Force re-subscribe called...');
+    print('🔄   Connection state: ${_connection?.state}');
+    print('🔄   Is fully initialized: $_isFullyInitialized');
+
+    if (_connection?.state != HubConnectionState.Connected) {
+      print('⚠️ Cannot force re-subscribe: SignalR not connected');
+      await ensureConnection();
+
+      // Check again after ensuring connection
+      if (_connection?.state != HubConnectionState.Connected) {
+        print('❌ Still not connected after ensureConnection');
+        return;
+      }
+    }
+
+    print('🔄 Force re-subscribing to activate realtime listeners on home screen...');
+    print('🔄 Checking listeners BEFORE re-subscribe:');
+    print('🔄   - Message listener has ${_messageController.hasListener ? "subscribers" : "NO subscribers"}');
+    print('🔄   - Room update listener has ${_roomUpdateController.hasListener ? "subscribers" : "NO subscribers"}');
+
+    try {
+      await _subscribeUser();
+
+      // Wait a bit for subscriptions to propagate
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Verify listeners are now active
+      final hasListeners = _messageController.hasListener && _roomUpdateController.hasListener;
+
+      print('🔄 Checking listeners AFTER re-subscribe:');
+      print('🔄   - Message listener has ${_messageController.hasListener ? "subscribers" : "NO subscribers"}');
+      print('🔄   - Room update listener has ${_roomUpdateController.hasListener ? "subscribers" : "NO subscribers"}');
+
+      if (hasListeners) {
+        print('✅ Force re-subscribe successful - listeners are now ACTIVE');
+      } else {
+        print('⚠️ Force re-subscribe completed but listeners still inactive');
+        print('⚠️ This is expected if no widgets are currently listening to the streams');
+      }
+
+    } catch (e) {
+      print('❌ Force re-subscribe failed: $e');
+      throw Exception('Failed to force re-subscribe: $e');
     }
   }
 

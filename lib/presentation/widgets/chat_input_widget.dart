@@ -4,8 +4,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'voice_recorder_widget.dart';
+import 'quick_reply_overlay.dart';
 import '../../core/models/chat_models.dart';
+import '../../core/models/quick_reply_models.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/providers/quick_reply_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/location_service.dart';
 import '../screens/media/media_preview_screen.dart';
@@ -31,13 +34,38 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
   final FocusNode _focusNode = FocusNode();
   bool _showAttachmentOptions = false;
   bool _showVoiceRecorder = false;
+  bool _showQuickReply = false;
 
   @override
   void initState() {
     super.initState();
-    _textController.addListener(() {
-      setState(() {}); // Rebuild to show correct button
-    });
+    _textController.addListener(_onTextChanged);
+    // Load quick reply templates on init
+    Future.microtask(() => ref.read(quickReplyProvider.notifier).loadTemplates());
+  }
+
+  void _onTextChanged() {
+    final text = _textController.text;
+    
+    // Check if user typed "/" to trigger quick reply
+    if (text.startsWith('/')) {
+      if (!_showQuickReply) {
+        setState(() {
+          _showQuickReply = true;
+        });
+      }
+      // Search templates based on command
+      ref.read(quickReplyProvider.notifier).searchTemplates(text);
+    } else {
+      if (_showQuickReply) {
+        setState(() {
+          _showQuickReply = false;
+        });
+        ref.read(quickReplyProvider.notifier).clearSearch();
+      }
+    }
+    
+    setState(() {}); // Rebuild to show correct button
   }
 
   @override
@@ -53,15 +81,30 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
 
     print('Sending text message: "$text"');
 
-    // Clear input immediately for better UX
+    // Clear input but keep reply preview until message is processed
     _textController.clear();
     setState(() {
       _showAttachmentOptions = false;
       _showVoiceRecorder = false;
+      _showQuickReply = false;
     });
 
-    // Send message (this will handle optimistic updates internally)
+    // Send message with reply info
     widget.onSendText(text);
+  }
+
+  void _onQuickReplySelected(QuickReplyTemplate template) {
+    // Replace the text with template content
+    _textController.text = template.content;
+    
+    // Hide quick reply
+    setState(() {
+      _showQuickReply = false;
+    });
+    ref.read(quickReplyProvider.notifier).clearSearch();
+    
+    // Focus back on input
+    _focusNode.requestFocus();
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -259,26 +302,19 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
       // Hide loading indicator
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
-      // Validate replyId before sending
-      String? validatedReplyId = widget.replyingTo?.id;
-      if (validatedReplyId != null && validatedReplyId.isNotEmpty) {
-        // Additional validation could be added here if needed
-        print('✅ Sending location with ReplyId: $validatedReplyId');
-      }
-      
       // Send location using the chat provider
       final chatNotifier = ref.read(chatProvider.notifier);
       await chatNotifier.sendLocationMessage(
         location,
-        replyId: validatedReplyId,
+        replyId: widget.replyingTo?.id, // Pass the raw replyId, let the provider handle validation
       );
       
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location sent successfully'),
+        SnackBar(
+          content: Text(widget.replyingTo != null ? 'Location reply sent successfully' : 'Location sent successfully'),
           backgroundColor: AppTheme.successColor,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
       
@@ -341,12 +377,19 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     if (_showVoiceRecorder) {
       return VoiceRecorderWidget(
         onSendVoice: _sendVoiceNote,
-        onCancel: _cancelVoiceRecording,
+        onCancel: _cancelVoiceRecording, onComplete: (String path, String filename) {  },
       );
     }
     
     return Column(
       children: [
+        // Quick Reply Overlay
+        if (_showQuickReply)
+          QuickReplyOverlay(
+            onTemplateSelected: _onQuickReplySelected,
+            maxHeight: 300,
+          ),
+        
         // Attachment options
         if (_showAttachmentOptions)
           Container(
@@ -384,11 +427,6 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
                   icon: Icons.location_on,
                   label: 'Location',
                   onTap: _sendLocation,
-                ),
-                _AttachmentOption(
-                  icon: Icons.mic,
-                  label: 'Voice',
-                  onTap: _startVoiceRecording,
                 ),
               ],
             ),

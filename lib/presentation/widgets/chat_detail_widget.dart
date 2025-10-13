@@ -179,6 +179,7 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
                     return MessageBubbleWidget(
                       message: message,
                       onReply: () => _handleReply(message),
+                      onForward: () => _handleForward(message),
                       onDelete: () => _handleDelete(message),
                       showSenderInfo: true,
                     );
@@ -282,8 +283,25 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
     // This will be handled by the provider
   }
 
-  void _handleResolve() {
-    // Implement resolve functionality
+  void _handleResolve() async {
+    final ok = await ref.read(chatProvider.notifier).markActiveRoomResolved();
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Conversation marked as resolved'),
+          backgroundColor: AppTheme.successColor,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to mark as resolved'),
+          backgroundColor: AppTheme.errorColor,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   void _handleArchive() {
@@ -292,5 +310,9 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
 
   void _handleDelete(ChatMessage message) {
     // Implement delete functionality
+  }
+
+  void _handleForward(ChatMessage message) {
+    // This will be handled by the message bubble widget's popup menu
   }
 }

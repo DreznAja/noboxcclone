@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../app_config.dart';
 import '../models/auth_models.dart';
 import '../models/chat_models.dart';
+import '../models/quick_reply_models.dart';
 import 'storage_service.dart';
 
 class ApiResponse<T> {
@@ -108,8 +109,8 @@ class ApiService {
         'Sort': ['IsPin DESC', 'TimeMsg DESC'],
         'IncludeColumns': [
           'Id', 'CtId', 'CtRealId', 'GrpId', 'CtRealNm', 'Ct', 'Grp',
-          'LastMsg', 'TimeMsg', 'Uc', 'St', 'ChId', 'ChAcc', 'CtImg', 'LinkImg',
-          'IsGrp', 'IsPin', 'CtIsBlock', 'IsMuteBot', 'Tags', 'Fn', 'FnId', 'TagsIds'
+          'LastMsg', 'TimeMsg', 'Uc', 'St', 'ChId', 'ChAcc', 'AccNm', 'BotNm', 'CtImg', 'LinkImg',
+          'IsGrp', 'IsPin', 'CtIsBlock', 'IsMuteBot', 'Tags', 'Fn', 'FnId', 'FnNm', 'FunnelId', 'TagsIds'
         ],
         'ColumnSelection': 1,
       };
@@ -119,18 +120,25 @@ class ApiService {
       }
 
       if (filters != null) {
-        // Handle status filter properly
-        if (filters.containsKey('St')) {
-          requestData['EqualityFilter'] = {'St': filters['St']};
-        } else {
-          requestData['EqualityFilter'] = filters;
-        }
+        print('📡 [API SERVICE] Received filters: $filters');
+        // FIXED: Send ALL filters, not just status
+        // Previously this code was sending only St when it exists, ignoring other filters
+        requestData['EqualityFilter'] = filters;
+        print('📡 [API SERVICE] Setting EqualityFilter: $filters');
       }
 
+      print('📡 [API SERVICE] Request data: $requestData');
+      
       final response = await dio.post(
         'Services/Chat/Chatrooms/List',
         data: requestData,
       );
+      
+      print('📡 [API SERVICE] Response status: ${response.statusCode}');
+      print('📡 [API SERVICE] Response data keys: ${response.data?.keys}');
+      if (response.data?['Entities'] != null) {
+        print('📡 [API SERVICE] Number of rooms returned: ${(response.data['Entities'] as List).length}');
+      }
 
       if (response.statusCode == 200) {
         // Safe null checking for IsError
@@ -147,9 +155,12 @@ class ApiService {
             statusCode: response.statusCode!,
           );
         } else {
+          final errorMessage = response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load rooms';
+          print('❌ [API SERVICE] API returned error: $errorMessage');
+          print('❌ [API SERVICE] Full response data: ${response.data}');
           return ApiResponse(
             isError: true,
-            error: response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load rooms',
+            error: errorMessage,
             statusCode: response.statusCode!,
           );
         }
@@ -170,6 +181,71 @@ class ApiService {
     }
   }
 
+  // Get archived room detail with messages - SPECIAL ENDPOINT for archived conversations
+  static Future<ApiResponse<Map<String, dynamic>>> getArchivedRoomDetail({
+    required String roomId,
+  }) async {
+    try {
+      print('📦 API Request for archived room detail - RoomId: $roomId');
+      
+      final requestData = {
+        'EntityId': roomId,
+      };
+      
+      print('📦 Request data: $requestData');
+      
+      final response = await dio.post(
+        'Services/Chat/Chatrooms/DetailArchived',
+        data: requestData,
+      );
+      
+      print('📦 Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        print('📦 API Response - HasError: $hasError');
+        print('📦 Full response data keys: ${response.data?.keys}');
+        
+        if (!hasError && response.data['Data'] != null) {
+          final data = response.data['Data'] as Map<String, dynamic>;
+          print('✅ Successfully got archived room detail');
+          print('📦 Data keys: ${data.keys}');
+          
+          return ApiResponse(
+            isError: false,
+            data: data,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          final errorMsg = response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load archived room detail';
+          print('❌ API Error loading archived room: $errorMsg');
+          
+          return ApiResponse(
+            isError: true,
+            error: errorMsg,
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        print('❌ HTTP Error: ${response.statusCode} - ${response.statusMessage}');
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ Exception in getArchivedRoomDetail: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
   // Get messages for a room
   static Future<ApiResponse<List<ChatMessage>>> getMessages({
     required String roomId,
@@ -180,9 +256,15 @@ class ApiService {
       final requestData = {
         'Take': take,
         'Skip': skip,
-        'EqualityFilter': {'RoomId': roomId},
+        // Ensure RoomId is sent with correct type (int if possible)
+        'EqualityFilter': {
+          'RoomId': int.tryParse(roomId) ?? roomId,
+        },
         'Sort': ['In DESC', 'Type DESC'],
       };
+
+      print('📨 API Request for messages - RoomId: $roomId, Take: $take, Skip: $skip');
+      print('📨 Request data: $requestData');
 
       final response = await dio.post(
         'Services/Chat/Chatmessages/List',
@@ -194,9 +276,13 @@ class ApiService {
         final isError = response.data['IsError'];
         final hasError = isError == true; // This handles null and false cases properly
         
+        print('📨 API Response for messages - HasError: $hasError, Entities count: ${(response.data['Entities'] as List?)?.length ?? 0}');
+        
         if (!hasError && response.data['Entities'] != null) {
           final entities = response.data['Entities'] as List;
           final messages = entities.map((e) => ChatMessage.fromJson(e)).toList();
+          
+          print('✅ Successfully parsed ${messages.length} messages from API response');
           
           return ApiResponse(
             isError: false,
@@ -204,9 +290,13 @@ class ApiService {
             statusCode: response.statusCode!,
           );
         } else {
+          final errorMsg = response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load messages';
+          print('❌ API Error loading messages: $errorMsg');
+          print('❌ Full response data: ${response.data}');
+          
           return ApiResponse(
             isError: true,
-            error: response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load messages',
+            error: errorMsg,
             statusCode: response.statusCode!,
           );
         }
@@ -239,15 +329,11 @@ class ApiService {
         );
       }
       
-      // Validate ReplyId if present
+      // CRITICAL FIX: Remove ReplyId from API requests entirely
+      // Backend confirmed that reply feature only works via WebSocket, not API
       if (messageData.containsKey('ReplyId')) {
-        final replyId = messageData['ReplyId'];
-        if (replyId == null || replyId.toString().trim().isEmpty) {
-          print('⚠️ Empty ReplyId detected, removing from request');
-          messageData.remove('ReplyId');
-        } else {
-          print('✅ Valid ReplyId: $replyId');
-        }
+        print('⚠️ Removing ReplyId from API request - reply only supported via WebSocket');
+        messageData.remove('ReplyId');
       }
       
       // Ensure proper data types for Inbox API
@@ -258,8 +344,6 @@ class ApiService {
         'BodyType': messageData['BodyType'] is int ? messageData['BodyType'] : int.tryParse(messageData['BodyType']?.toString() ?? messageData['Type']?.toString() ?? '1') ?? 1,
         'Body': messageData['Body']?.toString() ?? messageData['Msg']?.toString() ?? '',
         'Attachment': messageData['Attachment']?.toString() ?? messageData['File']?.toString() ?? '',
-        // Only include ReplyId if it exists in the original messageData after validation
-        if (messageData.containsKey('ReplyId')) 'ReplyId': messageData['ReplyId']?.toString(),
       };
 
       // Ensure LinkId is not 0 (which causes the error)
@@ -295,21 +379,6 @@ class ApiService {
           );
         }
         
-        // Validate ReplyId format for WhatsApp Business
-        if (inboxData.containsKey('ReplyId')) {
-          final replyId = inboxData['ReplyId']?.toString();
-          if (replyId != null && replyId.isNotEmpty) {
-            // Ensure ReplyId is numeric (WhatsApp Business expects numeric IDs)
-            final numericReplyId = int.tryParse(replyId);
-            if (numericReplyId == null) {
-              print('⚠️ Invalid ReplyId format for WhatsApp Business: $replyId, removing');
-              inboxData.remove('ReplyId');
-            } else {
-              print('✅ Valid numeric ReplyId for WhatsApp Business: $numericReplyId');
-            }
-          }
-        }
-        
         // Enhanced logging for media messages with caption
         if (inboxData['BodyType'] > 1) {
           print('WhatsApp Business MEDIA message:');
@@ -317,9 +386,6 @@ class ApiService {
           print('  Caption/Body: "${inboxData['Body']}"');
           print('  Attachment: "${inboxData['Attachment']}"');
           print('  HasCaption: $hasBody, HasAttachment: $hasAttachment');
-          if (inboxData.containsKey('ReplyId')) {
-            print('  ReplyId: ${inboxData['ReplyId']}');
-          }
         }
       }
 
@@ -338,96 +404,18 @@ class ApiService {
         final hasError = isError == true; // This handles null and false cases properly
         
         if (!hasError) {
-          // Enhanced success logging for media messages
-          if (inboxData['ChannelId'] == 1561 && inboxData['BodyType'] > 1) {
-            print('✅ WhatsApp Business MEDIA API Success: ${response.data}');
-            if (inboxData['Body'].toString().isNotEmpty) {
-              print('✅ Caption was included: "${inboxData['Body']}"');
-            }
-          }
-          
           return ApiResponse(
             isError: false,
             data: response.data['Data']?.toString() ?? 'Message sent successfully',
             statusCode: response.statusCode!,
           );
         } else {
-          // Enhanced error logging for media messages
-          if (inboxData['ChannelId'] == 1561 && inboxData['BodyType'] > 1) {
-            print('❌ WhatsApp Business MEDIA API Error: ${response.data}');
-          }
-          
-          // Enhanced error logging for reply messages
-          if (inboxData.containsKey('ReplyId')) {
-            print('❌ Reply message API Error: ${response.data}');
-            print('❌ ReplyId was: ${inboxData['ReplyId']}');
-            
-            // If it's a reply message error, try sending without ReplyId as fallback
-            if (response.data['Error']?.toString().contains('ReplyId') == true ||
-                response.data['ErrorMessage']?.toString().contains('ReplyId') == true) {
-              print('🔄 Retrying without ReplyId due to reply-related error...');
-              
-              final fallbackData = Map<String, dynamic>.from(inboxData);
-              fallbackData.remove('ReplyId');
-              
-              try {
-                final fallbackResponse = await dio.post(
-                  AppConfig.inboxSendEndpoint,
-                  data: fallbackData,
-                );
-                
-                if (fallbackResponse.statusCode == 200 && fallbackResponse.data['IsError'] != true) {
-                  print('✅ Fallback message sent successfully without ReplyId');
-                  return ApiResponse(
-                    isError: false,
-                    data: fallbackResponse.data['Data']?.toString() ?? 'Message sent successfully (without reply)',
-                    statusCode: fallbackResponse.statusCode!,
-                  );
-                }
-              } catch (fallbackError) {
-                print('❌ Fallback also failed: $fallbackError');
-              }
-            }
-          }
-          
           return ApiResponse(
             isError: true,
             error: response.data['Error'] ?? response.data['ErrorMessage'] ?? 'Failed to send message',
             statusCode: response.statusCode!,
           );
         }
-      } else if (response.statusCode == 500) {
-        // Handle 500 errors specifically for reply messages
-        if (inboxData.containsKey('ReplyId')) {
-          print('🔄 500 error with ReplyId, attempting fallback without ReplyId...');
-          
-          try {
-            final fallbackData = Map<String, dynamic>.from(inboxData);
-            fallbackData.remove('ReplyId');
-            
-            final fallbackResponse = await dio.post(
-              AppConfig.inboxSendEndpoint,
-              data: fallbackData,
-            );
-            
-            if (fallbackResponse.statusCode == 200 && fallbackResponse.data['IsError'] != true) {
-              print('✅ Fallback message sent successfully after 500 error');
-              return ApiResponse(
-                isError: false,
-                data: fallbackResponse.data['Data']?.toString() ?? 'Message sent successfully (reply failed, sent as regular message)',
-                statusCode: fallbackResponse.statusCode!,
-              );
-            }
-          } catch (fallbackError) {
-            print('❌ Fallback after 500 error also failed: $fallbackError');
-          }
-        }
-        
-        return ApiResponse(
-          isError: true,
-          error: 'Server error (500): Failed to send message. This might be due to an invalid reply reference.',
-          statusCode: response.statusCode!,
-        );
       } else {
         return ApiResponse(
           isError: true,
@@ -437,32 +425,6 @@ class ApiService {
       }
     } catch (e) {
       print('Error in sendMessage: $e');
-      if (messageData.containsKey('ReplyId')) {
-        print('❌ Error occurred with ReplyId: ${messageData['ReplyId']}');
-        
-        // If there's an exception with ReplyId, try one more time without it
-        try {
-          print('🔄 Exception with ReplyId, attempting fallback without ReplyId...');
-          final fallbackData = Map<String, dynamic>.from(messageData);
-          fallbackData.remove('ReplyId');
-          
-          final fallbackResponse = await dio.post(
-            AppConfig.inboxSendEndpoint,
-            data: fallbackData,
-          );
-          
-          if (fallbackResponse.statusCode == 200 && fallbackResponse.data['IsError'] != true) {
-            print('✅ Fallback message sent successfully after exception');
-            return ApiResponse(
-              isError: false,
-              data: fallbackResponse.data['Data']?.toString() ?? 'Message sent successfully (reply failed, sent as regular message)',
-              statusCode: fallbackResponse.statusCode!,
-            );
-          }
-        } catch (fallbackError) {
-          print('❌ Fallback after exception also failed: $fallbackError');
-        }
-      }
       return ApiResponse(
         isError: true,
         error: e.toString(),
@@ -840,6 +802,128 @@ class ApiService {
     } catch (e) {
       return ApiResponse(
         isError: true,  
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Create Note for Room/Conversation
+  static Future<ApiResponse<Map<String, dynamic>>> createNote({
+    required String roomId,
+    required String content,
+  }) async {
+    try {
+      // Try to parse roomId as integer for backend consistency
+      final roomIdValue = int.tryParse(roomId) ?? roomId;
+      
+      final requestData = {
+        'Entity': {
+          'RoomId': roomIdValue,  // Send as int if parseable, else string
+          'Cnt': content,
+        },
+      };
+
+      print('📝 [Create Note] Request - RoomId: $roomId (sent as: $roomIdValue), Content: $content');
+      print('📝 [Create Note] Full request: $requestData');
+      
+      final response = await dio.post(
+        'Services/Chat/Chatnotes/Create',
+        data: requestData,
+      );
+
+      print('📝 [Create Note] Response status: ${response.statusCode}');
+      print('📝 [Create Note] Response data: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final isError = response.data['Error'] != null;
+        
+        if (!isError) {
+          return ApiResponse(
+            isError: false,
+            data: response.data,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          return ApiResponse(
+            isError: true,
+            error: response.data['Error'] ?? 'Failed to create note',
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Create Note] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Get Quick Reply Templates
+  static Future<ApiResponse<List<QuickReplyTemplate>>> getQuickReplyTemplates({
+    String? search,
+    int take = 20,
+    int skip = 0,
+  }) async {
+    try {
+      final requestData = {
+        'Take': take,
+        'Skip': skip,
+        'IncludeColumns': ['Id', 'Cmd', 'Files', 'Cnt', 'Type', 'In', 'InBy', 'Up', 'UpBy'],
+        'ColumnSelection': 1,
+      };
+
+      if (search != null && search.isNotEmpty) {
+        requestData['ContainsText'] = search;
+      }
+
+      print('🚀 [Quick Reply] Fetching templates...');
+      final response = await dio.post(
+        'Services/Chat/Chattemplates/List',
+        data: requestData,
+      );
+
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError && response.data['Entities'] != null) {
+          final entities = response.data['Entities'] as List;
+          final templates = entities.map((e) => QuickReplyTemplate.fromJson(e)).toList();
+          
+          print('✅ [Quick Reply] Loaded ${templates.length} templates');
+          return ApiResponse(
+            isError: false,
+            data: templates,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          return ApiResponse(
+            isError: true,
+            error: response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load templates',
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Quick Reply] Error: $e');
+      return ApiResponse(
+        isError: true,
         error: e.toString(),
         statusCode: 500,
       );

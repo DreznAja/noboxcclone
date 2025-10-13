@@ -93,11 +93,31 @@ class FilterOptions {
     }
     
     if (channelId != null) filters['ChId'] = [int.parse(channelId!)];
+    // Chat Type filter: Group or Private
     if (chatType != null) {
-      filters['IsGrp'] = chatType == 'Group' ? [1] : [0];
+      if (chatType == 'Group') {
+        // For Group chats, send IsGrp=[1] to backend
+        filters['IsGrp'] = [1];
+        print('📝 [FilterOptions] Chat type filter: Group (IsGrp=[1])');
+      } else if (chatType == 'Private') {
+        // FIXED: For Private chats, use client-side filtering
+        // Backend doesn't support IsGrp=[0] properly, so we add a temporary flag
+        // that chat_provider will use for client-side filtering
+        filters['ChatTypeFilter'] = 'Private';
+        print('📝 [FilterOptions] Chat type filter: Private (will filter client-side)');
+      }
     }
     if (accountId != null) filters['AccountId'] = [int.parse(accountId!)];
-    if (contactId != null) filters['CtId'] = [int.parse(contactId!)];
+    // TESTING: Try CtRealId instead of CtId for contact filter
+    // Backend might use CtRealId as the primary contact identifier
+    if (contactId != null) {
+      // Try CtRealId first (Real Contact ID)
+      filters['CtRealId'] = [int.parse(contactId!)];
+      print('📝 [FilterOptions] Contact filter added: CtRealId = ${contactId!}');
+      
+      // Alternative if CtRealId doesn't work:
+      // filters['CtId'] = [int.parse(contactId!)];
+    }
     if (linkId != null) filters['LinkId'] = [int.parse(linkId!)];
     if (groupId != null) filters['GrpId'] = [int.parse(groupId!)];
     if (campaignId != null) filters['CampaignId'] = [int.parse(campaignId!)];

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "607733759779",
+    "project_id": "noboxnorification",
+    "storage_bucket": "noboxnorification.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:607733759779:android:8fb3609e171ab9a548d696",
+        "android_client_info": {
+          "package_name": "com.example.nbx0"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwXWXdJ10LzJ4czhC6-4hcjzBRqQ2uVHg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

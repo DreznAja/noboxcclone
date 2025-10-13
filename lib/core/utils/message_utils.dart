@@ -152,10 +152,29 @@ class MessageUtils {
   }
 
   static String generateMessageId() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    final timestampPart = timestamp.substring(0, 9);
-    final randomPart = (100000 + (900000 * (DateTime.now().microsecond / 1000000)).round()).toString();
-    return timestampPart + randomPart;
+    // FIXED: Generate message ID that matches backend JavaScript format exactly
+    // Based on backend: timestampPart (9 digits) + randomPart (6 digits) = 15 digits total
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final timestampStr = timestamp.toString();
+    final timestampPart = timestampStr.substring(0, 9); // First 9 digits
+    
+    // Generate 6-digit random number (100000-999999)
+    final random = DateTime.now().microsecond % 900000 + 100000;
+    final randomPart = random.toString();
+    
+    final messageId = timestampPart + randomPart;
+    
+    // Ensure it's exactly 15 digits
+    if (messageId.length != 15) {
+      print('⚠️ Generated message ID length mismatch: ${messageId.length}, expected 15');
+      // Fallback: use current timestamp + padding
+      final fallbackId = timestamp.toString().substring(0, 15).padRight(15, '0');
+      print('🔄 Using fallback message ID: $fallbackId');
+      return fallbackId;
+    }
+    
+    print('✅ Generated message ID: $messageId (length: ${messageId.length})');
+    return messageId;
   }
 
   static Map<String, dynamic> parseVCard(String vcard) {

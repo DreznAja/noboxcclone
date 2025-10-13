@@ -186,6 +186,15 @@ class FilterApiService {
 
       if (response.statusCode == 200 && response.data['IsError'] != true) {
         final List<dynamic> entities = response.data['Entities'] ?? [];
+        
+        // DEBUG: Print first contact to see structure
+        if (entities.isNotEmpty) {
+          print('=== CONTACT API RESPONSE DEBUG ===');
+          print('First contact item: ${entities.first}');
+          print('Available fields: ${(entities.first as Map).keys.toList()}');
+          print('================================');
+        }
+        
         return entities.map((item) => ContactItem.fromJson(item)).toList();
       }
       

@@ -4,6 +4,8 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../core/models/chat_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/app_config.dart';
+import '../../core/services/account_service.dart';
+import 'room_shimmer_widget.dart';
 
 class RoomListWidget extends ConsumerWidget {
   final List<Room> rooms;
@@ -34,10 +36,14 @@ class RoomListWidget extends ConsumerWidget {
     // Debug: Log when widget rebuilds with new data
     print('🏠 RoomListWidget rebuild: ${rooms.length} rooms, loading: $isLoading');
     
+    // Show shimmer for initial load (no data yet)
     if (isLoading && rooms.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const RoomShimmerWidget();
+    }
+    
+    // Show shimmer for refresh (data exists but refreshing)
+    if (isLoading && rooms.isNotEmpty) {
+      return const RoomShimmerWidget();
     }
 
     if (rooms.isEmpty) {
@@ -133,6 +139,13 @@ class _RoomListItem extends StatelessWidget {
       color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : null,
       child: Column(
         children: [
+          // Top separator line
+          Container(
+            height: 0.5,
+            color: Colors.grey.shade300,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          
           InkWell(
             onTap: onTap,
             onLongPress: onLongPress,
@@ -191,7 +204,7 @@ class _RoomListItem extends StatelessWidget {
                         ),
                         
                         const SizedBox(height: 3),
-                        
+
                         // Second row: Last message, Badge count
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -235,13 +248,29 @@ class _RoomListItem extends StatelessWidget {
                         const SizedBox(height: 3),
                         
                         // Tags and Funnel row
-                        if (room.tags.isNotEmpty || room.funnel != null)
+                        if (room.tags.isNotEmpty || room.funnel != null) ...[
                           _buildTagsAndFunnelRow(room),
+                          const SizedBox(height: 3),
+                        ],
                         
-                        // Third row: Status chip - tampil di normal mode dan selection mode
+                        // Bot name and Status chip row - dalam satu baris
                         Row(
                           children: [
-                            const Spacer(),
+                            _getChannelIcon(room.channelId),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _getBotName(room),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             _getStatusChip(isArchivedList ? 4 : room.status),
                           ],
                         ),
@@ -251,6 +280,13 @@ class _RoomListItem extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+          
+          // Bottom separator line
+          Container(
+            height: 0.5,
+            color: Colors.grey.shade300,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
         ],
       ),
@@ -307,19 +343,30 @@ class _RoomListItem extends StatelessWidget {
   }
 
   Widget _getChannelIcon(int channelId) {
+    // WhatsApp channels - gunakan logo dari asset
+    if (channelId == 1 || channelId == 1557 || channelId == 1561) {
+      return Container(
+        width: 17,
+        height: 17,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+        ),
+        child: ClipOval(
+          child: Image.asset(
+            'assets/wa.png',
+            width: 14,
+            height: 14,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    // Channel lainnya tetap menggunakan icon
     Color color;
     IconData icon;
 
     switch (channelId) {
-      case 1: // WhatsApp
-        color = const Color(0xFF25D366);
-        icon = Icons.chat;
-        break;
-      case 1557: // WhatsApp Business
-      case 1561:
-        color = const Color(0xFF25D366);
-        icon = Icons.business;
-        break;
       case 2: // Telegram
         color = const Color(0xFF0088CC);
         icon = Icons.send;
@@ -466,5 +513,60 @@ class _RoomListItem extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getBotName(Room room) {
+    // FIXED: Match ChatScreen AppBar display logic exactly
+    // Priority: accountName -> botName -> AccountService -> channelName -> fallback
+    
+    // Priority 1: Use accountName if available (from DetailRoom)
+    if (room.accountName != null && room.accountName!.isNotEmpty) {
+      return room.accountName!;
+    }
+    
+    // Priority 2: Use botName if available
+    if (room.botName != null && room.botName!.isNotEmpty) {
+      return room.botName!;
+    }
+
+    // Priority 3: Try AccountService to get account name for this channel
+    // This provides dynamic names from backend that can change
+    try {
+      final accountService = AccountService();
+      final accounts = accountService.getAccountsForChannel(room.channelId);
+      if (accounts.isNotEmpty) {
+        // Return account name as-is from backend
+        return accounts.first.name;
+      }
+    } catch (e) {
+      // Silently fail, will use fallback
+    }
+
+    // Priority 4: Use channelName from API if not "Not Found"
+    if (room.channelName.isNotEmpty && room.channelName != 'Not Found') {
+      return room.channelName;
+    }
+
+    // Priority 5: Final fallback - use generic name based on channel ID
+    return _getChannelNameFromId(room.channelId);
+  }
+
+  String _getChannelNameFromId(int channelId) {
+    switch (channelId) {
+      case 1:
+      case 1557:
+      case 1561:
+        return 'Bot WA';
+      case 2:
+        return 'Telegram Bot';
+      case 3:
+        return 'Instagram Bot';
+      case 4:
+        return 'Messenger Bot';
+      case 19:
+        return 'Email Bot';
+      default:
+        return 'Bot';
+    }
   }
 }

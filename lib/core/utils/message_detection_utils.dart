@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../models/chat_models.dart';
 import '../services/storage_service.dart';
 
@@ -170,8 +171,69 @@ class MessageDetectionUtils {
            content.contains('UnmuteBot');
   }
   
-  /// Membersihkan pesan dari signature NoBox
+  /// Parse system message JSON ke human-readable format
+  static String parseSystemMessage(String jsonString) {
+    try {
+      // Try to parse as JSON
+      final json = _tryParseJson(jsonString);
+      if (json == null) return jsonString;
+      
+      final msg = json['msg'] as String?;
+      final user = json['user'];
+      
+      if (msg == null) return jsonString;
+      
+      // Parse different system messages (without emojis)
+      if (msg == 'Site.Inbox.HasResolveBy') {
+        final userName = user ?? 'Agent';
+        return 'Conversation resolved by $userName';
+      } else if (msg == 'Site.Inbox.HasArchiveBy') {
+        final userName = user ?? 'Agent';
+        return 'Conversation archived by $userName';
+      } else if (msg == 'Site.Inbox.HasRestoreBy') {
+        final userName = user ?? 'Agent';
+        return 'Conversation restored by $userName';
+      } else if (msg == 'Site.Inbox.HasAssignBySystem') {
+        return 'Conversation assigned by system';
+      } else if (msg.contains('HasAsign') || msg.contains('HasAssign')) {
+        final userName = user ?? 'Agent';
+        return 'Conversation assigned to $userName';
+      } else if (msg.contains('MuteBot')) {
+        return 'Bot muted for this conversation';
+      } else if (msg.contains('UnmuteBot')) {
+        return 'Bot unmuted for this conversation';
+      }
+      
+      // Default: return cleaned message
+      return msg.replaceAll('Site.Inbox.', '').replaceAll('_', ' ');
+      
+    } catch (e) {
+      print('⚠️ Failed to parse system message: $e');
+      return jsonString;
+    }
+  }
+  
+  /// Helper to safely try parse JSON
+  static Map<String, dynamic>? _tryParseJson(String str) {
+    try {
+      final decoded = jsonDecode(str);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  /// Membersihkan pesan dari signature NoBox dan parse system messages
   static String cleanMessageContent(String content) {
+    // First check if it's a system message (JSON format)
+    if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+      final parsed = parseSystemMessage(content);
+      if (parsed != content) {
+        return parsed; // Return parsed system message
+      }
+    }
+    
+    // Regular message cleaning
     return content
         .replaceAll('\n\nSent from NoBox.Ai trial account', '')
         .replaceAll('\n\nSent by NoBox.Ai', '')

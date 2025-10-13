@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:record/record.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -15,7 +15,7 @@ class VoiceRecorderWidget extends ConsumerStatefulWidget {
   const VoiceRecorderWidget({
     super.key,
     required this.onSendVoice,
-    required this.onCancel,
+    required this.onCancel, required void Function(String path, String filename) onComplete,
   });
 
   @override
@@ -24,15 +24,16 @@ class VoiceRecorderWidget extends ConsumerStatefulWidget {
 
 class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     with TickerProviderStateMixin {
-  final AudioRecorder _recorder = AudioRecorder();
-  
+  FlutterSoundRecorder? _recorder;
+
   bool _isRecording = false;
   bool _isPaused = false;
   bool _isPlaying = false;
   Duration _recordingDuration = Duration.zero;
   Timer? _timer;
   String? _recordedFilePath;
-  
+  bool _isInitialized = false;
+
   late AnimationController _pulseController;
   late AnimationController _waveController;
   late Animation<double> _pulseAnimation;
@@ -41,17 +42,17 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
   @override
   void initState() {
     super.initState();
-    
+
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
-    
+
     _waveController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
-    
+
     _pulseAnimation = Tween<double>(
       begin: 1.0,
       end: 1.2,
@@ -59,7 +60,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
       parent: _pulseController,
       curve: Curves.easeInOut,
     ));
-    
+
     _waveAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -67,8 +68,8 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
       parent: _waveController,
       curve: Curves.linear,
     ));
-    
-    _startRecording();
+
+    _initRecorder();
   }
 
   @override
@@ -76,9 +77,8 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     _timer?.cancel();
     _pulseController.dispose();
     _waveController.dispose();
-    _recorder.dispose();
-    
-    // Clean up recorded file if not sent
+    _closeRecorder();
+
     if (_recordedFilePath != null) {
       try {
         File(_recordedFilePath!).deleteSync();
@@ -86,13 +86,42 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
         print('Error cleaning up recorded file: $e');
       }
     }
-    
+
     super.dispose();
   }
 
-  Future<void> _startRecording() async {
+  Future<void> _initRecorder() async {
     try {
-      // Request microphone permission
+      _recorder = FlutterSoundRecorder();
+      await _recorder!.openRecorder();
+
+      setState(() {
+        _isInitialized = true;
+      });
+
+      _startRecording();
+    } catch (e) {
+      print('Error initializing recorder: $e');
+      _showError('Failed to initialize recorder: $e');
+      widget.onCancel();
+    }
+  }
+
+  Future<void> _closeRecorder() async {
+    try {
+      if (_recorder != null) {
+        await _recorder!.closeRecorder();
+        _recorder = null;
+      }
+    } catch (e) {
+      print('Error closing recorder: $e');
+    }
+  }
+
+  Future<void> _startRecording() async {
+    if (!_isInitialized || _recorder == null) return;
+
+    try {
       final permission = await Permission.microphone.request();
       if (!permission.isGranted) {
         _showError('Microphone permission is required to record voice messages');
@@ -100,35 +129,24 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
         return;
       }
 
-      // Check if recording is supported
-      if (!await _recorder.hasPermission()) {
-        _showError('Recording permission denied');
-        widget.onCancel();
-        return;
-      }
+      final tempDir = Directory.systemTemp;
+      final filePath = '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.aac';
 
-      // Start recording
-      const config = RecordConfig(
-        encoder: AudioEncoder.aacLc,
+      await _recorder!.startRecorder(
+        toFile: filePath,
+        codec: Codec.aacADTS,
         bitRate: 128000,
         sampleRate: 44100,
       );
 
-      // Generate a temporary file path for the recording
-      final tempDir = Directory.systemTemp;
-      final filePath = '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.aac';
-      await _recorder.start(config, path: filePath);
-      
       setState(() {
         _isRecording = true;
         _recordingDuration = Duration.zero;
       });
 
-      // Start animations
       _pulseController.repeat(reverse: true);
       _waveController.repeat();
 
-      // Start timer
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (mounted) {
           setState(() {
@@ -137,7 +155,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
         }
       });
 
-      print('Voice recording started');
+      print('Voice recording started in AAC format');
     } catch (e) {
       print('Error starting recording: $e');
       _showError('Failed to start recording: $e');
@@ -146,13 +164,15 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
   }
 
   Future<void> _stopRecording() async {
+    if (_recorder == null) return;
+
     try {
-      final path = await _recorder.stop();
-      
+      final path = await _recorder!.stopRecorder();
+
       setState(() {
         _isRecording = false;
       });
-      
+
       _timer?.cancel();
       _pulseController.stop();
       _waveController.stop();
@@ -161,7 +181,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
         setState(() {
           _recordedFilePath = path;
         });
-        print('Recording stopped, file saved at: $path');
+        print('Recording stopped, AAC file saved at: $path');
       } else {
         _showError('Failed to save recording');
         widget.onCancel();
@@ -174,8 +194,10 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
   }
 
   Future<void> _pauseRecording() async {
+    if (_recorder == null) return;
+
     try {
-      await _recorder.pause();
+      await _recorder!.pauseRecorder();
       setState(() {
         _isPaused = true;
       });
@@ -188,13 +210,14 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
   }
 
   Future<void> _resumeRecording() async {
+    if (_recorder == null) return;
+
     try {
-      await _recorder.resume();
+      await _recorder!.resumeRecorder();
       setState(() {
         _isPaused = false;
       });
-      
-      // Resume timer from current duration
+
       final currentSeconds = _recordingDuration.inSeconds;
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (mounted) {
@@ -203,7 +226,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
           });
         }
       });
-      
+
       _pulseController.repeat(reverse: true);
       _waveController.repeat();
     } catch (e) {
@@ -215,15 +238,13 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     if (_recordedFilePath == null) return;
 
     try {
-      // Convert to base64
       final file = File(_recordedFilePath!);
       final bytes = await file.readAsBytes();
       final base64Data = base64Encode(bytes);
       final filename = 'voice_${DateTime.now().millisecondsSinceEpoch}.aac';
 
-      // Send the voice note
       widget.onSendVoice(base64Data, filename);
-      
+
       print('Voice note sent: $filename');
     } catch (e) {
       print('Error sending voice note: $e');
@@ -231,9 +252,9 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     }
   }
 
-  void _cancelRecording() {
-    if (_isRecording) {
-      _recorder.stop();
+  void _cancelRecording() async {
+    if (_isRecording && _recorder != null) {
+      await _recorder!.stopRecorder();
     }
     widget.onCancel();
   }
@@ -272,7 +293,6 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -291,18 +311,16 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
               ),
             ],
           ),
-          
+
           const SizedBox(height: 20),
-          
-          // Recording visualization
+
           if (_isRecording || _isPaused)
             _buildRecordingVisualization()
           else
             _buildPlaybackControls(),
-          
+
           const SizedBox(height: 20),
-          
-          // Duration display
+
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -319,10 +337,9 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
               ),
             ),
           ),
-          
+
           const SizedBox(height: 20),
-          
-          // Control buttons
+
           if (_isRecording || _isPaused)
             _buildRecordingControls()
           else
@@ -400,7 +417,6 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // Cancel button
         Container(
           decoration: BoxDecoration(
             color: AppTheme.errorColor.withOpacity(0.1),
@@ -414,8 +430,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
             padding: const EdgeInsets.all(12),
           ),
         ),
-        
-        // Pause/Resume button
+
         Container(
           decoration: BoxDecoration(
             color: AppTheme.warningColor.withOpacity(0.1),
@@ -429,8 +444,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
             padding: const EdgeInsets.all(12),
           ),
         ),
-        
-        // Stop button
+
         Container(
           decoration: BoxDecoration(
             color: AppTheme.primaryColor.withOpacity(0.1),
@@ -451,11 +465,9 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
   Widget _buildPlaybackActions() {
     return Row(
       children: [
-        // Re-record button
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () {
-              // Reset and start new recording
               setState(() {
                 _recordedFilePath = null;
                 _recordingDuration = Duration.zero;
@@ -471,10 +483,9 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
             ),
           ),
         ),
-        
+
         const SizedBox(width: 12),
-        
-        // Send button
+
         Expanded(
           child: ElevatedButton.icon(
             onPressed: _sendVoiceNote,

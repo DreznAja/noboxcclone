@@ -489,7 +489,7 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Open Chat'),
+                        : const Text('Create'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
