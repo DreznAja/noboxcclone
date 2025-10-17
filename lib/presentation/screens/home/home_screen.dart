@@ -620,48 +620,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 ),
               ),
 
-              // Archived Conversation Section
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.only(bottom: 6),
-                child: InkWell(
-                  onTap: _navigateToArchive,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.archive_outlined,
-                            color: Color(0xFF007AFF),
-                            size: 35,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Archived Conversation',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right,
-                          color: Colors.grey,
-                          size: 24,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              // // Archived Conversation Section
+              // Container(
+              //   color: Colors.white,
+              //   padding: const EdgeInsets.only(bottom: 6),
+              //   child: InkWell(
+              //     onTap: _navigateToArchive,
+              //     child: Container(
+              //       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              //       child: Row(
+              //         crossAxisAlignment: CrossAxisAlignment.center,
+              //         children: [
+              //           Container(
+              //             width: 44,
+              //             height: 44,
+              //             alignment: Alignment.center,
+              //             child: const Icon(
+              //               Icons.archive_outlined,
+              //               color: Color(0xFF007AFF),
+              //               size: 35,
+              //             ),
+              //           ),
+              //           const SizedBox(width: 12),
+              //           const Expanded(
+              //             child: Text(
+              //               'Archived Conversation',
+              //               style: TextStyle(
+              //                 fontSize: 16,
+              //                 fontWeight: FontWeight.w500,
+              //                 color: Colors.black,
+              //               ),
+              //             ),
+              //           ),
+              //           const Icon(
+              //             Icons.chevron_right,
+              //             color: Colors.grey,
+              //             size: 24,
+              //           ),
+              //         ],
+              //       ),
+              //     ),
+              //   ),
+              // ),
               
               // Room List
               Expanded(
@@ -758,9 +758,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                   _handleLogout();
                 } else if (value == 'debug') {
                   Navigator.of(context).push(MaterialPageRoute(builder: (context) => const WhatsAppDebugScreen()));
+                } else if (value == 'archive') {
+                  _navigateToArchive();
                 }
               },
               itemBuilder: (context) => [
+                const PopupMenuItem(value: 'archive', child: Row(children: [Icon(Icons.archive, color: Colors.blue), SizedBox(width: 12), Text('Archived Conversation', style: TextStyle(color: Colors.black))])),
                 const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 12), Text('Logout', style: TextStyle(color: Colors.red))])),
               ],
               padding: const EdgeInsets.all(8),
