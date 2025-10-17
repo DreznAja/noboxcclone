@@ -36,6 +36,63 @@ class TagService {
     ));
   }
 
+  Future<String?> createTag(String tagName) async {
+    try {
+      print('🏷️ [Create Tag] Creating tag with name: $tagName');
+      
+      final requestData = {
+        'Entity': {
+          'Nm': tagName,
+          'InBy': '',
+          'UpBy': '',
+        },
+      };
+
+      print('🏷️ [Create Tag] Request data: $requestData');
+      print('🏷️ [Create Tag] Endpoint: Services/Chat/Chattags/Create');
+
+      final response = await _dio.post(
+        'Services/Chat/Chattags/Create',
+        data: requestData,
+      );
+
+      print('🏷️ [Create Tag] Response: ${response.statusCode} - ${response.data}');
+
+      if (response.statusCode == 200) {
+        // Check if there's an Error field that is not null
+        final hasError = response.data['Error'] != null;
+        if (!hasError) {
+          // Get the EntityId from response
+          final entityId = response.data['EntityId'];
+          if (entityId != null) {
+            print('✅ [Create Tag] Success - EntityId: $entityId');
+            return entityId.toString();
+          }
+        }
+      }
+
+      print('❌ Create Tag API Error: ${response.data}');
+      return null;
+    } catch (e) {
+      print('❌ Error creating tag: $e');
+      
+      // Try to extract error details from DioException
+      if (e.toString().contains('DioException')) {
+        try {
+          final dioError = e as DioException;
+          print('❌ Error type: ${dioError.type}');
+          print('❌ Error message: ${dioError.message}');
+          print('❌ Error response: ${dioError.response?.data}');
+          print('❌ Status code: ${dioError.response?.statusCode}');
+        } catch (_) {
+          // Ignore if casting fails
+        }
+      }
+      
+      return null;
+    }
+  }
+
   Future<List<MessageTag>> getAvailableTags() async {
     try {
       final requestData = {
@@ -139,22 +196,32 @@ class TagService {
     try {
       print('🏷️ Updating room tags for room $roomId with tag IDs: $tagIds');
       
-      // Convert string IDs to integers for the API
-      final intTagIds = tagIds.map((id) => int.tryParse(id)).where((id) => id != null).cast<int>().toList();
+      // Convert string IDs to integers (backend expects List<Int64>)
+      final intTagIds = tagIds.map((id) {
+        final parsed = int.tryParse(id);
+        if (parsed == null) {
+          print('⚠️ Warning: Could not parse tag ID: $id');
+        }
+        return parsed;
+      }).where((id) => id != null).cast<int>().toList();
       
       print('🏷️ Converted tag IDs to integers: $intTagIds');
       
       final requestData = {
-        'EntityId': roomId,
+        'EntityId': int.tryParse(roomId) ?? roomId, // Try to convert roomId to int too
         'Entity': {
-          'TagsIds': intTagIds, // Send as array of integers instead of comma-separated string
+          'TagsIds': intTagIds, // Send as array of integers
         },
       };
+
+      print('🏷️ Request data: $requestData');
 
       final response = await _dio.post(
         'Services/Chat/Chatrooms/Update',
         data: requestData,
       );
+
+      print('🏷️ Update response: ${response.data}');
 
       if (response.statusCode == 200 && response.data['IsError'] != true) {
         print('✅ Room tags updated successfully');

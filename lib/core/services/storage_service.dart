@@ -52,6 +52,35 @@ class StorageService {
     await instance.remove(AppConfig.userDataKey);
   }
 
+  // Credentials management for auto re-login
+  static Future<void> saveCredentials(String username, String password) async {
+    await instance.setString('saved_username', username);
+    await instance.setString('saved_password', password);
+  }
+
+  static Map<String, String>? getSavedCredentials() {
+    final username = instance.getString('saved_username');
+    final password = instance.getString('saved_password');
+    
+    if (username != null && password != null) {
+      return {
+        'username': username,
+        'password': password,
+      };
+    }
+    return null;
+  }
+
+  static Future<void> removeCredentials() async {
+    await instance.remove('saved_username');
+    await instance.remove('saved_password');
+  }
+
+  static bool hasCredentials() {
+    return instance.containsKey('saved_username') && 
+           instance.containsKey('saved_password');
+  }
+
   // Settings management
   static Future<void> saveSetting(String key, dynamic value) async {
     if (value is String) {

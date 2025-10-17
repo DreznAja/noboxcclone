@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -437,19 +438,99 @@ class MessageBubbleWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Flexible(
-          child: Text(
-            cleanMessage,
-            style: TextStyle(
-              color: isMe ? Colors.white : AppTheme.textPrimary,
-              fontSize: 16,
-              height: 1.3,
-            ),
-          ),
+          child: _buildTextWithLinks(cleanMessage, isMe),
         ),
         const SizedBox(width: 8),
         _buildTimestampRow(isMe),
       ],
     );
+  }
+  
+  Widget _buildTextWithLinks(String text, bool isMe) {
+    // Regex untuk mendeteksi URL
+    final urlRegex = RegExp(
+      r'https?://[^\s]+|www\.[^\s]+',
+      caseSensitive: false,
+    );
+    
+    final matches = urlRegex.allMatches(text);
+    
+    // Jika tidak ada link, return simple text
+    if (matches.isEmpty) {
+      return Text(
+        text,
+        style: TextStyle(
+          color: isMe ? Colors.white : AppTheme.textPrimary,
+          fontSize: 16,
+          height: 1.3,
+        ),
+      );
+    }
+    
+    // Build TextSpan dengan link berwarna biru
+    final List<TextSpan> spans = [];
+    int currentIndex = 0;
+    
+    for (final match in matches) {
+      // Add text sebelum link
+      if (match.start > currentIndex) {
+        spans.add(TextSpan(
+          text: text.substring(currentIndex, match.start),
+          style: TextStyle(
+            color: isMe ? Colors.white : AppTheme.textPrimary,
+            fontSize: 16,
+            height: 1.3,
+          ),
+        ));
+      }
+      
+      // Add link dengan warna biru
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: TextStyle(
+          color: Colors.blue,
+          fontSize: 16,
+          height: 1.3,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () => _launchURL(url),
+      ));
+      
+      currentIndex = match.end;
+    }
+    
+    // Add remaining text after last link
+    if (currentIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(currentIndex),
+        style: TextStyle(
+          color: isMe ? Colors.white : AppTheme.textPrimary,
+          fontSize: 16,
+          height: 1.3,
+        ),
+      ));
+    }
+    
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+  
+  Future<void> _launchURL(String url) async {
+    // Add https:// if missing
+    String finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      finalUrl = 'https://$url';
+    }
+    
+    final uri = Uri.parse(finalUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      print('Could not launch $finalUrl');
+    }
   }
 
   Widget _buildImageMessage(BuildContext context, bool isMe) {

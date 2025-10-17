@@ -7,6 +7,23 @@ class TagNotifier extends StateNotifier<TagState> {
 
   final TagService _service = TagService();
 
+  Future<bool> createTag(String tagName) async {
+    try {
+      final tagId = await _service.createTag(tagName);
+      if (tagId != null) {
+        // Reload available tags to include the newly created tag
+        await loadAvailableTags();
+        return true;
+      } else {
+        state = state.copyWith(error: 'Failed to create tag');
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to create tag: $e');
+      return false;
+    }
+  }
+
   Future<void> loadAvailableTags() async {
     state = state.copyWith(isLoadingAvailable: true, error: null);
 

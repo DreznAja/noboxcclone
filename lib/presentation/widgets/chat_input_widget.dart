@@ -12,6 +12,9 @@ import '../../core/providers/quick_reply_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/location_service.dart';
 import '../screens/media/media_preview_screen.dart';
+import 'package:latlong2/latlong.dart';
+import '../screens/location/location_picker_screen.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
 class ChatInputWidget extends ConsumerStatefulWidget {
   final Function(String) onSendText;
@@ -35,6 +38,7 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
   bool _showAttachmentOptions = false;
   bool _showVoiceRecorder = false;
   bool _showQuickReply = false;
+  bool _showEmojiPicker = false;
 
   @override
   void initState() {
@@ -87,6 +91,7 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
       _showAttachmentOptions = false;
       _showVoiceRecorder = false;
       _showQuickReply = false;
+      _showEmojiPicker = false;
     });
 
     // Send message with reply info
@@ -105,6 +110,22 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     
     // Focus back on input
     _focusNode.requestFocus();
+  }
+
+  void _onEmojiSelected(Emoji emoji) {
+    final text = _textController.text;
+    final selection = _textController.selection;
+    final newText = text.replaceRange(
+      selection.start,
+      selection.end,
+      emoji.emoji,
+    );
+    _textController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: selection.start + emoji.emoji.length,
+      ),
+    );
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -276,8 +297,93 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
   }
 
   Future<void> _sendLocation() async {
+    // Show dialog to choose between current location or select location
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.location_on,
+                color: Color(0xFF1976D2),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Send Location',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.my_location,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+              title: const Text('Current Location'),
+              subtitle: const Text('Send your current GPS location'),
+              onTap: () => Navigator.of(context).pop('current'),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.map,
+                  color: Colors.green.shade700,
+                ),
+              ),
+              title: const Text('Select Location'),
+              subtitle: const Text('Choose location from map'),
+              onTap: () => Navigator.of(context).pop('select'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null) {
+      setState(() {
+        _showAttachmentOptions = false;
+      });
+      return;
+    }
+
+    if (choice == 'current') {
+      await _sendCurrentLocation();
+    } else if (choice == 'select') {
+      await _selectAndSendLocation();
+    }
+  }
+
+  Future<void> _sendCurrentLocation() async {
     try {
-      // Show loading indicator
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
@@ -285,7 +391,7 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
               SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               ),
               SizedBox(width: 12),
               Text('Getting your location...'),
@@ -296,34 +402,68 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
         ),
       );
 
-      // Get current location
       final location = await LocationService.getCurrentLocation();
-      
-      // Hide loading indicator
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
-      // Send location using the chat provider
       final chatNotifier = ref.read(chatProvider.notifier);
       await chatNotifier.sendLocationMessage(
         location,
-        replyId: widget.replyingTo?.id, // Pass the raw replyId, let the provider handle validation
+        replyId: widget.replyingTo?.id,
       );
       
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.replyingTo != null ? 'Location reply sent successfully' : 'Location sent successfully'),
+        const SnackBar(
+          content: Text('Location sent successfully'),
           backgroundColor: AppTheme.successColor,
-          duration: const Duration(seconds: 2),
+          duration: Duration(seconds: 2),
         ),
       );
-      
     } catch (e) {
-      // Hide loading indicator
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      
-      // Show error message
       _showError('Failed to get location: $e');
+    }
+    
+    setState(() {
+      _showAttachmentOptions = false;
+      _showVoiceRecorder = false;
+    });
+  }
+
+  Future<void> _selectAndSendLocation() async {
+    try {
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LocationPickerScreen(),
+        ),
+      );
+
+      if (result == null) {
+        setState(() {
+          _showAttachmentOptions = false;
+        });
+        return;
+      }
+
+      final lat = result['latitude'] as double;
+      final lng = result['longitude'] as double;
+      final address = result['address'] as String;
+
+      final chatNotifier = ref.read(chatProvider.notifier);
+      await chatNotifier.sendLocationMessage(
+        {'latitude': lat, 'longitude': lng, 'address': address},
+        replyId: widget.replyingTo?.id,
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location sent successfully'),
+          backgroundColor: AppTheme.successColor,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      _showError('Failed to send location: $e');
     }
     
     setState(() {
@@ -390,6 +530,53 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
             maxHeight: 300,
           ),
         
+        // Emoji Picker
+        if (_showEmojiPicker)
+          SizedBox(
+            height: 350,
+            child: EmojiPicker(
+              onEmojiSelected: (category, emoji) {
+                _onEmojiSelected(emoji);
+              },
+              config: Config(
+                height: 350,
+                checkPlatformCompatibility: true,
+                emojiViewConfig: EmojiViewConfig(
+                  columns: 8,
+                  emojiSizeMax: 28,
+                  verticalSpacing: 0,
+                  horizontalSpacing: 0,
+                  gridPadding: EdgeInsets.zero,
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  buttonMode: ButtonMode.MATERIAL,
+                  recentsLimit: 28,
+                ),
+                skinToneConfig: const SkinToneConfig(
+                  enabled: true,
+                  dialogBackgroundColor: Colors.white,
+                ),
+                categoryViewConfig: const CategoryViewConfig(
+                  initCategory: Category.RECENT,
+                  backgroundColor: Color(0xFFF8FAFC),
+                  indicatorColor: AppTheme.primaryColor,
+                  iconColorSelected: AppTheme.primaryColor,
+                  iconColor: Color(0xFF94A3B8),
+                  categoryIcons: CategoryIcons(),
+                ),
+                bottomActionBarConfig: const BottomActionBarConfig(
+                  enabled: true,
+                  backgroundColor: Colors.white,
+                  buttonColor: Colors.transparent,
+                  buttonIconColor: Color(0xFF64748B),
+                ),
+                searchViewConfig: const SearchViewConfig(
+                  backgroundColor: Color(0xFFF8FAFC),
+                  buttonIconColor: Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ),
+        
         // Attachment options
         if (_showAttachmentOptions)
           Container(
@@ -452,6 +639,26 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
                 onPressed: () {
                   setState(() {
                     _showAttachmentOptions = !_showAttachmentOptions;
+                    _showEmojiPicker = false;
+                  });
+                },
+              ),
+              
+              // Emoji button
+              IconButton(
+                icon: Icon(
+                  _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions,
+                  color: AppTheme.primaryColor,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showEmojiPicker = !_showEmojiPicker;
+                    _showAttachmentOptions = false;
+                    if (_showEmojiPicker) {
+                      _focusNode.unfocus();
+                    } else {
+                      _focusNode.requestFocus();
+                    }
                   });
                 },
               ),

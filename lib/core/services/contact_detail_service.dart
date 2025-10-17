@@ -350,67 +350,132 @@ class ContactDetailService {
     }
   }
 
-  Future<bool> assignFunnelToContact(String contactId, String funnelId) async {
+  Future<String?> createFunnel(String funnelName) async {
     try {
-      print('Assigning funnel $funnelId to contact $contactId');
+      print('🔨 [Create Funnel] Creating funnel with name: $funnelName');
       
       final requestData = {
-        'CtId': int.tryParse(contactId) ?? 0,
-        'FnId': int.tryParse(funnelId) ?? 0,
+        'Entity': {
+          'Nm': funnelName,
+          'InBy': '',
+          'UpBy': '',
+        },
       };
 
-      print('Funnel assignment request data: $requestData');
+      print('🔨 [Create Funnel] Request data: $requestData');
+      print('🔨 [Create Funnel] Endpoint: Services/Chat/Chatfunnels/Create');
 
       final response = await _dio.post(
-        'Services/Chat/Chatrooms/AssignFunnel',
+        'Services/Chat/Chatfunnels/Create',
         data: requestData,
       );
 
-      print('Funnel assignment response: ${response.statusCode} - ${response.data}');
+      print('🔨 [Create Funnel] Response: ${response.statusCode} - ${response.data}');
 
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        print('Successfully assigned funnel to contact');
-        return true;
+      if (response.statusCode == 200) {
+        // Check if there's an Error field that is not null
+        final hasError = response.data['Error'] != null;
+        if (!hasError) {
+          // Get the EntityId from response
+          final entityId = response.data['EntityId'];
+          if (entityId != null) {
+            print('✅ [Create Funnel] Success - EntityId: $entityId');
+            return entityId.toString();
+          }
+        }
       }
 
-      print('Assign Funnel API Error: ${response.data}');
+      print('❌ Create Funnel API Error: ${response.data}');
+      return null;
+    } catch (e) {
+      print('❌ Error creating funnel: $e');
+      
+      // Try to extract error details from DioException
+      if (e.toString().contains('DioException')) {
+        try {
+          final dioError = e as DioException;
+          print('❌ Error type: ${dioError.type}');
+          print('❌ Error message: ${dioError.message}');
+          print('❌ Error response: ${dioError.response?.data}');
+          print('❌ Status code: ${dioError.response?.statusCode}');
+        } catch (_) {
+          // Ignore if casting fails
+        }
+      }
+      
+      return null;
+    }
+  }
+
+  Future<bool> assignFunnelToContact(String roomId, String funnelId) async {
+    try {
+      print('🎯 [Assign Funnel] Assigning funnel $funnelId to room $roomId');
+      
+      // Special case: if funnelId is '0', we're removing the funnel (set to null)
+      final isRemoving = funnelId == '0';
+      
+      dynamic funnelValue;
+      if (isRemoving) {
+        funnelValue = null; // Set to null to remove funnel
+        print('🎯 [Assign Funnel] Removing funnel (setting FnId to null)');
+      } else {
+        // Convert funnelId to int
+        final funnelIdInt = int.tryParse(funnelId);
+        if (funnelIdInt == null) {
+          print('❌ [Assign Funnel] Invalid funnelId format: $funnelId');
+          return false;
+        }
+        funnelValue = funnelIdInt;
+      }
+      
+      final requestData = {
+        'EntityId': roomId,
+        'Entity': {
+          'FnId': funnelValue,
+        },
+      };
+      
+      print('🎯 [Assign Funnel] Request data: $requestData');
+      print('🎯 [Assign Funnel] Endpoint: Services/Chat/Chatrooms/Update');
+      
+      final response = await _dio.post(
+        'Services/Chat/Chatrooms/Update',
+        data: requestData,
+      );
+      
+      print('🎯 [Assign Funnel] Response: ${response.statusCode} - ${response.data}');
+      
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError) {
+          print('✅ [Assign Funnel] Success');
+          return true;
+        } else {
+          print('❌ [Assign Funnel] Error: ${response.data['ErrorMsg'] ?? response.data['Error']}');
+          return false;
+        }
+      }
+      
+      print('❌ [Assign Funnel] API Error: ${response.data}');
       return false;
     } catch (e) {
-      print('Error assigning funnel to contact: $e');
+      print('❌ [Assign Funnel] Exception: $e');
+      
+      if (e.toString().contains('DioException')) {
+        try {
+          final dioError = e as DioException;
+          print('❌ Error type: ${dioError.type}');
+          print('❌ Error message: ${dioError.message}');
+          print('❌ Error response: ${dioError.response?.data}');
+        } catch (_) {}
+      }
+      
       return false;
     }
   }
 
-  Future<bool> removeFunnelFromContact(String contactId) async {
-    try {
-      print('Removing funnel from contact $contactId');
-      
-      final requestData = {
-        'CtId': int.tryParse(contactId) ?? 0,
-        'FnId': null,
-      };
-
-      print('Remove funnel request data: $requestData');
-
-      final response = await _dio.post(
-        'Services/Chat/Chatrooms/RemoveFunnel',
-        data: requestData,
-      );
-
-      print('Remove funnel response: ${response.statusCode} - ${response.data}');
-
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        print('Successfully removed funnel from contact');
-        return true;
-      }
-
-      print('Remove Funnel API Error: ${response.data}');
-      return false;
-    } catch (e) {
-      print('Error removing funnel from contact: $e');
-      return false;
-    }
-  }
   Future<bool> addContactNote(String roomId, String content) async {
     try {
       print('📝 [Add Contact Note] Starting - RoomId: $roomId');
@@ -531,7 +596,7 @@ class ContactDetailService {
       final requestData = {
         'EntityId': roomId,
         'Entity': {
-          'NeedReply': needReply ? 1 : 0,
+          'IsNeedReply': needReply ? 1 : 0,
         },
       };
 

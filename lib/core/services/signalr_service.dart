@@ -258,6 +258,16 @@ class SignalRService {
       return; // Skip notifications for agent messages
     }
     
+    // CRITICAL: Don't show notification if user is currently in this room
+    // Get current room from PushNotificationService
+    final currentRoomId = PushNotificationService.getCurrentRoomId();
+    if (currentRoomId != null && currentRoomId == message.roomId) {
+      print('🚫 User in current room ${message.roomId} - skipping SignalR notification');
+      return;
+    }
+    
+    print('✅ User NOT in room ${message.roomId} (current: $currentRoomId) - showing notification');
+    
     // Get actual contact name from room detail
     String senderName = 'Customer';
     String roomName = 'New Message';

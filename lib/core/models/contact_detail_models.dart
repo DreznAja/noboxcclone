@@ -16,6 +16,8 @@ class ContactDetail {
   final bool isGroup;
   final String? description;
   final String? groupId;
+  final String? externalId;
+  final List<GroupAgent>? agents;
 
   ContactDetail({
     required this.id,
@@ -35,10 +37,24 @@ class ContactDetail {
     this.isGroup = false,
     this.description,
     this.groupId,
+    this.externalId,
+    this.agents,
   });
 
   factory ContactDetail.fromJson(Map<String, dynamic> json) {
     print('Parsing contact detail JSON: $json');
+    
+    // Parse agents from SelectAgents or RoomAgents
+    List<GroupAgent>? agents;
+    if (json['SelectAgents'] != null && json['SelectAgents'] is List) {
+      agents = (json['SelectAgents'] as List)
+          .map((agent) => GroupAgent.fromJson(agent))
+          .toList();
+    } else if (json['RoomAgents'] != null && json['RoomAgents'] is List) {
+      agents = (json['RoomAgents'] as List)
+          .map((agent) => GroupAgent.fromJson(agent))
+          .toList();
+    }
     
     return ContactDetail(
       id: json['Id']?.toString() ?? '',
@@ -58,6 +74,8 @@ class ContactDetail {
       isGroup: json['IsGrp'] == 1 || json['IsGroup'] == true,
       description: json['Description'] ?? json['Desc'],
       groupId: json['GrpId']?.toString(),
+      externalId: json['ExtId'] ?? json['GrpExtId'],
+      agents: agents,
     );
   }
 }
@@ -273,6 +291,32 @@ class ContactFunnel {
       id: json['Id']?.toString() ?? '',
       name: displayName,
       description: description,
+    );
+  }
+}
+
+class GroupAgent {
+  final String userId;
+  final String displayName;
+  final String email;
+  final String? userImage;
+  final DateTime? lastLogin;
+
+  GroupAgent({
+    required this.userId,
+    required this.displayName,
+    required this.email,
+    this.userImage,
+    this.lastLogin,
+  });
+
+  factory GroupAgent.fromJson(Map<String, dynamic> json) {
+    return GroupAgent(
+      userId: json['UserId']?.toString() ?? json['Id']?.toString() ?? '',
+      displayName: json['DisplayName'] ?? json['Username'] ?? '',
+      email: json['Email'] ?? json['UserEmail'] ?? json['Username'] ?? '',
+      userImage: json['UserImage'],
+      lastLogin: json['LastLogin'] != null ? DateTime.parse(json['LastLogin']) : null,
     );
   }
 }

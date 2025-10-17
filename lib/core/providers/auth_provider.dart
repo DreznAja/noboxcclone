@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/signalr_service.dart';
 import '../services/account_service.dart';
+import '../services/agent_cache_service.dart';
 
 class AuthState {
   final bool isLoading;
@@ -50,7 +51,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> login(String username, String password) async {
+  Future<bool> login(String username, String password, {bool saveCredentials = true}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -72,6 +73,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       
       // Save token
       await StorageService.saveToken(response.data!);
+      
+      // Save credentials for auto re-login
+      if (saveCredentials) {
+        print('💾 Saving credentials for auto re-login');
+        await StorageService.saveCredentials(username, password);
+      }
       
       // Create user data with proper structure
       final userData = UserData(
@@ -111,6 +118,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         print('❌ SignalR initialization failed during login: $e');
         // Continue with login, SignalR will retry connection automatically
       }
+      
+      // Initialize Agent Cache Service for system message formatting
+      try {
+        print('👥 Initializing Agent Cache Service...');
+        await AgentCacheService().initialize();
+        print('✅ Agent Cache Service initialized successfully');
+      } catch (e) {
+        print('❌ Agent Cache Service initialization failed: $e');
+        // Continue with login, agent names will show as 'Agent' in system messages
+      }
 
       state = state.copyWith(
         isLoading: false,
@@ -136,14 +153,58 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Disconnect SignalR
       SignalRService.dispose();
       
-      // Clear storage
+      // Clear Agent Cache
+      AgentCacheService().clearCache();
+      
+      // Clear storage including credentials
       await StorageService.removeToken();
       await StorageService.removeUserData();
+      await StorageService.removeCredentials();
 
       state = AuthState();
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  Future<bool> tryAutoReLogin() async {
+    print('🔄 Attempting auto re-login...');
+    
+    final credentials = StorageService.getSavedCredentials();
+    if (credentials == null) {
+      print('❌ No saved credentials found');
+      return false;
+    }
+
+    print('✅ Found saved credentials, attempting re-login...');
+    
+    // Login without saving credentials again (already saved)
+    final success = await login(
+      credentials['username']!,
+      credentials['password']!,
+      saveCredentials: false,
+    );
+
+    if (success) {
+      print('✅ Auto re-login successful');
+    } else {
+      print('❌ Auto re-login failed');
+    }
+
+    return success;
+  }
+
+  void invalidateSession() {
+    print('🔴 Session invalidated - clearing auth state');
+    
+    try {
+      SignalRService.dispose();
+      AgentCacheService().clearCache();
+    } catch (e) {
+      print('⚠️ Error cleaning up services: $e');
+    }
+    
+    state = AuthState();
   }
 
   void clearError() {

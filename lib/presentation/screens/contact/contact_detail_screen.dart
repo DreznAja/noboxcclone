@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/models/tag_models.dart' as tag_models;
 import 'package:nobox_chat/core/models/tag_models.dart';
-import 'package:nobox_chat/core/providers/chat_provider.dart';
-import 'package:timeago/timeago.dart' as timeago;
+import 'package:nobox_chat/presentation/widgets/add_note_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:nobox_chat/core/models/contact_detail_models.dart';
 import '../../../core/providers/contact_detail_provider.dart';
+import '../../../core/providers/chat_provider.dart';
 import '../../../core/providers/tag_provider.dart';
-import '../../../core/models/contact_detail_models.dart';
-import '../../../core/models/tag_models.dart' as tag_models;
 import '../../../core/theme/app_theme.dart';
-import '../../widgets/add_note_dialog.dart';
+import '../../widgets/add_funnel_dialog.dart';
+import '../../widgets/add_tag_dialog.dart';
 import '../../widgets/edit_note_dialog.dart';
 import '../../widgets/funnel_selection_dialog.dart';
 import '../../widgets/tag_selection_dialog.dart';
+import '../../widgets/campaign_selection_dialog.dart';
+import '../../widgets/deal_selection_dialog.dart';
+import '../../widgets/form_template_selection_dialog.dart';
 import '../chat/chat_screen.dart';
 import '../../../core/models/chat_models.dart';
+import '../../../core/services/account_service.dart';
+import 'conversation_history_screen.dart';
 
 class ContactDetailScreen extends ConsumerStatefulWidget {
   final String contactId;
@@ -46,11 +52,18 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   String? _currentRoomId;
   OverlayEntry? _funnelOverlayEntry;
   final GlobalKey _funnelKey = GlobalKey();
+  bool _isUpdatingNeedReply = false;
+  bool _isUpdatingMuteBot = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Don't auto-refresh rooms to avoid disrupting new conversations
+      // Room will be refreshed automatically after first message is sent
+      // print('🔄 Contact screen opened - refreshing rooms to get latest data');
+      // await ref.read(chatProvider.notifier).loadRooms();
+      
       // For groups, skip loading contact detail from API as it doesn't exist
       // We'll use Room data directly
       if (!widget.isGroup) {
@@ -63,7 +76,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       ref.read(tagProvider.notifier).loadAvailableTags();
       // Load room tags using the actual room ID, not contact ID
       _loadRoomTagsForContact();
-      // Load initial needReply status
+      // Load initial needReply status from refreshed data
       _loadNeedReplyStatus();
     });
   }
@@ -146,21 +159,13 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     final tagState = ref.watch(tagProvider);
 
     // Listen for errors (suppress for groups as they might not have contact detail API)
+    // DISABLED: Don't show error alerts for contact not found - just log it
     ref.listen<ContactDetailState>(contactDetailProvider, (previous, next) {
       if (next.error != null && next.error != previous?.error && !widget.isGroup) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: AppTheme.errorColor,
-            action: SnackBarAction(
-              label: 'Dismiss',
-              textColor: Colors.white,
-              onPressed: () {
-                ref.read(contactDetailProvider.notifier).clearError();
-              },
-            ),
-          ),
-        );
+        // Just log the error, don't show alert
+        print('⚠️ Contact detail error: ${next.error}');
+        // Clear the error silently
+        ref.read(contactDetailProvider.notifier).clearError();
       }
     });
 
@@ -182,6 +187,31 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
         );
       }
     });
+    
+    // Listen for changes in chat provider to update needReply and muteBot status
+    ref.listen<ChatState>(chatProvider, (previous, next) {
+      // Don't sync if we're in the middle of updating (to preserve optimistic update)
+      if (_isUpdatingNeedReply || _isUpdatingMuteBot) {
+        print('⏸️ Skipping sync - update in progress');
+        return;
+      }
+      
+      if (_currentRoomId != null) {
+        // Find matching room and update local state
+        for (final room in next.rooms) {
+          if (room.id == _currentRoomId) {
+            if (_needReply != room.needReply || _muteAIAgent != room.isMuteBot) {
+              setState(() {
+                _needReply = room.needReply;
+                _muteAIAgent = room.isMuteBot;
+              });
+              print('🔄 Synced from chat provider: needReply=$_needReply, muteBot=$_muteAIAgent');
+            }
+            break;
+          }
+        }
+      }
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -189,9 +219,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        title: const Text(
-          'Contact Detail',
-          style: TextStyle(
+        title: Text(
+          widget.isGroup ? 'Extra Panel' : 'Contact Detail',
+          style: const TextStyle(
             color: Colors.black,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -250,22 +280,30 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               : SingleChildScrollView(
                   child: Column(
                     children: [
-                      // Contact Header with Avatar and Phone Number
-                      _buildContactHeader(contactState.contact!),
+                      // Contact Header with Avatar and Phone Number (only for individual)
+                      if (!widget.isGroup) ...[
+                        _buildContactHeader(contactState.contact!),
+                        const SizedBox(height: 8),
+                      ],
                       
-                      const SizedBox(height: 8),
+                      // Group name header for Extra Panel (only for groups)
+                      if (widget.isGroup) ...[
+                        _buildGroupNameHeader(),
+                        const SizedBox(height: 8),
+                      ],
                       
                       // Conversation History Section
                       _buildConversationHistorySection(),
                       
                       const SizedBox(height: 8),
                       
-                      // Group or Contact Section
-                      contactState.contact!.isGroup
-                          ? _buildGroupSection(contactState.contact!)
-                          : _buildContactSection(contactState.contact!),
-                      
-                      const SizedBox(height: 8),
+                      // Group or Contact Section (only for individual)
+                      if (!widget.isGroup) ...[
+                        contactState.contact!.isGroup
+                            ? _buildGroupSection(contactState.contact!)
+                            : _buildContactSection(contactState.contact!),
+                        const SizedBox(height: 8),
+                      ],
                       
                       // Conversation Settings Section
                       _buildConversationSection(),
@@ -309,6 +347,63 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildGroupNameHeader() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          // Group Avatar
+          CircleAvatar(
+            radius: 24,
+            backgroundImage: _isValidImageUrl(widget.contactImage)
+                ? NetworkImage(widget.contactImage!)
+                : null,
+            backgroundColor: Colors.grey.shade200,
+            child: !_isValidImageUrl(widget.contactImage)
+                ? const Icon(
+                    Icons.group,
+                    color: Colors.grey,
+                    size: 28,
+                  )
+                : null,
+          ),
+          
+          const SizedBox(width: 16),
+          
+          // Group Name
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.contactName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                if (widget.groupDescription != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.groupDescription!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -403,11 +498,34 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
           color: Colors.grey,
         ),
         onTap: () {
-          // Navigate to conversation history
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Conversation history feature coming soon'),
-              backgroundColor: AppTheme.primaryColor,
+          // Navigate to conversation history screen
+          // Get CtId (NOT CtRealId!) from current room
+          final chatState = ref.read(chatProvider);
+          String? ctId;
+          
+          if (_currentRoomId != null) {
+            for (final room in chatState.rooms) {
+              if (room.id == _currentRoomId) {
+                // Use CtId (external contact ID), not CtRealId (internal ID)
+                ctId = room.ctId;
+                print('🔍 Found room: ${room.id}');
+                print('  CtId: ${room.ctId}');
+                print('  CtRealId: ${room.ctRealId}');
+                break;
+              }
+            }
+          }
+          
+          print('📜 Navigating to conversation history with CtId: ${ctId ?? widget.contactId}');
+          
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ConversationHistoryScreen(
+                contactId: ctId ?? widget.contactId,
+                contactName: widget.contactName,
+                contactImage: widget.contactImage,
+              ),
             ),
           );
         },
@@ -436,10 +554,15 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.phone, color: Colors.red, size: 20),
-                  onPressed: contact.phone != null ? () => _makePhoneCall(contact.phone!) : null,
+                  icon: Icon(
+                    contact.isBlocked ? Icons.block : Icons.block_outlined,
+                    color: contact.isBlocked ? Colors.red : Colors.grey,
+                    size: 20,
+                  ),
+                  onPressed: () => _toggleBlockContact(contact),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: contact.isBlocked ? 'Unblock Contact' : 'Block Contact',
                 ),
                 const SizedBox(width: 8),
                 IconButton(
@@ -491,81 +614,165 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   Widget _buildGroupSection(ContactDetail contact) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Group',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
+          // Header
+          const Padding(
+            padding: EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 12),
+            child: Text(
+              'Group Info',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          // Name row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(
-                width: 90,
-                child: Text(
+          
+          // Group details
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name
+                const Text(
                   'Name',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
+                    fontSize: 12,
+                    color: Colors.grey,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-              ),
-              Expanded(
-                child: Text(
+                const SizedBox(height: 4),
+                Text(
                   contact.name,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 16,
                     color: Color(0xFF007AFF),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-              ),
-            ],
-          ),
-          // Description row
-          if (contact.description != null && contact.description!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(
-                  width: 90,
-                  child: Text(
+                
+                // Description
+                if (contact.description != null && contact.description!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
                     'Description',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.black,
+                      fontSize: 12,
+                      color: Colors.grey,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Text(
+                  const SizedBox(height: 4),
+                  Text(
                     contact.description!,
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.black87,
                     ),
                   ),
-                ),
+                ],
+                
+                // External ID
+                if (contact.externalId != null && contact.externalId!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Group ID',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    contact.externalId!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+                
+                // Assigned Agents
+                if (contact.agents != null && contact.agents!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Assigned Agents',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...contact.agents!.map((agent) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundImage: agent.userImage != null && agent.userImage!.isNotEmpty
+                              ? NetworkImage(agent.userImage!)
+                              : null,
+                          backgroundColor: Colors.grey.shade300,
+                          child: agent.userImage == null || agent.userImage!.isEmpty
+                              ? const Icon(Icons.person, size: 18, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                agent.displayName,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                agent.email,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )).toList(),
+                ],
               ],
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildConversationSection() {
+    // Get account name from current room
+    final chatState = ref.watch(chatProvider);
+    String accountName = 'Bot WA'; // Default fallback
+    
+    // Find the current room to get account/bot name
+    if (_currentRoomId != null) {
+      for (final room in chatState.rooms) {
+        if (room.id == _currentRoomId) {
+          accountName = _getBotName(room);
+          break;
+        }
+      }
+    }
+    
     return Container(
       color: Colors.white,
       child: Column(
@@ -582,7 +789,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               ),
             ),
           ),
-          _buildConversationItem('Account', 'Bot WA', hasSwitch: false),
+          _buildConversationItem('Account', accountName, hasSwitch: false),
           _buildConversationItem('Need Reply', '', hasSwitch: true, switchValue: _needReply),
           _buildConversationItem('Mute AI Agent', '', hasSwitch: true, switchValue: _muteAIAgent),
         ],
@@ -810,10 +1017,19 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 ),
                 const Spacer(),
                 IconButton(
+                  icon: const Icon(Icons.add_circle_outline, color: Colors.blue, size: 20),
+                  onPressed: _showAddTagDialog,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Create new tag',
+                ),
+                const SizedBox(width: 4),
+                IconButton(
                   icon: const Icon(Icons.add, color: Colors.blue, size: 20),
                   onPressed: () => _showTagSelectionDialog(tagState),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  tooltip: 'Assign tags to contact',
                 ),
               ],
             ),
@@ -1003,11 +1219,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Campaign',
                     style: TextStyle(
                       fontSize: 16,
@@ -1015,12 +1231,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       color: Colors.black,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    'Not Set',
+                    campaign?.name ?? 'Not Set',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.red,
+                      color: campaign != null ? Colors.black87 : Colors.red,
                     ),
                   ),
                 ],
@@ -1029,6 +1245,13 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             IconButton(
               icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 18),
               onPressed: campaign != null ? () => _viewCampaign(campaign) : null,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+              onPressed: _showCampaignDialog,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
@@ -1045,11 +1268,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Deal',
                     style: TextStyle(
                       fontSize: 16,
@@ -1057,14 +1280,24 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       color: Colors.black,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    'Not Set',
+                    deal?.name ?? 'Not Set',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.red,
+                      color: deal != null ? Colors.black87 : Colors.red,
                     ),
                   ),
+                  if (deal != null && (deal.pipeline != null || deal.stage != null)) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '${deal.pipeline ?? ''} ${deal.stage != null ? '• ${deal.stage}' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1076,15 +1309,8 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.add, color: Colors.blue, size: 20),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Add deal feature coming soon'),
-                    backgroundColor: AppTheme.primaryColor,
-                  ),
-                );
-              },
+              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+              onPressed: _showDealDialog,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
@@ -1101,11 +1327,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Form Template',
                     style: TextStyle(
                       fontSize: 16,
@@ -1113,12 +1339,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       color: Colors.black,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    'Not Set',
+                    formTemplate?.name ?? 'Not Set',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.red,
+                      color: formTemplate != null ? Colors.black87 : Colors.red,
                     ),
                   ),
                 ],
@@ -1127,6 +1353,13 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             IconButton(
               icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 18),
               onPressed: formTemplate != null ? () => _viewFormTemplate(formTemplate) : null,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+              onPressed: _showFormTemplateDialog,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
@@ -1232,12 +1465,52 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Note'),
-        content: const Text('Are you sure you want to delete this note?'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Color(0xFF1976D2),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Delete Note',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to delete this note? This action cannot be undone.',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1251,10 +1524,18 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFF1976D2),
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Delete'),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -1262,46 +1543,28 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   void _showFunnelDialog() {
-    final contactState = ref.read(contactDetailProvider);
-
-    if (contactState.availableFunnels.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No funnels available. Please create funnels first.'),
-          backgroundColor: AppTheme.warningColor,
-        ),
-      );
-      return;
-    }
-
     showDialog(
       context: context,
-      builder: (context) => FunnelSelectionDialog(
-        availableFunnels: contactState.availableFunnels,
-        currentFunnel: contactState.funnel,
-        onFunnelSelected: (funnelId) async {
-          if (_currentRoomId != null) {
-            await ref.read(contactDetailProvider.notifier).assignFunnel(_currentRoomId!, funnelId);
-
-            // Reload rooms to sync with web
-            await ref.read(chatProvider.notifier).loadRooms();
-            print('🔄 Reloaded rooms after funnel assignment');
-
-            if (mounted) {
+      builder: (context) => AddFunnelDialog(
+        onSave: (funnelName) async {
+          final success = await ref.read(contactDetailProvider.notifier).createFunnel(funnelName);
+          
+          if (mounted) {
+            if (success) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Funnel assigned successfully'),
+                SnackBar(
+                  content: Text('Funnel "$funnelName" created successfully'),
                   backgroundColor: AppTheme.successColor,
                 ),
               );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to create funnel'),
+                  backgroundColor: AppTheme.errorColor,
+                ),
+              );
             }
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Room ID not found. Please try again.'),
-                backgroundColor: AppTheme.errorColor,
-              ),
-            );
           }
         },
       ),
@@ -1368,19 +1631,32 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       onTap: () async {
                         _removeFunnelOverlay();
                         if (_currentRoomId != null) {
-                          await ref.read(contactDetailProvider.notifier).assignFunnel(_currentRoomId!, funnel.id);
+                          final success = await ref.read(contactDetailProvider.notifier).assignFunnel(_currentRoomId!, funnel.id);
 
-                          // Reload rooms to sync with web
-                          await ref.read(chatProvider.notifier).loadRooms();
-                          print('🔄 Reloaded rooms after funnel assignment');
+                          if (success) {
+                            // Provider already updates state, no need to reload
+                            // Just reload rooms to sync with web
+                            await ref.read(chatProvider.notifier).loadRooms();
+                            print('🔄 Reloaded rooms after funnel assignment');
 
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Funnel "${funnel.name}" assigned successfully'),
-                                backgroundColor: AppTheme.successColor,
-                              ),
-                            );
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Funnel "${funnel.name}" assigned successfully'),
+                                  backgroundColor: AppTheme.successColor,
+                                ),
+                              );
+                            }
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Funnel assignment is only available via web dashboard'),
+                                  backgroundColor: AppTheme.warningColor,
+                                  duration: Duration(seconds: 4),
+                                ),
+                              );
+                            }
                           }
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1447,35 +1723,356 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     super.dispose();
   }
 
+  Future<void> _toggleBlockContact(ContactDetail contact) async {
+    if (_currentRoomId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Room ID not found. Please try again.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );  
+      return;
+    }
+
+    final isCurrentlyBlocked = contact.isBlocked;
+    final action = isCurrentlyBlocked ? 'Unblock' : 'Block';
+    
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isCurrentlyBlocked ? Icons.check_circle_outline : Icons.block,
+                color: const Color(0xFF1976D2),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '$action Contact',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          isCurrentlyBlocked
+              ? 'Are you sure you want to unblock this contact? You will receive messages from them.'
+              : 'Are you sure you want to block this contact? You will not receive messages from them.',
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1976D2),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              action,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // Call API to update block status using Chatrooms/Update endpoint
+      final response = await ref.read(chatProvider.notifier).toggleBlockContact(
+        _currentRoomId!,
+        !isCurrentlyBlocked,
+      );
+
+      if (response && mounted) {
+        // Update local contact state
+        final updatedContact = ContactDetail(
+          id: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+          channelId: contact.channelId,
+          channelName: contact.channelName,
+          image: contact.image,
+          address: contact.address,
+          isGroup: contact.isGroup,
+          description: contact.description,
+          isBlocked: !isCurrentlyBlocked,
+        );
+        
+        ref.read(contactDetailProvider.notifier).setContact(updatedContact);
+        
+        // Reload rooms to sync with updated block status
+        await ref.read(chatProvider.notifier).loadRooms();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isCurrentlyBlocked
+                  ? 'Contact unblocked successfully'
+                  : 'Contact blocked successfully',
+            ),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to ${action.toLowerCase()} contact'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error toggling block status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getBotName(Room room) {
+    // FIXED: Match home screen display logic exactly
+    // Priority: accountName -> botName -> AccountService -> channelName -> fallback
+    
+    print('🔍 Getting bot name for room ${room.id}, channelId: ${room.channelId}');
+    print('  accountName: ${room.accountName}');
+    print('  botName: ${room.botName}');
+    print('  channelName: ${room.channelName}');
+    
+    // Priority 1: Use accountName if available (from DetailRoom)
+    if (room.accountName != null && room.accountName!.isNotEmpty) {
+      print('  ✅ Using accountName: ${room.accountName}');
+      return room.accountName!;
+    }
+    
+    // Priority 2: Use botName if available
+    if (room.botName != null && room.botName!.isNotEmpty) {
+      print('  ✅ Using botName: ${room.botName}');
+      return room.botName!;
+    }
+
+    // Priority 3: Try AccountService to get account name for this channel
+    // This provides dynamic names from backend that can change
+    try {
+      final accountService = AccountService();
+      final accounts = accountService.getAccountsForChannel(room.channelId);
+      if (accounts.isNotEmpty) {
+        // Return account name as-is from backend
+        print('  ✅ Using AccountService: ${accounts.first.name}');
+        return accounts.first.name;
+      }
+    } catch (e) {
+      print('  ⚠️ AccountService error: $e');
+      // Silently fail, will use fallback
+    }
+    
+    // Priority 4: Use channelName from API if not "Not Found"
+    if (room.channelName.isNotEmpty && room.channelName != 'Not Found') {
+      print('  ✅ Using channelName: ${room.channelName}');
+      return room.channelName;
+    }
+    
+    // Priority 5: Final fallback - use generic name based on channel ID
+    final fallbackName = _getChannelNameFromId(room.channelId);
+    print('  ✅ Using fallback: $fallbackName');
+    return fallbackName;
+  }
+  
+  String _getChannelNameFromId(int channelId) {
+    switch (channelId) {
+      case 1:
+      case 1557:
+      case 1561:
+        return 'Bot WA';
+      case 2:
+        return 'Telegram Bot';
+      case 3:
+        return 'Instagram Bot';
+      case 4:
+        return 'Messenger Bot';
+      case 19:
+        return 'Email Bot';
+      default:
+        return 'Bot';
+    }
+  }
+
   void _removeFunnel(String contactId) {
+    // Use roomId instead of contactId
+    if (_currentRoomId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Room ID not found. Please try again.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove Funnel'),
-        content: const Text('Are you sure you want to remove the funnel from this contact?'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.filter_alt_off,
+                color: Color(0xFF1976D2),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Remove Funnel',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to remove the funnel from this contact?',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              ref.read(contactDetailProvider.notifier).removeFunnel(contactId);
+              
+              // Use _currentRoomId instead of contactId
+              final success = await ref.read(contactDetailProvider.notifier).removeFunnel(_currentRoomId!);
+              
+              if (mounted) {
+                if (success) {
+                  // Provider already updates state to null, no need to reload
+                  // Just reload rooms to sync with web
+                  await ref.read(chatProvider.notifier).loadRooms();
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Funnel removed successfully'),
+                      backgroundColor: AppTheme.successColor,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to remove funnel'),
+                      backgroundColor: AppTheme.errorColor,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1976D2),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Remove',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTagDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AddTagDialog(
+        onSave: (tagName) async {
+          final success = await ref.read(tagProvider.notifier).createTag(tagName);
+          
+          if (mounted) {
+            if (success) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Funnel removed successfully'),
+                SnackBar(
+                  content: Text('Tag "$tagName" created successfully'),
                   backgroundColor: AppTheme.successColor,
                 ),
               );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Remove'),
-          ),
-        ],
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to create tag'),
+                  backgroundColor: AppTheme.errorColor,
+                ),
+              );
+            }
+          }
+        },
       ),
     );
   }
@@ -1498,17 +2095,20 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     
     showDialog(
       context: context,
-      builder: (context) => TagSelectionDialog(
+      builder: (dialogContext) => TagSelectionDialog(
         roomId: roomIdToUse,
         currentTags: tagState.roomTags,
         onTagsSelected: (tagIds) async {
+          // Save ScaffoldMessenger before async operation
+          final messenger = ScaffoldMessenger.of(context);
+          
           try {
             // Update room tags
             await ref.read(tagProvider.notifier).updateRoomTags(roomIdToUse, tagIds);
             
-            // Check if widget is still mounted before showing SnackBar
+            // Use saved messenger instead of context
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Tags updated successfully'),
                   backgroundColor: AppTheme.successColor,
@@ -1518,7 +2118,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
           } catch (e) {
             print('❌ Error updating tags: $e');
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: Text('Failed to update tags: $e'),
                   backgroundColor: AppTheme.errorColor,
@@ -1549,12 +2149,54 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove Tag'),
-        content: Text('Are you sure you want to remove the tag "${tag.name}"?'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.label_off,
+                color: Color(0xFF1976D2),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Remove Tag',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to remove the tag "${tag.name}"?',
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1584,10 +2226,18 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFF1976D2),
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Remove'),
+            child: const Text(
+              'Remove',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -1630,6 +2280,67 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     );
   }
 
+  void _showCampaignDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => CampaignSelectionDialog(
+        contactId: widget.contactId,
+        onCampaignSelected: (campaignId, campaignName) {
+          print('📌 Selected campaign: $campaignName (ID: $campaignId)');
+          // TODO: Save campaign to contact
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Campaign "$campaignName" selected'),
+              backgroundColor: AppTheme.successColor,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDealDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => DealSelectionDialog(
+        contactId: widget.contactId,
+        onDealSelected: (dealId, dealName, pipeline, stage) {
+          print('📌 Selected deal: $dealName (ID: $dealId)');
+          print('  Pipeline: $pipeline, Stage: $stage');
+          // TODO: Save deal to contact
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Deal "$dealName" selected'),
+              backgroundColor: AppTheme.successColor,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showFormTemplateDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => FormTemplateSelectionDialog(
+        contactId: widget.contactId,
+        onFormSelected: (formTemplateId, formTemplateName, formResultId) {
+          print('📌 Selected form template: $formTemplateName (ID: $formTemplateId)');
+          if (formResultId != null) {
+            print('  Form result ID: $formResultId');
+          }
+          // TODO: Save form template to contact
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Form template "$formTemplateName" selected'),
+              backgroundColor: AppTheme.successColor,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _handleNeedReplyToggle(bool newValue) async {
     if (_currentRoomId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1641,6 +2352,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       return;
     }
 
+    // Mark as updating to prevent listener from overriding
+    _isUpdatingNeedReply = true;
+    
     // Optimistically update UI
     setState(() {
       _needReply = newValue;
@@ -1651,15 +2365,14 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       final success = await ref.read(contactDetailProvider.notifier).updateNeedReply(_currentRoomId!, newValue);
 
       if (success) {
+        // Add delay to let backend sync
+        await Future.delayed(const Duration(milliseconds: 500));
+        
         // Update the room in chat provider to sync with home screen
-        final chatState = ref.read(chatProvider);
-        for (final room in chatState.rooms) {
-          if (room.id == _currentRoomId) {
-            // Force a room refresh by loading rooms again
-            await ref.read(chatProvider.notifier).loadRooms();
-            break;
-          }
-        }
+        await ref.read(chatProvider.notifier).loadRooms();
+        
+        // Wait a bit more before allowing listener sync
+        await Future.delayed(const Duration(milliseconds: 300));
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1685,6 +2398,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
           _needReply = !newValue;
         });
       }
+    } finally {
+      // Always reset the flag
+      _isUpdatingNeedReply = false;
     }
   }
 
@@ -1699,6 +2415,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       return;
     }
 
+    // Mark as updating to prevent listener from overriding
+    _isUpdatingMuteBot = true;
+    
     // Optimistically update UI
     setState(() {
       _muteAIAgent = newValue;
@@ -1709,8 +2428,14 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       final success = await ref.read(contactDetailProvider.notifier).updateMuteBot(_currentRoomId!, newValue);
 
       if (success) {
+        // Add delay to let backend sync
+        await Future.delayed(const Duration(milliseconds: 500));
+        
         // Update the room in chat provider to sync with home screen
         await ref.read(chatProvider.notifier).loadRooms();
+        
+        // Wait a bit more before allowing listener sync
+        await Future.delayed(const Duration(milliseconds: 300));
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1736,6 +2461,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
           _muteAIAgent = !newValue;
         });
       }
+    } finally {
+      // Always reset the flag
+      _isUpdatingMuteBot = false;
     }
   }
 }

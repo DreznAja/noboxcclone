@@ -66,50 +66,25 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     });
 
     try {
-      print('Starting to load filter data from APIs...');
-      
-      // Load data sequentially to avoid overwhelming the API
       _channels = await _apiService.getChannels();
-      print('Loaded ${_channels.length} channels');
-      
       _accounts = await _apiService.getAccounts();
-      print('Loaded ${_accounts.length} accounts');
-      
       _contacts = await _apiService.getContacts();
-      print('Loaded ${_contacts.length} contacts');
-      
       _links = await _apiService.getLinks();
-      print('Loaded ${_links.length} links');
-      
       _groups = await _apiService.getGroups();
-      print('Loaded ${_groups.length} groups');
-      
       _campaigns = await _apiService.getCampaigns();
-      print('Loaded ${_campaigns.length} campaigns');
-      
       _funnels = await _apiService.getFunnels();
-      print('Loaded ${_funnels.length} funnels');
-      
       _deals = await _apiService.getDeals();
-      print('Loaded ${_deals.length} deals');
-      
       _tags = await _apiService.getTags();
-      print('Loaded ${_tags.length} tags');
-      
       _humanAgents = await _apiService.getHumanAgents();
-      print('Loaded ${_humanAgents.length} human agents');
 
       setState(() {
         _isLoadingData = false;
       });
-      
-      print('All filter data loaded successfully');
     } catch (e) {
       setState(() {
         _isLoadingData = false;
         _loadingError = 'Failed to load filter data: $e';
       });
-      print('Error loading filter data: $e');
     }
   }
 
@@ -192,45 +167,7 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
 
             // Filter options
             Expanded(
-              child: _isLoadingData
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            color: AppTheme.primaryColor,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Loading filter options...',
-                            style: TextStyle(
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : _loadingError != null
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                              const SizedBox(height: 16),
-                              Text(
-                                _loadingError!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.red),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _loadApiData,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        )
-                      : SingleChildScrollView(
+              child: SingleChildScrollView(
                           child: Column(
                             children: [
                               // Status
@@ -273,13 +210,13 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                                 (value) => setState(() => _filters.chatType = value),
                               ),
 
-                              // Account
-                              _buildApiDropdownField(
-                                'Account',
-                                _filters.accountId,
-                                _accounts,
-                                (value) => setState(() => _filters.accountId = value),
-                              ),
+              // Account - Uses Account ID
+              _buildApiDropdownField(
+                'Account',
+                _filters.accountId,
+                _accounts,
+                (value) => setState(() => _filters.accountId = value),
+              ),
 
                               // Contact
                               _buildApiDropdownField(
@@ -453,42 +390,57 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  canvasColor: Colors.white, // Background dropdown menu
-                ),
-                child: DropdownButton<String>(
-                  value: value,
-                  hint: Text(
-                    options.isEmpty ? 'No data' : '--select--',
-                    style: TextStyle(
-                      color: options.isEmpty ? Colors.red : Colors.grey,
-                      fontSize: 14,
-                    ),
-                  ),
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  iconEnabledColor: Colors.black,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 14,
-                  ),
-                  items: options.map((FilterDataItem item) {
-                    return DropdownMenuItem<String>(
-                      value: item.id,
-                      child: Text(
-                        item.name.isNotEmpty ? item.name : 'ID: ${item.id}',
+              child: _isLoadingData
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Loading...', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                        ],
+                      ),
+                    )
+                  : Theme(
+                      data: Theme.of(context).copyWith(
+                        canvasColor: Colors.white, // Background dropdown menu
+                      ),
+                      child: DropdownButton<String>(
+                        value: value,
+                        hint: const Text(
+                          '--select--',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                        ),
+                        isExpanded: true,
+                        underline: const SizedBox(),
+                        iconEnabledColor: Colors.black,
                         style: const TextStyle(
                           color: Colors.black,
                           fontSize: 14,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        items: options.map((FilterDataItem item) {
+                          return DropdownMenuItem<String>(
+                            value: item.id,
+                            child: Text(
+                              item.name.isNotEmpty ? item.name : 'ID: ${item.id}',
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: onChanged,
                       ),
-                    );
-                  }).toList(),
-                  onChanged: options.isEmpty ? null : onChanged,
-                ),
-              ),
+                    ),
             ),
           ),
         ],

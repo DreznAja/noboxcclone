@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/services/background_service_manager.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/signalr_service.dart';
+import '../../core/services/storage_service.dart';
 import 'auth/login_screen.dart';
 import 'home/home_screen.dart';
 
@@ -113,6 +114,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _handleUnauthenticatedUser() async {
     if (!mounted) return;
+    
+    // Check if we have saved credentials for auto login
+    final authNotifier = ref.read(authProvider.notifier);
+    final hasCredentials = await Future(() => StorageService.hasCredentials());
+    
+    if (hasCredentials) {
+      setState(() {
+        _initStatus = 'Auto login...';
+      });
+      
+      print('🔄 Found saved credentials, attempting auto login...');
+      
+      final success = await authNotifier.tryAutoReLogin();
+      
+      if (!mounted) return;
+      
+      if (success) {
+        print('✅ Auto login successful');
+        await _handleAuthenticatedUser();
+        return;
+      } else {
+        print('❌ Auto login failed');
+      }
+    }
     
     setState(() {
       _initStatus = 'Redirecting to login...';

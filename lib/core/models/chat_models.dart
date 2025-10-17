@@ -43,6 +43,7 @@ class Room {
   final String? funnelId;
   final List<String> tagIds;
   final bool needReply;
+  final int? lastUpdatedBy; // Agent ID who last updated the room (UpBy field)
 
   Room({
     required this.id,
@@ -70,6 +71,7 @@ class Room {
     this.funnelId,
     this.tagIds = const [],
     this.needReply = false,
+    this.lastUpdatedBy,
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -96,6 +98,8 @@ class Room {
     print('  📶 ChAcc: $channelNameRaw, ChId: ${json['ChId']}');
     print('  👤 Contact: ${json['CtRealNm']} / ${json['Ct']} / ${json['Grp']} -> $contactName');
     print('  📈 Status: ${json['St']}');
+    print('  🔔 IsMuteBot: ${json['IsMuteBot']} -> ${json['IsMuteBot'] == 1}');
+    print('  📌 IsNeedReply: ${json['IsNeedReply']}, NeedReply: ${json['NeedReply']}');
     
     return Room(
       id: json['Id']?.toString() ?? '',
@@ -128,6 +132,7 @@ class Room {
       funnelId: json['FnId']?.toString() ?? json['FunnelId']?.toString(), // Also check FunnelId field
       tagIds: (json['TagsIds'] as String?)?.split(',').where((t) => t.isNotEmpty).toList() ?? [],
       needReply: json['NeedReply'] == 1 || json['NeedReply'] == true || json['IsNeedReply'] == 1 || json['IsNeedReply'] == true,
+      lastUpdatedBy: json['UpBy'] != null ? int.tryParse(json['UpBy'].toString()) : null,
     );
   }
 

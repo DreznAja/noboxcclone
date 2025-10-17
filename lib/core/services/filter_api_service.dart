@@ -159,7 +159,21 @@ class FilterApiService {
 
       if (response.statusCode == 200 && response.data['IsError'] != true) {
         final List<dynamic> entities = response.data['Entities'] ?? [];
-        return entities.map((item) => AccountItem.fromJson(item)).toList();
+        
+        // DEBUG: Print raw response untuk melihat structure data
+        if (entities.isNotEmpty) {
+          print('=== ACCOUNT API RESPONSE DEBUG ===');
+          print('First account item: ${entities.first}');
+          print('Available fields: ${(entities.first as Map).keys.toList()}');
+          print('================================');
+        }
+        
+        final accounts = entities.map((item) => AccountItem.fromJson(item)).toList();
+        print('Loaded ${accounts.length} accounts:');
+        for (final acc in accounts) {
+          print('  - ID: ${acc.id}, Name: "${acc.name}"');
+        }
+        return accounts;
       }
       
       print('Account API Error: ${response.data}');

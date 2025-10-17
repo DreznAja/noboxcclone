@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../app_config.dart';
 import '../models/auth_models.dart';
 import '../models/chat_models.dart';
 import '../models/quick_reply_models.dart';
+import '../models/agent_models.dart';
 import 'storage_service.dart';
 
 class ApiResponse<T> {
@@ -22,6 +24,9 @@ class ApiResponse<T> {
 
 class ApiService {
   static Dio? _dio;
+  static final _sessionExpiredController = StreamController<void>.broadcast();
+  
+  static Stream<void> get onSessionExpired => _sessionExpiredController.stream;
 
   static Future<void> init() async {
     _dio = Dio(BaseOptions(
@@ -43,8 +48,20 @@ class ApiService {
         }
         handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         print('API Error: ${error.message}');
+        
+        // Handle 401 Unauthorized - token expired or invalid
+        if (error.response?.statusCode == 401) {
+          print('🔴 Token expired or invalid - notifying for auto re-login');
+          
+          // Notify listeners that session has expired
+          // Don't clear token here - let the UI handle re-login first
+          _sessionExpiredController.add(null);
+          
+          print('✅ Session expired event emitted');
+        }
+        
         handler.next(error);
       },
     ));
@@ -110,7 +127,7 @@ class ApiService {
         'IncludeColumns': [
           'Id', 'CtId', 'CtRealId', 'GrpId', 'CtRealNm', 'Ct', 'Grp',
           'LastMsg', 'TimeMsg', 'Uc', 'St', 'ChId', 'ChAcc', 'AccNm', 'BotNm', 'CtImg', 'LinkImg',
-          'IsGrp', 'IsPin', 'CtIsBlock', 'IsMuteBot', 'Tags', 'Fn', 'FnId', 'FnNm', 'FunnelId', 'TagsIds'
+          'IsGrp', 'IsPin', 'CtIsBlock', 'IsMuteBot', 'IsNeedReply', 'Tags', 'Fn', 'FnId', 'FnNm', 'FunnelId', 'TagsIds'
         ],
         'ColumnSelection': 1,
       };
@@ -137,7 +154,18 @@ class ApiService {
       print('📡 [API SERVICE] Response status: ${response.statusCode}');
       print('📡 [API SERVICE] Response data keys: ${response.data?.keys}');
       if (response.data?['Entities'] != null) {
-        print('📡 [API SERVICE] Number of rooms returned: ${(response.data['Entities'] as List).length}');
+        final entities = response.data['Entities'] as List;
+        print('📡 [API SERVICE] Number of rooms returned: ${entities.length}');
+        
+        // DEBUG: Print first entity to see ChAcc field
+        if (entities.isNotEmpty) {
+          final firstRoom = entities.first as Map<String, dynamic>;
+          print('🔍 [API DEBUG] First room RAW data:');
+          print('  - ChAcc: "${firstRoom['ChAcc']}"');
+          print('  - AccNm: "${firstRoom['AccNm']}"');
+          print('  - BotNm: "${firstRoom['BotNm']}"');
+          print('  - CtRealNm: "${firstRoom['CtRealNm']}"');
+        }
       }
 
       if (response.statusCode == 200) {
@@ -927,6 +955,579 @@ class ApiService {
         error: e.toString(),
         statusCode: 500,
       );
+    }
+  }
+
+  // Get Human Agents List
+  static Future<ApiResponse<List<HumanAgent>>> getHumanAgents() async {
+    try {
+      print('👥 [Human Agents] Fetching agents list...');
+      
+      final requestData = {
+        'Take': 100,
+        'Sort': ['DisplayName'],
+        'EqualityFilter': {
+          'IsActive': 1, // Only active users
+        },
+        'IncludeColumns': [
+          'UserId',
+          'DisplayName',
+          'Email',
+          'UserImage',
+          'IsActive',
+        ],
+      };
+      
+      final response = await dio.post(
+        'Services/Administration/User/List',
+        data: requestData,
+      );
+      
+      if (response.statusCode == 200) {
+        print('✅ [Human Agents] Response received');
+        print('📦 Response data keys: ${response.data?.keys}');
+        
+        // Check if Entities key exists
+        if (response.data != null && response.data['Entities'] != null) {
+          final entities = response.data['Entities'] as List;
+          final agents = entities.map((e) => HumanAgent.fromJson(e)).toList();
+          
+          print('✅ [Human Agents] Loaded ${agents.length} agents');
+          return ApiResponse(
+            isError: false,
+            data: agents,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          print('❌ [Human Agents] No Entities key in response');
+          print('❌ Response structure: ${response.data?.keys}');
+          return ApiResponse(
+            isError: true,
+            error: 'No agents data available',
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Human Agents] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Add Agent to Conversation
+  static Future<ApiResponse<AddAgentResponse>> addAgentToConversation(
+    AddAgentRequest request,
+  ) async {
+    try {
+      print('👥 [Add Agent] Adding agent ${request.userId} to room ${request.roomId}...');
+      
+      final response = await dio.post(
+        'Services/Chat/Chatrooms/AddAgentToConversation',
+        data: request.toJson(),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ [Add Agent] Response received');
+        print('📦 [Add Agent] Response data: ${response.data}');
+        
+        // Check if there's an error in response
+        final isError = response.data['IsError'] == true;
+        final errorMsg = response.data['ErrorMsg'];
+        
+        if (isError && errorMsg != null) {
+          print('❌ [Add Agent] Backend error: $errorMsg');
+          return ApiResponse(
+            isError: true,
+            error: errorMsg,
+            statusCode: response.statusCode!,
+          );
+        }
+        
+        // Success - check if RoomId exists (valid response)
+        if (response.data['RoomId'] != null && response.data['UserId'] != null) {
+          try {
+            final addAgentResponse = AddAgentResponse.fromJson(response.data);
+            print('✅ [Add Agent] Agent added successfully');
+            
+            return ApiResponse(
+              isError: false,
+              data: addAgentResponse,
+              statusCode: response.statusCode!,
+            );
+          } catch (e) {
+            print('❌ [Add Agent] Parse error: $e');
+            return ApiResponse(
+              isError: true,
+              error: 'Failed to parse response: $e',
+              statusCode: response.statusCode!,
+            );
+          }
+        } else {
+          // No RoomId means something went wrong
+          print('❌ [Add Agent] Invalid response structure');
+          return ApiResponse(
+            isError: true,
+            error: 'Invalid response from server',
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Add Agent] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Get Conversation History for a contact
+  static Future<ApiResponse<List<Room>>> getConversationHistory(String contactId) async {
+    try {
+      print('📜 [Conversation History] Loading history for contact: $contactId');
+      print('📜 [Conversation History] Contact ID type: ${contactId.runtimeType}');
+      
+      // Parse contactId to int if possible
+      final ctIdValue = int.tryParse(contactId);
+      print('📜 [Conversation History] Parsed CtId: $ctIdValue');
+      
+      final requestData = {
+        'EqualityFilter': {
+          'CtId': ctIdValue ?? contactId,
+          'St': 3, // Status 3 = Resolved conversations
+        },
+        'Sort': ['IsPin DESC', 'TimeMsg DESC'],
+        'Skip': 0,
+        'Take': 500,
+      };
+      
+      print('📜 [Conversation History] Request data: $requestData');
+      print('📜 [Conversation History] EqualityFilter: ${requestData['EqualityFilter']}');
+      
+      final response = await dio.post(
+        'Services/Chat/Chatrooms/ListHistory',
+        data: requestData,
+      );
+      
+      print('📜 [Conversation History] Response status: ${response.statusCode}');
+      print('📜 [Conversation History] Response data keys: ${response.data?.keys}');
+      
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        print('📜 [Conversation History] IsError: $isError, HasError: $hasError');
+        print('📜 [Conversation History] Entities: ${response.data['Entities']}');
+        
+        if (!hasError && response.data['Entities'] != null) {
+          final entities = response.data['Entities'] as List;
+          print('📜 [Conversation History] Entities count: ${entities.length}');
+          
+          if (entities.isNotEmpty) {
+            print('📜 [Conversation History] First entity: ${entities.first}');
+          }
+          
+          final rooms = entities.map((e) => Room.fromJson(e)).toList();
+          
+          print('✅ [Conversation History] Loaded ${rooms.length} history items');
+          
+          return ApiResponse(
+            isError: false,
+            data: rooms,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          final errorMessage = response.data['ErrorMessage'] ?? response.data['Error'] ?? 'Failed to load conversation history';
+          print('❌ [Conversation History] API error: $errorMessage');
+          
+          return ApiResponse(
+            isError: true,
+            error: errorMessage,
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Conversation History] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Get Link ID from Contact ID
+  static Future<ApiResponse<String>> getLinkIdFromContactId(String contactId, int channelId) async {
+    try {
+      print('🔗 [Get Link] Getting Link ID for contact: $contactId, channel: $channelId');
+      
+      final response = await dio.post(
+        'Services/Chat/Links/List',
+        data: {
+          'EqualityFilter': {
+            'CtId': int.tryParse(contactId) ?? contactId,
+            'ChId': channelId,
+          },
+          'Take': 1,
+          'Skip': 0,
+        },
+      );
+      
+      print('🔗 [Get Link] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError && response.data['Entities'] != null) {
+          final entities = response.data['Entities'] as List;
+          if (entities.isNotEmpty) {
+            final linkId = entities.first['Id']?.toString();
+            print('✅ [Get Link] Found Link ID: $linkId');
+            
+            return ApiResponse(
+              isError: false,
+              data: linkId,
+              statusCode: response.statusCode!,
+            );
+          } else {
+            print('❌ [Get Link] No link found for contact');
+            return ApiResponse(
+              isError: true,
+              error: 'No link found for this contact',
+              statusCode: response.statusCode!,
+            );
+          }
+        } else {
+          final errorMessage = response.data['ErrorMsg'] ?? response.data['Error'] ?? 'Failed to get link';
+          print('❌ [Get Link] API error: $errorMessage');
+          
+          return ApiResponse(
+            isError: true,
+            error: errorMessage,
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Get Link] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Create Room using DetailRoom endpoint (like web does)
+  static Future<ApiResponse<Map<String, dynamic>>> createRoomWithDetailRoom(String linkId) async {
+    try {
+      print('🆕 [Create Room] Creating room for link: $linkId');
+      
+      final response = await dio.post(
+        'Services/Chat/Chatrooms/DetailRoom',
+        data: {
+          'EntityId': linkId, // Pass link ID to create/get room
+        },
+      );
+      
+      print('🆕 [Create Room] Response status: ${response.statusCode}');
+      print('🆕 [Create Room] Response keys: ${response.data?.keys}');
+      
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError && response.data['Data'] != null) {
+          final data = response.data['Data'] as Map<String, dynamic>;
+          print('✅ [Create Room] Room created/retrieved successfully');
+          print('🆕 [Create Room] Room ID: ${data['Room']?['Id']}');
+          
+          return ApiResponse(
+            isError: false,
+            data: data,
+            statusCode: response.statusCode!,
+          );
+        } else {
+          final errorMessage = response.data['ErrorMsg'] ?? response.data['Error'] ?? 'Failed to create room';
+          print('❌ [Create Room] API error: $errorMessage');
+          
+          return ApiResponse(
+            isError: true,
+            error: errorMessage,
+            statusCode: response.statusCode!,
+          );
+        }
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Create Room] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Delete Message
+  static Future<ApiResponse<bool>> deleteMessage(String messageId) async {
+    try {
+      print('🗑️ [Delete Message] Deleting message: $messageId');
+      
+      final response = await dio.post(
+        'Services/Chat/Chatmessages/Delete',
+        data: {
+          'EntityId': messageId,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ [Delete Message] Response received');
+        print('📦 [Delete Message] Response data: ${response.data}');
+        
+        // Check if there's an error in response
+        final isError = response.data['IsError'] == true;
+        final errorMsg = response.data['ErrorMsg'] ?? response.data['Error'];
+        
+        if (isError || errorMsg != null) {
+          print('❌ [Delete Message] Backend error: $errorMsg');
+          return ApiResponse(
+            isError: true,
+            error: errorMsg ?? 'Failed to delete message',
+            statusCode: response.statusCode!,
+          );
+        }
+        
+        print('✅ [Delete Message] Message deleted successfully');
+        return ApiResponse(
+          isError: false,
+          data: true,
+          statusCode: response.statusCode!,
+        );
+      } else {
+        return ApiResponse(
+          isError: true,
+          error: 'HTTP ${response.statusCode}: ${response.statusMessage}',
+          statusCode: response.statusCode!,
+        );
+      }
+    } catch (e) {
+      print('❌ [Delete Message] Error: $e');
+      return ApiResponse(
+        isError: true,
+        error: e.toString(),
+        statusCode: 500,
+      );
+    }
+  }
+
+  // Get active campaigns list
+  Future<List<Map<String, dynamic>>> getCampaignsListActive() async {
+    try {
+      print('📋 [Get Campaigns] Loading active campaigns...');
+      
+      final response = await dio.post(
+        'Services/Nobox/Campaign/ListActive',
+        data: {
+          'Take': 100,
+          'Skip': 0,
+        },
+      );
+      
+      print('📋 [Get Campaigns] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 && response.data['Entities'] != null) {
+        final entities = response.data['Entities'] as List;
+        print('✅ [Get Campaigns] Loaded ${entities.length} campaigns');
+        return entities.cast<Map<String, dynamic>>();
+      }
+      
+      print('❌ [Get Campaigns] Failed to load campaigns');
+      return [];
+    } catch (e) {
+      print('❌ [Get Campaigns] Error: $e');
+      throw Exception('Failed to load campaigns: $e');
+    }
+  }
+
+  // Get deal pipelines
+  Future<List<Map<String, dynamic>>> getDealPipelines() async {
+    try {
+      print('📋 [Get Pipelines] Loading pipelines...');
+      
+      final response = await dio.post(
+        'Services/Nobox/Dealpipelines/List',
+        data: {
+          'Take': 100,
+          'Skip': 0,
+        },
+      );
+      
+      print('📋 [Get Pipelines] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 && response.data['Entities'] != null) {
+        final entities = response.data['Entities'] as List;
+        print('✅ [Get Pipelines] Loaded ${entities.length} pipelines');
+        return entities.cast<Map<String, dynamic>>();
+      }
+      
+      print('❌ [Get Pipelines] Failed to load pipelines');
+      return [];
+    } catch (e) {
+      print('❌ [Get Pipelines] Error: $e');
+      throw Exception('Failed to load pipelines: $e');
+    }
+  }
+
+  // Get deal pipeline types (stages)
+  Future<List<Map<String, dynamic>>> getDealPipelineTypes() async {
+    try {
+      print('📋 [Get Stages] Loading stages...');
+      
+      final response = await dio.post(
+        'Services/Nobox/Dealpipelinetypes/List',
+        data: {
+          'Take': 100,
+          'Skip': 0,
+        },
+      );
+      
+      print('📋 [Get Stages] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 && response.data['Entities'] != null) {
+        final entities = response.data['Entities'] as List;
+        print('✅ [Get Stages] Loaded ${entities.length} stages');
+        return entities.cast<Map<String, dynamic>>();
+      }
+      
+      print('❌ [Get Stages] Failed to load stages');
+      return [];
+    } catch (e) {
+      print('❌ [Get Stages] Error: $e');
+      throw Exception('Failed to load stages: $e');
+    }
+  }
+
+  // Get deals
+  Future<List<Map<String, dynamic>>> getDeals() async {
+    try {
+      print('📋 [Get Deals] Loading deals...');
+      
+      final response = await dio.post(
+        'Services/Nobox/Deals/List',
+        data: {
+          'Take': 100,
+          'Skip': 0,
+        },
+      );
+      
+      print('📋 [Get Deals] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 && response.data['Entities'] != null) {
+        final entities = response.data['Entities'] as List;
+        print('✅ [Get Deals] Loaded ${entities.length} deals');
+        return entities.cast<Map<String, dynamic>>();
+      }
+      
+      print('❌ [Get Deals] Failed to load deals');
+      return [];
+    } catch (e) {
+      print('❌ [Get Deals] Error: $e');
+      throw Exception('Failed to load deals: $e');
+    }
+  }
+
+  // Get form templates
+  Future<List<Map<String, dynamic>>> getFormTemplates() async {
+    try {
+      print('📋 [Get Forms] Loading form templates...');
+      
+      final response = await dio.post(
+        'Services/NoBoxCRM/Form/List',
+        data: {
+          'Take': 100,
+          'Skip': 0,
+        },
+      );
+      
+      print('📋 [Get Forms] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 && response.data['Entities'] != null) {
+        final entities = response.data['Entities'] as List;
+        print('✅ [Get Forms] Loaded ${entities.length} form templates');
+        return entities.cast<Map<String, dynamic>>();
+      }
+      
+      print('❌ [Get Forms] Failed to load form templates');
+      return [];
+    } catch (e) {
+      print('❌ [Get Forms] Error: $e');
+      throw Exception('Failed to load form templates: $e');
+    }
+  }
+
+  // Get form results
+  Future<List<Map<String, dynamic>>> getFormResults() async {
+    try {
+      print('📋 [Get Form Results] Loading form results...');
+      
+      final response = await dio.post(
+        'Services/NoBoxCRM/Formresults/List',
+        data: {
+          'Take': 100,
+          'Skip': 0,
+        },
+      );
+      
+      print('📋 [Get Form Results] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 && response.data['Entities'] != null) {
+        final entities = response.data['Entities'] as List;
+        print('✅ [Get Form Results] Loaded ${entities.length} form results');
+        return entities.cast<Map<String, dynamic>>();
+      }
+      
+      print('❌ [Get Form Results] Failed to load form results');
+      return [];
+    } catch (e) {
+      print('❌ [Get Form Results] Error: $e');
+      throw Exception('Failed to load form results: $e');
     }
   }
 }

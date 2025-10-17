@@ -1,6 +1,7 @@
 import 'dart:convert';
 import '../models/chat_models.dart';
 import '../services/storage_service.dart';
+import '../services/agent_cache_service.dart';
 
 class MessageDetectionUtils {
   static final Map<String, bool> _learnedAgentNumbers = {};
@@ -180,28 +181,51 @@ class MessageDetectionUtils {
       
       final msg = json['msg'] as String?;
       final user = json['user'];
+      final userId = json['userId']?.toString();
+      final byUserId = json['byUserId']?.toString();
+      final agentId = json['agentId']?.toString();
       
       if (msg == null) return jsonString;
       
-      // Parse different system messages (without emojis)
-      if (msg == 'Site.Inbox.HasResolveBy') {
-        final userName = user ?? 'Agent';
-        return 'Conversation resolved by $userName';
-      } else if (msg == 'Site.Inbox.HasArchiveBy') {
-        final userName = user ?? 'Agent';
-        return 'Conversation archived by $userName';
-      } else if (msg == 'Site.Inbox.HasRestoreBy') {
-        final userName = user ?? 'Agent';
-        return 'Conversation restored by $userName';
+      // Get agent names from cache (sync, no API call in message parsing)
+      final agentCache = AgentCacheService();
+      
+      // Parse different system messages with proper formatting
+      if (msg == 'Site.Inbox.HasResolveBy' || msg.contains('ResolveBy')) {
+        final agentName = _resolveAgentName(agentCache, byUserId ?? userId ?? agentId) ?? user ?? 'Agent';
+        return '$agentName resolved this conversation';
+      } else if (msg == 'Site.Inbox.HasArchiveBy' || msg.contains('ArchiveBy')) {
+        final agentName = _resolveAgentName(agentCache, byUserId ?? userId ?? agentId) ?? user ?? 'Agent';
+        return '$agentName archived this conversation';
+      } else if (msg == 'Site.Inbox.HasRestoreBy' || msg.contains('RestoreBy')) {
+        final agentName = _resolveAgentName(agentCache, byUserId ?? userId ?? agentId) ?? user ?? 'Agent';
+        return '$agentName restored this conversation';
       } else if (msg == 'Site.Inbox.HasAssignBySystem') {
         return 'Conversation assigned by system';
       } else if (msg.contains('HasAsign') || msg.contains('HasAssign')) {
-        final userName = user ?? 'Agent';
-        return 'Conversation assigned to $userName';
+        final targetAgentName = _resolveAgentName(agentCache, userId ?? agentId) ?? user ?? 'Agent';
+        final byAgentName = _resolveAgentName(agentCache, byUserId);
+        
+        if (byAgentName != null) {
+          return '$targetAgentName has been assigned to this conversation by $byAgentName';
+        } else {
+          return '$targetAgentName has been assigned to this conversation';
+        }
+      } else if (msg.contains('AgentOutBy') || msg.contains('HasRemove')) {
+        final removedAgentName = _resolveAgentName(agentCache, userId ?? agentId) ?? user ?? 'Agent';
+        final byAgentName = _resolveAgentName(agentCache, byUserId);
+        
+        if (byAgentName != null) {
+          return '$removedAgentName has been removed from this conversation by $byAgentName';
+        } else {
+          return '$removedAgentName has been removed from this conversation';
+        }
       } else if (msg.contains('MuteBot')) {
-        return 'Bot muted for this conversation';
+        final agentName = _resolveAgentName(agentCache, byUserId ?? userId ?? agentId) ?? user ?? 'Agent';
+        return '$agentName muted the bot for this conversation';
       } else if (msg.contains('UnmuteBot')) {
-        return 'Bot unmuted for this conversation';
+        final agentName = _resolveAgentName(agentCache, byUserId ?? userId ?? agentId) ?? user ?? 'Agent';
+        return '$agentName unmuted the bot for this conversation';
       }
       
       // Default: return cleaned message
@@ -211,6 +235,12 @@ class MessageDetectionUtils {
       print('⚠️ Failed to parse system message: $e');
       return jsonString;
     }
+  }
+  
+  /// Helper to resolve agent ID to agent name
+  static String? _resolveAgentName(AgentCacheService agentCache, String? agentId) {
+    if (agentId == null || agentId.isEmpty) return null;
+    return agentCache.getAgentNameSync(agentId);
   }
   
   /// Helper to safely try parse JSON

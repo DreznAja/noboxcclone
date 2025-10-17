@@ -1,26 +1,38 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:nobox_chat/presentation/widgets/forward_dialog.dart';
 import '../../../core/models/chat_models.dart';
 import '../../../core/providers/chat_provider.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../widgets/message_bubble_widget.dart';
 import '../../widgets/message_shimmer_widget.dart';
 import '../../widgets/chat_input_widget.dart';
 import '../../widgets/add_note_dialog.dart';
+import '../../widgets/add_agent_dialog.dart';
+import '../auth/login_screen.dart';
 import '../contact/contact_detail_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final Room room;
   final bool isArchived;
+  final bool isNewConversation; // Flag untuk new conversation
+  final bool isReadOnly; // Flag untuk read-only mode (conversation history)
 
   const ChatScreen({
     super.key,
     required this.room,
     this.isArchived = false,
+    this.isNewConversation = false, // Default false
+    this.isReadOnly = false, // Default false
   });
 
   @override
@@ -36,10 +48,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _hasInitiallyScrolled = false; // Flag untuk memastikan sudah scroll pertama kali
   bool _isFirstBuild = true; // Flag untuk build pertama
   bool _showContactDetail = false;
+  StreamSubscription<void>? _sessionExpiredSubscription;
 
   @override
   void initState() {
     super.initState();
+
+    // Listen to session expiration events
+    _sessionExpiredSubscription = ApiService.onSessionExpired.listen((_) {
+      print('🔴 Session expired in chat screen - navigating to login');
+      _handleSessionExpired();
+    });
 
     // Add scroll listener for pagination
     _scrollController.addListener(_onScroll);
@@ -112,7 +131,81 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _sessionExpiredSubscription?.cancel();
     super.dispose();
+  }
+
+  void _handleSessionExpired() async {
+    if (!mounted) return;
+    
+    print('🔄 Session expired - attempting auto re-login...');
+    
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('Refreshing session...'),
+          ],
+        ),
+        duration: Duration(seconds: 10),
+      ),
+    );
+    
+    // Try auto re-login first
+    final success = await ref.read(authProvider.notifier).tryAutoReLogin();
+    
+    if (!mounted) return;
+    
+    // Clear the loading snackbar
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    if (success) {
+      print('✅ Auto re-login successful - continuing session');
+      
+      // Reload messages after successful re-login
+      ref.read(chatProvider.notifier).loadMoreMessages();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session refreshed successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      print('❌ Auto re-login failed - redirecting to login');
+      
+      // Invalidate auth state and clear data
+      ref.read(authProvider.notifier).invalidateSession();
+      await StorageService.removeToken();
+      await StorageService.removeUserData();
+      
+      // Navigate to login
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+      
+      // Show message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session expired. Please login again.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   void _onScroll() {
@@ -178,7 +271,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _onMessageLongPress(ChatMessage message) {
-    if (!widget.isArchived) {
+    if (!widget.isArchived && !widget.isReadOnly) {
       setState(() {
         _selectedMessage = message;
         _isSelectionMode = true;
@@ -263,16 +356,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                // TODO: Implement actual delete logic here
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Message deleted'),
-                    backgroundColor: AppTheme.errorColor,
-                  ),
-                );
+                
+                final messageId = _selectedMessage!.id;
+                print('🗑️ Attempting to delete message: $messageId');
+                
+                // Call provider to delete message
+                final success = await ref.read(chatProvider.notifier).deleteMessage(messageId);
+                
                 _exitSelectionMode();
+                
+                if (mounted) {
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Message deleted successfully'),
+                        backgroundColor: AppTheme.successColor,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to delete message'),
+                        backgroundColor: AppTheme.errorColor,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.errorColor,
@@ -371,8 +484,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
+      resizeToAvoidBottomInset: true,
+      extendBody: false, // Don't extend body behind bottom nav
       appBar: _isSelectionMode ? _buildSelectionAppBar() : _buildNormalAppBar(),
-      body: Stack(
+      body: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard when tapping outside
+          FocusScope.of(context).unfocus();
+        },
+        child: Stack(
         children: [
           Column(
             children: [
@@ -381,24 +501,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: chatState.isLoading
                 ? const MessageShimmerWidget()
                 : chatState.messages.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
+                            // System message untuk new conversation
+                            if (widget.isNewConversation)
+                              Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue[200]!, width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        'New conversation created',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.blue[900],
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 16),
+                            const Icon(
                               Icons.chat_bubble_outline,
                               size: 64,
                               color: AppTheme.textSecondary,
                             ),
-                            SizedBox(height: 16),
-                            Text(
+                            const SizedBox(height: 16),
+                            const Text(
                               'No messages yet',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: AppTheme.textSecondary,
                               ),
                             ),
-                            Text(
+                            const Text(
                               'Start the conversation!',
                               style: TextStyle(
                                 fontSize: 14,
@@ -445,28 +594,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 child: ListView.builder(
                                   controller: _scrollController,
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                                  physics: const ClampingScrollPhysics(),
+                                  cacheExtent: 500, // Cache widgets for smoother scrolling
+                                  addAutomaticKeepAlives: true, // Keep widgets alive
+                                  addRepaintBoundaries: true, // Isolate repaints
                                   itemCount: chatState.messages.length + (chatState.isLoadingMore ? 1 : 0),
                                   itemBuilder: (context, index) {
                                     // Show loading indicator at the top when loading more
                                     if (index == 0 && chatState.isLoadingMore) {
                                       return Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: Shimmer.fromColors(
-                                          baseColor: Colors.grey[300]!,
-                                          highlightColor: Colors.grey[100]!,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Container(
-                                                width: 150,
-                                                height: 12,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+                                        child: Column(
+                                          children: [
+                                            // Shimmer message bubble 1
+                                            _buildShimmerMessageBubble(isFromAgent: true),
+                                            const SizedBox(height: 8),
+                                            // Shimmer message bubble 2
+                                            _buildShimmerMessageBubble(isFromAgent: false),
+                                            const SizedBox(height: 8),
+                                            // Shimmer message bubble 3
+                                            _buildShimmerMessageBubble(isFromAgent: true),
+                                          ],
                                         ),
                                       );
                                     }
@@ -562,14 +710,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
           
-          // Input (disabled if archived)
-          if (!widget.isArchived)
+          // Input (disabled if archived, resolved, or read-only)
+          if (!widget.isArchived && !widget.isReadOnly && widget.room.status != 3)
             ChatInputWidget(
               onSendText: (text) => _handleSendText(text),
               onSendMedia: (type, data, filename) => _handleSendMedia(type, data, filename),
               replyingTo: _replyingTo,
             )
-          else
+          else if (widget.isReadOnly)
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.blue[50],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, color: Colors.blue[700], size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Viewing conversation history (read-only)',
+                    style: TextStyle(
+                      color: Colors.blue[700],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (widget.isArchived)
             Container(
               padding: const EdgeInsets.all(16),
               color: Colors.grey[200],
@@ -583,6 +751,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (widget.room.status == 3)
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.green[50],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green[700], size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'This conversation has been resolved',
+                    style: TextStyle(
+                      color: Colors.green[700],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -627,7 +815,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
       ],
-      ),
+        ), // Close GestureDetector
+      ), // Close body
     );
   }
 
@@ -638,6 +827,7 @@ PreferredSizeWidget _buildNormalAppBar() {
     backgroundColor: AppTheme.primaryColor,
     foregroundColor: Colors.white,
     elevation: 0,
+    titleSpacing: 0, // Mengurangi jarak dari back button ke title
     leading: IconButton(
       icon: const Icon(Icons.arrow_back, color: Colors.white),
       onPressed: () => Navigator.of(context).pop(),
@@ -659,7 +849,7 @@ PreferredSizeWidget _buildNormalAppBar() {
               : null,
         ),
         
-        const SizedBox(width: 12),
+        const SizedBox(width: 8), // Dikurangi dari 12 ke 8
         
         Expanded(
           child: Column(
@@ -703,7 +893,7 @@ PreferredSizeWidget _buildNormalAppBar() {
       if ((!widget.room.isGroup && (widget.room.ctId != null || widget.room.ctRealId != null)) ||
           (widget.room.isGroup && widget.room.grpId != null))
         IconButton(
-          icon: const Icon(Icons.splitscreen, color: Colors.white),
+          icon: Icon(LucideIcons.columns, color: Colors.white),
           onPressed: _openContactDetailSlidePanel,
           tooltip: widget.room.isGroup ? 'Group Info' : 'Contact Info',
         ),
@@ -711,8 +901,15 @@ PreferredSizeWidget _buildNormalAppBar() {
       if (!widget.isArchived)
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, color: Colors.white),
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
           onSelected: (String value) {
             switch (value) {
+              case 'add_agent':
+                _handleAddAgent();
+                break;
               case 'resolve':
                 _handleResolve();
                 break;
@@ -722,16 +919,22 @@ PreferredSizeWidget _buildNormalAppBar() {
               case 'add_note':
                 _handleAddNote();
                 break;
+              case 'help':
+                _handleHelp();
+                break;
             }
           },
           itemBuilder: (BuildContext context) => [
             const PopupMenuItem(
-              value: 'add_note',
+              value: 'add_agent',
               child: Row(
                 children: [
-                  Icon(Icons.note_add_outlined, size: 20),
+                  Icon(Icons.person_add_outlined, size: 20, color: Colors.blue),
                   SizedBox(width: 12),
-                  Text('Add Note'),
+                  Text(
+                    'Add Human Agent',
+                    style: TextStyle(color: Colors.blue),
+                  ),
                 ],
               ),
             ),
@@ -739,19 +942,25 @@ PreferredSizeWidget _buildNormalAppBar() {
               value: 'resolve',
               child: Row(
                 children: [
-                  Icon(Icons.check_circle_outline, size: 20),
+                  Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
                   SizedBox(width: 12),
-                  Text('Mark as Resolved'),
+                  Text(
+                    'Mark as Resolved',
+                    style: TextStyle(color: Colors.green),
+                  ),
                 ],
               ),
             ),
             const PopupMenuItem(
-              value: 'archive',
+              value: 'help',
               child: Row(
                 children: [
-                  Icon(Icons.archive_outlined, size: 20),
+                  Icon(Icons.help_outline, size: 20, color: Colors.red),
                   SizedBox(width: 12),
-                  Text('Archive'),
+                  Text(
+                    'Help',
+                    style: TextStyle(color: Colors.red),
+                  ),
                 ],
               ),
             ),
@@ -965,6 +1174,21 @@ void _openContactDetailSlidePanel() {
     );
   }
 
+  void _handleAddAgent() {
+    showDialog(
+      context: context,
+      builder: (context) => AddAgentDialog(
+        roomId: widget.room.id,
+        onAgentAdded: (agent) {
+          // Optional: Reload messages or update UI if needed
+          print('✅ Agent ${agent.displayName} added to conversation');
+          // You can trigger a message reload here if needed:
+          // ref.read(chatProvider.notifier).loadMessages();
+        },
+      ),
+    );
+  }
+
   void _handleAddNote() {
     showDialog(
       context: context,
@@ -994,6 +1218,66 @@ void _openContactDetailSlidePanel() {
         },
       ),
     );
+  }
+
+  void _handleHelp() async {
+    final url = Uri.parse('https://ubig-co-1.gitbook.io/nobox-ai/real-base-ai-articles-english/menu/messages/inbox');
+    
+    try {
+      // FIXED: Coba beberapa mode launch untuk compatibility
+      bool launched = false;
+      
+      // Try 1: External Application (recommended)
+      try {
+        launched = await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (e) {
+        print('Failed with externalApplication mode: $e');
+      }
+      
+      // Try 2: Platform Default (fallback)
+      if (!launched) {
+        try {
+          launched = await launchUrl(
+            url,
+            mode: LaunchMode.platformDefault,
+          );
+        } catch (e) {
+          print('Failed with platformDefault mode: $e');
+        }
+      }
+      
+      // Try 3: External Non-Browser Application (last resort)
+      if (!launched) {
+        launched = await launchUrl(
+          url,
+          mode: LaunchMode.externalNonBrowserApplication,
+        );
+      }
+      
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak bisa membuka dokumentasi. Pastikan ada browser terinstall.'),
+            backgroundColor: AppTheme.errorColor,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error opening help URL: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak bisa membuka dokumentasi. Pastikan ada browser terinstall.'),
+            backgroundColor: AppTheme.errorColor,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
   
   bool _isValidImageUrl(String? url) {
@@ -1035,5 +1319,74 @@ void _openContactDetailSlidePanel() {
         ),
       );
     }
+  }
+
+  // Shimmer message bubble for loading more messages
+  Widget _buildShimmerMessageBubble({required bool isFromAgent}) {
+    return Align(
+      alignment: isFromAgent ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[300]!, 
+          highlightColor: Colors.grey[100]!,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Sender name shimmer (for agent messages)
+                if (isFromAgent)
+                  Container(
+                    width: 80,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                if (isFromAgent) const SizedBox(height: 8),
+                // Message content shimmer
+                Container(
+                  width: double.infinity,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: MediaQuery.of(context).size.width * 0.5,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Timestamp shimmer
+                Container(
+                  width: 60,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

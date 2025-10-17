@@ -120,16 +120,16 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
         }
       } else {
         print('Contact not found for ID: $contactId');
+        // Don't set error state - just log it
         state = state.copyWith(
           isLoading: false,
-          error: 'Contact not found or not accessible',
         );
       }
     } catch (e) {
       print('Exception loading contact detail for ID $contactId: $e');
+      // Don't set error state - just log it
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to load contact details. The contact may not exist or you may not have permission to view it.',
       );
     }
   }
@@ -237,31 +237,68 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  Future<void> assignFunnel(String contactId, String funnelId) async {
+  Future<bool> createFunnel(String funnelName) async {
     try {
-      final success = await _service.assignFunnelToContact(contactId, funnelId);
-      if (success) {
-        // Reload funnel data to get the updated information
-        await loadContactFunnel(contactId);
+      final funnelId = await _service.createFunnel(funnelName);
+      if (funnelId != null) {
+        // Reload available funnels to include the newly created funnel
+        await loadAvailableFunnels();
+        return true;
       } else {
-        state = state.copyWith(error: 'Failed to assign funnel');
+        state = state.copyWith(error: 'Failed to create funnel');
+        return false;
       }
     } catch (e) {
-      state = state.copyWith(error: 'Failed to assign funnel: $e');
+      state = state.copyWith(error: 'Failed to create funnel: $e');
+      return false;
     }
   }
 
-  Future<void> removeFunnel(String contactId) async {
+  Future<bool> assignFunnel(String roomId, String funnelId) async {
     try {
-      final success = await _service.removeFunnelFromContact(contactId);
+      // assignFunnelToContact now expects roomId instead of contactId
+      final success = await _service.assignFunnelToContact(roomId, funnelId);
       if (success) {
-        // Reload funnel data to get the updated information
-        await loadContactFunnel(contactId);
+        // Update state directly with the assigned funnel from availableFunnels
+        final assignedFunnel = state.availableFunnels.firstWhere(
+          (f) => f.id == funnelId,
+          orElse: () => ContactFunnel(id: funnelId, name: 'Unknown Funnel'),
+        );
+        
+        if (mounted) {
+          state = state.copyWith(funnel: assignedFunnel);
+          print('✅ Funnel state updated: ${assignedFunnel.name} (${assignedFunnel.id})');
+        }
+        
+        return true;
+      } else {
+        state = state.copyWith(error: 'Failed to assign funnel');
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to assign funnel: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removeFunnel(String roomId) async {
+    try {
+      // To remove funnel, just assign null (0) as funnelId
+      final success = await _service.assignFunnelToContact(roomId, '0');
+      if (success) {
+        // Update state directly to null (funnel removed)
+        if (mounted) {
+          state = state.copyWith(funnel: null);
+          print('✅ Funnel removed from state');
+        }
+        return true;
       } else {
         state = state.copyWith(error: 'Failed to remove funnel');
+        return false;
       }
     } catch (e) {
       state = state.copyWith(error: 'Failed to remove funnel: $e');
+      return false;
     }
   }
   Future<void> _loadCampaign(String contactId) async {

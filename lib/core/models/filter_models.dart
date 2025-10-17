@@ -88,8 +88,13 @@ class FilterOptions {
     }
     
     if (readStatus != null) {
-      // This would need to be handled differently based on API requirement
-      filters['ReadStatus'] = readStatus == 'Is Read' ? [1] : [0];
+      // FIXED: ReadStatus menggunakan client-side filtering
+      // Backend ReadStatus filter kadang trigger action "mark as read"
+      // Jadi kita filter di client side aja seperti Private chat
+      // Is Read = percakapan yang udah dibaca (unreadCount = 0)
+      // Unread = percakapan yang belum dibaca (unreadCount > 0)
+      filters['ReadStatusFilter'] = readStatus; // Temporary flag untuk client-side filtering
+      print('📝 [FilterOptions] Read status filter: $readStatus (will filter client-side)');
     }
     
     if (channelId != null) filters['ChId'] = [int.parse(channelId!)];
@@ -107,7 +112,17 @@ class FilterOptions {
         print('📝 [FilterOptions] Chat type filter: Private (will filter client-side)');
       }
     }
-    if (accountId != null) filters['AccountId'] = [int.parse(accountId!)];
+    // FIXED: Account filter using ChAccId (Channel Account ID)
+    // Web version uses ChAccId in EqualityFilter
+    if (accountId != null) {
+      try {
+        // Send as string, not int array - web sends "706026840646405"
+        filters['ChAccId'] = accountId;
+        print('📝 [FilterOptions] Account filter added: ChAccId = $accountId');
+      } catch (e) {
+        print('⚠️ [FilterOptions] Failed to set Account filter: $e');
+      }
+    }
     // TESTING: Try CtRealId instead of CtId for contact filter
     // Backend might use CtRealId as the primary contact identifier
     if (contactId != null) {
@@ -121,10 +136,29 @@ class FilterOptions {
     if (linkId != null) filters['LinkId'] = [int.parse(linkId!)];
     if (groupId != null) filters['GrpId'] = [int.parse(groupId!)];
     if (campaignId != null) filters['CampaignId'] = [int.parse(campaignId!)];
-    if (funnelId != null) filters['FunnelId'] = [int.parse(funnelId!)];
+    
+    // FIXED: FunnelId menggunakan client-side filtering
+    // Backend FunnelId filter menyebabkan error 500
+    if (funnelId != null) {
+      filters['FunnelIdFilter'] = funnelId; // Temporary flag untuk client-side filtering
+      print('📝 [FilterOptions] Funnel filter: $funnelId (will filter client-side)');
+    }
+    
     if (dealId != null) filters['DealId'] = [int.parse(dealId!)];
-    if (tagId != null) filters['TagId'] = [int.parse(tagId!)];
-    if (humanAgentId != null) filters['AgentId'] = [int.parse(humanAgentId!)];
+    
+    // FIXED: TagId menggunakan client-side filtering
+    // Backend TagId filter menyebabkan error 500
+    if (tagId != null) {
+      filters['TagIdFilter'] = tagId; // Temporary flag untuk client-side filtering
+      print('📝 [FilterOptions] Tag filter: $tagId (will filter client-side)');
+    }
+    
+    // FIXED: HumanAgentId menggunakan client-side filtering
+    // Backend AgentId filter menyebabkan error 500
+    if (humanAgentId != null) {
+      filters['HumanAgentIdFilter'] = humanAgentId; // Temporary flag untuk client-side filtering
+      print('📝 [FilterOptions] Human Agent filter: $humanAgentId (will filter client-side)');
+    }
     
     return filters;
   }

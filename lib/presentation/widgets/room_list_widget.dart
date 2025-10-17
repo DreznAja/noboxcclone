@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:timeago/timeago.dart' as timeago;
+import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/models/chat_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/app_config.dart';
 import '../../core/services/account_service.dart';
+import '../../core/providers/chat_provider.dart';
 import 'room_shimmer_widget.dart';
 
-class RoomListWidget extends ConsumerWidget {
+class RoomListWidget extends ConsumerStatefulWidget {
   final List<Room> rooms;
   final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
   final String? selectedRoomId;
   final Function(Room)? onRoomTap;
   final bool isSelectionMode;
@@ -17,11 +21,15 @@ class RoomListWidget extends ConsumerWidget {
   final Function(String)? onRoomLongPress;
   final Function(String)? onRoomSelectionToggle;
   final bool isArchivedList;
+  final String? searchQuery;
+  final Map<String, dynamic>? filters;
 
   const RoomListWidget({
     super.key,
     required this.rooms,
     required this.isLoading,
+    this.isLoadingMore = false,
+    this.hasMore = true,
     this.selectedRoomId,
     this.onRoomTap,
     this.isSelectionMode = false,
@@ -29,24 +37,31 @@ class RoomListWidget extends ConsumerWidget {
     this.onRoomLongPress,
     this.onRoomSelectionToggle,
     this.isArchivedList = false,
+    this.searchQuery,
+    this.filters,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RoomListWidget> createState() => _RoomListWidgetState();
+}
+
+class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
+  @override
+  Widget build(BuildContext context) {
     // Debug: Log when widget rebuilds with new data
-    print('🏠 RoomListWidget rebuild: ${rooms.length} rooms, loading: $isLoading');
+    print('🏠 RoomListWidget rebuild: ${widget.rooms.length} rooms, loading: ${widget.isLoading}');
     
     // Show shimmer for initial load (no data yet)
-    if (isLoading && rooms.isEmpty) {
+    if (widget.isLoading && widget.rooms.isEmpty) {
       return const RoomShimmerWidget();
     }
     
     // Show shimmer for refresh (data exists but refreshing)
-    if (isLoading && rooms.isNotEmpty) {
+    if (widget.isLoading && widget.rooms.isNotEmpty) {
       return const RoomShimmerWidget();
     }
 
-    if (rooms.isEmpty) {
+    if (widget.rooms.isEmpty) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -70,7 +85,7 @@ class RoomListWidget extends ConsumerWidget {
     }
 
     // Sort rooms: pinned first, then by last message time
-    final sortedRooms = List<Room>.from(rooms);
+    final sortedRooms = List<Room>.from(widget.rooms);
     sortedRooms.sort((a, b) {
       // First, sort by pin status (pinned rooms first)
       if (a.isPinned && !b.isPinned) return -1;
@@ -83,33 +98,136 @@ class RoomListWidget extends ConsumerWidget {
       return b.lastMessageTime!.compareTo(a.lastMessageTime!);
     });
 
-    return ListView.builder(
-      itemCount: sortedRooms.length,
-      itemBuilder: (context, index) {
-        final room = sortedRooms[index];
-        final isSelected = room.id == selectedRoomId;
-        final isSelectedForAction = selectedRoomIds.contains(room.id);
-        
-        return _RoomListItem(
-          room: room,
-          isSelected: isSelected,
-          isSelectionMode: isSelectionMode,
-          isSelectedForAction: isSelectedForAction,
-          isArchivedList: isArchivedList,
-          onTap: () {
-            if (isSelectionMode) {
-              onRoomSelectionToggle?.call(room.id);
-            } else if (onRoomTap != null) {
-              onRoomTap!(room);
-            }
-          },
-          onLongPress: () {
-            if (!isSelectionMode) {
-              onRoomLongPress?.call(room.id);
-            }
-          },
-        );
+    // Calculate item count: rooms + loading indicator
+    final itemCount = widget.isLoadingMore ? sortedRooms.length + 1 : sortedRooms.length;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification scrollInfo) {
+        // Trigger load more when scrolled to 80% of the list
+        if (!widget.isArchivedList && 
+            !widget.isLoadingMore && 
+            widget.hasMore && 
+            scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.8) {
+          print('📄 Triggering loadMoreRooms from scroll...');
+          ref.read(chatProvider.notifier).loadMoreRooms(
+            search: widget.searchQuery,
+            filters: widget.filters,
+          );
+        }
+        return false;
       },
+      child: ListView.builder(
+        itemCount: itemCount,
+        itemBuilder: (context, index) {
+          // Show shimmer effect at the bottom when loading more
+          if (index >= sortedRooms.length) {
+            return Shimmer.fromColors(
+              baseColor: Colors.grey[300]!,
+              highlightColor: Colors.grey[100]!,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Avatar shimmer
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Content shimmer
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Name shimmer
+                              Container(
+                                width: 120,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              
+                              // Time shimmer
+                              Container(
+                                width: 40,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Account/Bot name shimmer
+                          Container(
+                            width: 80,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Last message shimmer
+                          Container(
+                            width: double.infinity,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final room = sortedRooms[index];
+          final isSelected = room.id == widget.selectedRoomId;
+          final isSelectedForAction = widget.selectedRoomIds.contains(room.id);
+          
+          return _RoomListItem(
+            room: room,
+            isSelected: isSelected,
+            isSelectionMode: widget.isSelectionMode,
+            isSelectedForAction: isSelectedForAction,
+            isArchivedList: widget.isArchivedList,
+            onTap: () {
+              if (widget.isSelectionMode) {
+                widget.onRoomSelectionToggle?.call(room.id);
+              } else if (widget.onRoomTap != null) {
+                widget.onRoomTap!(room);
+              }
+            },
+            onLongPress: () {
+              if (!widget.isSelectionMode) {
+                widget.onRoomLongPress?.call(room.id);
+              }
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -165,26 +283,41 @@ class _RoomListItem extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // First row: Name, Time, Pin
+                        // First row: Name, Mute Bot Icon, Time, Pin
                         Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                room.name,
-                                style: TextStyle(
-                                  fontWeight: room.unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
-                                  fontSize: 16,
-                                  color: Colors.black,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      room.name,
+                                      style: TextStyle(
+                                        fontWeight: room.unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
+                                        fontSize: 16,
+                                        color: Colors.black,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  // Muted AI Agent icon - robot merah
+                                  if (room.isMuteBot) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.smart_toy,
+                                      size: 16,
+                                      color: Colors.red,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             
                             // Time
                             if (room.lastMessageTime != null)
                               Text(
-                                timeago.format(room.lastMessageTime!),
+                                _formatMessageTime(room.lastMessageTime!),
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppTheme.textSecondary,
@@ -215,8 +348,14 @@ class _RoomListItem extends StatelessWidget {
                                 child: Text(
                                   room.lastMessage ?? 'No messages',
                                   style: TextStyle(
-                                    color: room.unreadCount > 0 ? Colors.red : AppTheme.textSecondary,
-                                    fontWeight: room.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                                    // Need Reply ON → Merah (selalu, apapun status baca)
+                                    // Need Reply OFF → Hitam (unread) atau Abu-abu (read) - default behavior
+                                    color: room.needReply
+                                        ? Colors.red
+                                        : room.unreadCount > 0
+                                            ? Colors.black
+                                            : AppTheme.textSecondary,
+                                    fontWeight: room.needReply || room.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
                                     fontSize: 14,
                                   ),
                                   maxLines: 1,
@@ -513,6 +652,24 @@ class _RoomListItem extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatMessageTime(DateTime messageTime) {
+    // Convert to local timezone if it's UTC
+    final localTime = messageTime.isUtc ? messageTime.toLocal() : messageTime;
+    
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(localTime.year, localTime.month, localTime.day);
+    
+    // Check if message is from today
+    if (messageDate.isAtSameMomentAs(today)) {
+      // Today: show only time (HH:mm)
+      return DateFormat('HH:mm').format(localTime);
+    } else {
+      // Yesterday or before: show date and time (d MMM, HH:mm)
+      return DateFormat('d MMM, HH:mm').format(localTime);
+    }
   }
 
   String _getBotName(Room room) {

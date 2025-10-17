@@ -56,6 +56,11 @@ void main() async {
     ),
   );
 
+  // Optimize keyboard performance
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
   runApp(const ProviderScope(child: NoboxChatApp()));
 }
 
@@ -173,6 +178,16 @@ class _NoboxChatAppState extends ConsumerState<NoboxChatApp> {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
+      },
+      builder: (context, child) {
+        // Optimize keyboard dismiss behavior
+        return GestureDetector(
+          onTap: () {
+            // Dismiss keyboard when tapping outside TextField
+            FocusScope.of(context).unfocus();
+          },
+          child: child,
+        );
       },
     );
   }

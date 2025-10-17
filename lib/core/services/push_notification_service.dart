@@ -181,11 +181,16 @@ class PushNotificationService {
     final senderName = data['senderName'] ?? 'Someone';
     final messageText = data['message'] ?? 'New message';
 
+    // Debug: Log current room state
+    print('🔍 Notification check - Current room: $_currentRoomId, Message room: $roomId');
+    
     // Don't show notification if user is currently in this room
     if (_currentRoomId != null && _currentRoomId == roomId) {
       print('🚫 User in current room - skipping notification');
       return;
     }
+    
+    print('✅ User NOT in this room - showing notification');
 
     // Show local notification when app is in foreground
     if (roomId != null) {
@@ -345,6 +350,11 @@ class PushNotificationService {
     _currentRoomId = null;
     print('📍 Current room cleared');
   }
+  
+  // Get current room ID (for checking if user is in a specific room)
+  static String? getCurrentRoomId() {
+    return _currentRoomId;
+  }
 
   // Handle notification from SignalR messages
   static Future<void> handleSignalRMessage(
@@ -355,14 +365,20 @@ class PushNotificationService {
 
     // Don't show notification for own messages
     if (message.agentId.toString() == currentUserId) {
+      print('🚫 Own message - skipping notification');
       return;
     }
 
+    // Debug: Log current room state
+    print('🔍 SignalR notification check - Current room: $_currentRoomId, Message room: ${room.id}');
+    
     // Don't show notification if user is currently in this room
     if (_currentRoomId != null && _currentRoomId == room.id) {
       print('🚫 User in current room - skipping SignalR notification');
       return;
     }
+    
+    print('✅ User NOT in this room - showing SignalR notification');
 
     // Show notification
     await showChatNotification(

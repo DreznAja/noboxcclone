@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/services/signalr_service.dart';
 import '../../../core/services/account_service.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/chat_provider.dart';
@@ -17,7 +19,6 @@ import '../auth/login_screen.dart';
 import '../chat/chat_screen.dart';
 import '../debug/whatsapp_debug_screen.dart';
 import 'arsip_contact_screen.dart';
-import 'dart:async';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -39,11 +40,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   
   // Real-time update management
   StreamSubscription<String>? _connectionSubscription;
+  StreamSubscription<void>? _sessionExpiredSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Listen to session expiration events
+    _sessionExpiredSubscription = ApiService.onSessionExpired.listen((_) {
+      print('🔴 Session expired - navigating to login');
+      _handleSessionExpired();
+    });
 
     // Setup realtime listeners immediately
     _setupRealtimeListeners();
@@ -60,7 +68,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _searchController.dispose();
     _searchFocusNode.dispose();
     _cancelRealtimeListeners();
+    _sessionExpiredSubscription?.cancel();
     super.dispose();
+  }
+
+  void _handleSessionExpired() async {
+    if (!mounted) return;
+    
+    print('🔄 Session expired - attempting auto re-login...');
+    
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('Refreshing session...'),
+          ],
+        ),
+        duration: Duration(seconds: 10),
+      ),
+    );
+    
+    // Try auto re-login first
+    final success = await ref.read(authProvider.notifier).tryAutoReLogin();
+    
+    if (!mounted) return;
+    
+    // Clear the loading snackbar
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    if (success) {
+      print('✅ Auto re-login successful - continuing session');
+      
+      // Refresh data after successful re-login
+      _handleRefresh();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session refreshed successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      print('❌ Auto re-login failed - redirecting to login');
+      
+      // Invalidate auth state and clear data
+      ref.read(authProvider.notifier).invalidateSession();
+      await StorageService.removeToken();
+      await StorageService.removeUserData();
+      
+      // Navigate to login
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+      
+      // Show message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session expired. Please login again.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -586,12 +668,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 child: RoomListWidget(
                   rooms: chatState.rooms,
                   isLoading: chatState.isLoading,
+                  isLoadingMore: chatState.isLoadingMoreRooms,
+                  hasMore: chatState.hasMoreRooms,
                   selectedRoomId: null,
                   onRoomTap: _isSelectionMode ? null : _navigateToChat,
                   isSelectionMode: _isSelectionMode,
                   selectedRoomIds: _selectedRoomIds,
                   onRoomLongPress: _enterSelectionMode,
                   onRoomSelectionToggle: _toggleRoomSelection,
+                  searchQuery: _searchController.text.isNotEmpty ? _searchController.text : null,
+                  filters: _getCurrentFilters(),
                 ),
               ),
             ],
@@ -675,7 +761,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'debug', child: Row(children: [Icon(Icons.bug_report, color: Colors.orange), SizedBox(width: 12), Text('Debug Tools')])),
                 const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 12), Text('Logout', style: TextStyle(color: Colors.red))])),
               ],
               padding: const EdgeInsets.all(8),

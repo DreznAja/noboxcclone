@@ -18,6 +18,9 @@ class ChatState {
   final bool isLoadingMore;
   final bool isLoadingArchived;
   final bool hasMoreMessages;
+  final bool hasMoreRooms;
+  final bool isLoadingMoreRooms;
+  final int currentRoomSkip;
   final String? error;
   final String connectionStatus;
 
@@ -30,6 +33,9 @@ class ChatState {
     this.isLoadingMore = false,
     this.isLoadingArchived = false,
     this.hasMoreMessages = true,
+    this.hasMoreRooms = true,
+    this.isLoadingMoreRooms = false,
+    this.currentRoomSkip = 0,
     this.error,
     this.connectionStatus = 'disconnected',
   });
@@ -43,6 +49,9 @@ class ChatState {
     bool? isLoadingMore,
     bool? isLoadingArchived,
     bool? hasMoreMessages,
+    bool? hasMoreRooms,
+    bool? isLoadingMoreRooms,
+    int? currentRoomSkip,
     String? error,
     String? connectionStatus,
   }) {
@@ -55,6 +64,9 @@ class ChatState {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       isLoadingArchived: isLoadingArchived ?? this.isLoadingArchived,
       hasMoreMessages: hasMoreMessages ?? this.hasMoreMessages,
+      hasMoreRooms: hasMoreRooms ?? this.hasMoreRooms,
+      isLoadingMoreRooms: isLoadingMoreRooms ?? this.isLoadingMoreRooms,
+      currentRoomSkip: currentRoomSkip ?? this.currentRoomSkip,
       error: error,
       connectionStatus: connectionStatus ?? this.connectionStatus,
     );
@@ -99,6 +111,45 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       print('❌ [Create Note] Exception: $e');
       state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  // Delete message
+  Future<bool> deleteMessage(String messageId) async {
+    final activeRoom = state.activeRoom;
+    if (activeRoom == null) {
+      state = state.copyWith(error: 'No active room');
+      return false;
+    }
+
+    print('🗑️ [Delete Message] Deleting message: $messageId');
+
+    // Store previous state for rollback
+    final previousMessages = List<ChatMessage>.from(state.messages);
+
+    // Optimistic update: remove message from UI immediately
+    final updatedMessages = state.messages.where((m) => m.id != messageId).toList();
+    state = state.copyWith(messages: updatedMessages);
+
+    try {
+      final response = await ApiService.deleteMessage(messageId);
+
+      if (response.isError) {
+        print('❌ [Delete Message] Failed: ${response.error}');
+        // Rollback: restore previous messages
+        state = state.copyWith(messages: previousMessages, error: response.error);
+        return false;
+      }
+
+      print('✅ [Delete Message] Message deleted successfully');
+      // Clear any previous error
+      state = state.copyWith(error: null);
+      return true;
+    } catch (e) {
+      print('❌ [Delete Message] Exception: $e');
+      // Rollback: restore previous messages
+      state = state.copyWith(messages: previousMessages, error: e.toString());
       return false;
     }
   }
@@ -199,6 +250,46 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  // Toggle block/unblock contact
+  Future<bool> toggleBlockContact(String roomId, bool shouldBlock) async {
+    print('🚫 [Block Contact] ${shouldBlock ? "Blocking" : "Unblocking"} contact for room: $roomId');
+    
+    try {
+      print('🚫 [Block Contact] Request data: EntityId=$roomId, CtIsBlock=${shouldBlock ? 1 : 0}');
+      
+      final response = await ApiService.dio.post(
+        'Services/Chat/Chatrooms/Update',
+        data: {
+          'EntityId': roomId,
+          'Entity': {
+            'CtIsBlock': shouldBlock ? 1 : 0,
+          },
+        },
+      );
+      
+      print('🚫 [Block Contact] Response: ${response.statusCode} - ${response.data}');
+      
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError) {
+          print('✅ [Block Contact] Success');
+          return true;
+        } else {
+          print('❌ [Block Contact] Error: ${response.data['ErrorMsg'] ?? response.data['Error']}');
+          return false;
+        }
+      }
+      
+      print('❌ [Block Contact] API Error: ${response.data}');
+      return false;
+    } catch (e) {
+      print('❌ [Block Contact] Exception: $e');
+      return false;
+    }
+  }
+
   void _setupSignalRListeners() {
     // Listen to connection status
     SignalRService.connectionStatus.listen((status) {
@@ -230,10 +321,33 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
   final preserveMessages = state.messages;
   final preserveHasMore = state.hasMoreMessages;
   
+  // IMPORTANT: Preserve newly created rooms that might not be in API yet
+  // These are rooms with status=1, no lastMessage, and recent lastMessageTime (< 10 seconds old)
+  final now = DateTime.now();
+  final newlyCreatedRooms = state.rooms.where((room) {
+    if (room.status == 1 && 
+        (room.lastMessage == null || room.lastMessage!.isEmpty) &&
+        room.lastMessageTime != null) {
+      final age = now.difference(room.lastMessageTime!);
+      return age.inSeconds < 30; // Keep rooms created in last 30 seconds
+    }
+    return false;
+  }).toList();
+  
+  if (newlyCreatedRooms.isNotEmpty) {
+    print('🔒 [Load Rooms] Preserving ${newlyCreatedRooms.length} newly created rooms:');
+    for (final room in newlyCreatedRooms) {
+      print('   - ${room.id}: ${room.name} (age: ${now.difference(room.lastMessageTime!).inSeconds}s)');
+    }
+  }
+  
   // Always show loading state (for shimmer effect)
+  // Reset pagination untuk initial load
   state = state.copyWith(
     isLoading: true,
     error: null,
+    currentRoomSkip: 0,
+    hasMoreRooms: true,
   );
   
   print('🔍 [CHAT PROVIDER] Loading rooms with search: "$search"');
@@ -268,11 +382,36 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       }
     }
     
-    print('🔍 [CHAT PROVIDER] Step 3: Final filters to be sent to API: $finalFilters');
+    // Step 3: Remove client-side only filters before sending to API
+    final chatTypeFilter = finalFilters.remove('ChatTypeFilter');
+    final readStatusFilter = finalFilters.remove('ReadStatusFilter');
+    final funnelIdFilter = finalFilters.remove('FunnelIdFilter');
+    final tagIdFilter = finalFilters.remove('TagIdFilter');
+    final humanAgentIdFilter = finalFilters.remove('HumanAgentIdFilter');
+    // Note: AccountFilter was removed, now using AccId which goes to backend
+    if (chatTypeFilter != null) {
+      print('🔍 [CHAT PROVIDER] Removed ChatTypeFilter (client-side only): $chatTypeFilter');
+    }
+    if (readStatusFilter != null) {
+      print('🔍 [CHAT PROVIDER] Removed ReadStatusFilter (client-side only): $readStatusFilter');
+    }
+    if (funnelIdFilter != null) {
+      print('🔍 [CHAT PROVIDER] Removed FunnelIdFilter (client-side only): $funnelIdFilter');
+    }
+    if (tagIdFilter != null) {
+      print('🔍 [CHAT PROVIDER] Removed TagIdFilter (client-side only): $tagIdFilter');
+    }
+    if (humanAgentIdFilter != null) {
+      print('🔍 [CHAT PROVIDER] Removed HumanAgentIdFilter (client-side only): $humanAgentIdFilter');
+    }
+    
+    print('🔍 [CHAT PROVIDER] Step 4: Final filters to be sent to API: $finalFilters');
 
     final response = await ApiService.getRoomList(
       search: search,
       filters: finalFilters,
+      take: 20,  // Load 20 rooms per batch
+      skip: 0,   // Start from beginning
     );
 
     if (response.isError) {
@@ -293,27 +432,178 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     // IMPORTANT: Client-side filtering for Private chats
     // Backend might not support IsGrp=[0] filter, so we filter here
     if (filters != null && filters.containsKey('ChatTypeFilter')) {
-      final chatTypeFilter = filters['ChatTypeFilter'];
-      if (chatTypeFilter == 'Private') {
+      final chatTypeFilterValue = filters['ChatTypeFilter'];
+      if (chatTypeFilterValue == 'Private') {
         print('🔍 [CHAT PROVIDER] Applying client-side Private chat filter');
         rooms = rooms.where((room) => !room.isGroup).toList();
         print('🔍 [CHAT PROVIDER] After Private filter: ${rooms.length} rooms');
       }
-      // Remove the temporary filter key before continuing
-      finalFilters.remove('ChatTypeFilter');
     }
+    
+    // IMPORTANT: Client-side filtering for Read Status
+    // Backend ReadStatus filter sometimes triggers "mark as read" action
+    // So we filter on client side to avoid unwanted side effects
+    if (filters != null && filters.containsKey('ReadStatusFilter')) {
+      final readStatusFilterValue = filters['ReadStatusFilter'];
+      if (readStatusFilterValue == 'Is Read') {
+        print('🔍 [CHAT PROVIDER] Applying client-side "Is Read" filter (unreadCount = 0)');
+        rooms = rooms.where((room) => room.unreadCount == 0).toList();
+        print('🔍 [CHAT PROVIDER] After Is Read filter: ${rooms.length} rooms');
+      } else if (readStatusFilterValue == 'Unread') {
+        print('🔍 [CHAT PROVIDER] Applying client-side "Unread" filter (unreadCount > 0)');
+        rooms = rooms.where((room) => room.unreadCount > 0).toList();
+        print('🔍 [CHAT PROVIDER] After Unread filter: ${rooms.length} rooms');
+      }
+    }
+    
+    // IMPORTANT: Client-side filtering for Funnel
+    // Backend FunnelId filter causes error 500
+    if (filters != null && filters.containsKey('FunnelIdFilter')) {
+      final funnelIdFilterValue = filters['FunnelIdFilter'];
+      print('🔍 [CHAT PROVIDER] Applying client-side Funnel filter (funnelId = $funnelIdFilterValue)');
+      rooms = rooms.where((room) => room.funnelId?.toString() == funnelIdFilterValue).toList();
+      print('🔍 [CHAT PROVIDER] After Funnel filter: ${rooms.length} rooms');
+    }
+    
+    // IMPORTANT: Client-side filtering for Tag
+    // Backend TagId filter causes error 500
+    if (filters != null && filters.containsKey('TagIdFilter')) {
+      final tagIdFilterValue = filters['TagIdFilter'];
+      print('🔍 [CHAT PROVIDER] Applying client-side Tag filter (tagId = $tagIdFilterValue)');
+      print('🔍 [CHAT PROVIDER] Total rooms before filter: ${rooms.length}');
+      
+      // Debug: Print all rooms with their tagIds
+      for (final room in rooms) {
+        print('  📊 Room: ${room.name}');
+        print('    - tagIds: ${room.tagIds}');
+        print('    - tags: ${room.tags}');
+        print('    - messageTags: ${room.messageTags.map((t) => '${t.id}:${t.name}').join(', ')}');
+      }
+      
+      rooms = rooms.where((room) {
+        // Check if room has this tag in tagIds list (tagIds is List<String>)
+        final hasTag = room.tagIds.contains(tagIdFilterValue.toString());
+        if (hasTag) {
+          print('  ✅ Room ${room.name} has tag $tagIdFilterValue (tagIds: ${room.tagIds})');
+        }
+        return hasTag;
+      }).toList();
+      print('🔍 [CHAT PROVIDER] After Tag filter: ${rooms.length} rooms');
+    }
+    
+    // IMPORTANT: Client-side filtering for Human Agent
+    // Backend AgentId filter causes error 500
+    // We filter by lastUpdatedBy field which indicates which agent last handled the room
+    if (filters != null && filters.containsKey('HumanAgentIdFilter')) {
+      final humanAgentIdFilterValue = filters['HumanAgentIdFilter'];
+      print('🔍 [CHAT PROVIDER] Applying client-side Human Agent filter (agentId = $humanAgentIdFilterValue)');
+      print('🔍 [CHAT PROVIDER] Total rooms before filter: ${rooms.length}');
+      
+      // Debug: Print all rooms with their lastUpdatedBy values
+      for (final room in rooms) {
+        print('  👤 Room: ${room.name}, lastUpdatedBy: ${room.lastUpdatedBy}');
+      }
+      
+      rooms = rooms.where((room) {
+        // Filter by lastUpdatedBy (agent who last handled the conversation)
+        final matches = room.lastUpdatedBy?.toString() == humanAgentIdFilterValue;
+        if (matches) {
+          print('  ✅ Room ${room.name} handled by agent $humanAgentIdFilterValue (lastUpdatedBy: ${room.lastUpdatedBy})');
+        }
+        return matches;
+      }).toList();
+      print('🔍 [CHAT PROVIDER] After Human Agent filter: ${rooms.length} rooms');
+    }
+    // Account filter now uses AccId sent to backend, no client-side filtering needed
     
     final nonArchivedRooms = rooms.where((room) => room.status != 4).toList();
     
     print('Successfully loaded ${nonArchivedRooms.length} non-archived rooms');
     
+    // CRITICAL FIX: Preserve unreadCount from previous state
+    // Backend sometimes incorrectly returns unreadCount=0 on refresh
+    // We preserve the old unreadCount unless the room was the active room (which means it was opened)
+    final previousRoomsMap = {for (var r in state.rooms) r.id: r};
+    final preservedRooms = nonArchivedRooms.map((room) {
+      final previousRoom = previousRoomsMap[room.id];
+      // Only preserve unreadCount if:
+      // 1. Previous room exists
+      // 2. Room was NOT the active room (not opened)
+      // 3. Previous unreadCount was > 0
+      // 4. New unreadCount is 0 (suspicious decrease)
+      if (previousRoom != null && 
+          preserveActiveRoom?.id != room.id && 
+          previousRoom.unreadCount > 0 && 
+          room.unreadCount == 0) {
+        print('🔒 Preserving unreadCount for ${room.name}: ${previousRoom.unreadCount} (was going to be 0)');
+        return Room(
+          id: room.id,
+          ctId: room.ctId,
+          ctRealId: room.ctRealId,
+          grpId: room.grpId,
+          name: room.name,
+          lastMessage: room.lastMessage,
+          lastMessageTime: room.lastMessageTime,
+          unreadCount: previousRoom.unreadCount, // PRESERVE old unreadCount
+          status: room.status,
+          channelId: room.channelId,
+          channelName: room.channelName,
+          accountName: room.accountName,
+          botName: room.botName,
+          contactImage: room.contactImage,
+          linkImage: room.linkImage,
+          isGroup: room.isGroup,
+          isPinned: room.isPinned,
+          isBlocked: room.isBlocked,
+          isMuteBot: room.isMuteBot,
+          needReply: room.needReply,
+          tags: room.tags,
+          funnel: room.funnel,
+          funnelId: room.funnelId,
+          tagIds: room.tagIds,
+          messageTags: room.messageTags,
+        );
+      }
+      return room;
+    }).toList();
+    
+    // IMPORTANT: Merge back newly created rooms that might not be in API yet
+    final finalRooms = List<Room>.from(preservedRooms);
+    for (final newRoom in newlyCreatedRooms) {
+      // Only add if not already in the list from API
+      if (!finalRooms.any((r) => r.id == newRoom.id)) {
+        print('➕ [Load Rooms] Re-adding newly created room: ${newRoom.id} - ${newRoom.name}');
+        finalRooms.insert(0, newRoom); // Add at beginning
+      } else {
+        print('✅ [Load Rooms] Newly created room ${newRoom.id} already in API response');
+      }
+    }
+    
+    // Sort final rooms
+    finalRooms.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+
+      if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
+      if (a.lastMessageTime == null) return 1;
+      if (b.lastMessageTime == null) return -1;
+      return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+    });
+    
+    // Check if there are more rooms to load
+    final hasMore = preservedRooms.length >= 20;
+    
+    print('🏠 [Load Rooms] Final room count: ${finalRooms.length} (API: ${preservedRooms.length}, Newly created: ${newlyCreatedRooms.length})');
+    
     // CRITICAL FIX: ALWAYS preserve active room and messages during loadRooms
     state = state.copyWith(
       isLoading: false,
-      rooms: nonArchivedRooms,
+      rooms: finalRooms, // Use final merged rooms
       activeRoom: preserveActiveRoom, // Keep active room unchanged
       messages: preserveMessages, // Keep messages unchanged
       hasMoreMessages: preserveHasMore, // Keep pagination state
+      hasMoreRooms: hasMore,
+      currentRoomSkip: 20, // Next load will skip 20
     );
   } catch (e) {
     print('Exception loading rooms: $e');
@@ -327,6 +617,131 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     );
   }
 }
+
+  Future<void> loadMoreRooms({String? search, Map<String, dynamic>? filters}) async {
+    // Don't load if already loading or no more rooms
+    if (state.isLoadingMoreRooms || !state.hasMoreRooms) {
+      print('⏭️ Skipping loadMoreRooms: isLoading=${state.isLoadingMoreRooms}, hasMore=${state.hasMoreRooms}');
+      return;
+    }
+    
+    state = state.copyWith(isLoadingMoreRooms: true, error: null);
+    
+    final currentSkip = state.currentRoomSkip;
+    print('📄 Loading more rooms with skip: $currentSkip');
+    
+    try {
+      final cleanedFilters = filters != null ? _cleanFilters(filters) : null;
+      Map<String, dynamic>? finalFilters;
+      
+      if (cleanedFilters != null) {
+        finalFilters = Map<String, dynamic>.from(cleanedFilters);
+      } else {
+        finalFilters = {};
+      }
+      
+      if (!finalFilters.containsKey('St')) {
+        finalFilters['St'] = [1, 2, 3];
+      } else {
+        final currentStatuses = finalFilters['St'] as List<dynamic>;
+        final filteredStatuses = currentStatuses.where((status) => status != 4).toList();
+        if (filteredStatuses.isNotEmpty) {
+          finalFilters['St'] = filteredStatuses;
+        } else {
+          finalFilters['St'] = [1];
+        }
+      }
+      
+      // Remove client-side only filters before sending to API
+      finalFilters.remove('ChatTypeFilter');
+      finalFilters.remove('ReadStatusFilter');
+      finalFilters.remove('FunnelIdFilter');
+      finalFilters.remove('TagIdFilter');
+      finalFilters.remove('HumanAgentIdFilter');
+      // Note: AccountFilter was removed, now using AccId which goes to backend
+      
+      final response = await ApiService.getRoomList(
+        search: search,
+        filters: finalFilters,
+        take: 20,
+        skip: currentSkip,
+      );
+      
+      if (response.isError) {
+        state = state.copyWith(
+          isLoadingMoreRooms: false,
+          error: response.error,
+        );
+        return;
+      }
+      
+      var newRooms = response.data ?? [];
+      
+      // Client-side filtering for Private chats
+      if (filters != null && filters.containsKey('ChatTypeFilter')) {
+        final chatTypeFilter = filters['ChatTypeFilter'];
+        if (chatTypeFilter == 'Private') {
+          newRooms = newRooms.where((room) => !room.isGroup).toList();
+        }
+      }
+      
+      // Client-side filtering for Read Status
+      if (filters != null && filters.containsKey('ReadStatusFilter')) {
+        final readStatusFilter = filters['ReadStatusFilter'];
+        if (readStatusFilter == 'Is Read') {
+          newRooms = newRooms.where((room) => room.unreadCount == 0).toList();
+        } else if (readStatusFilter == 'Unread') {
+          newRooms = newRooms.where((room) => room.unreadCount > 0).toList();
+        }
+      }
+      
+      // Client-side filtering for Funnel
+      if (filters != null && filters.containsKey('FunnelIdFilter')) {
+        final funnelIdFilter = filters['FunnelIdFilter'];
+        newRooms = newRooms.where((room) => room.funnelId?.toString() == funnelIdFilter).toList();
+      }
+      
+      // Client-side filtering for Tag
+      if (filters != null && filters.containsKey('TagIdFilter')) {
+        final tagIdFilter = filters['TagIdFilter'];
+        newRooms = newRooms.where((room) {
+          return room.tagIds.contains(tagIdFilter.toString());
+        }).toList();
+      }
+      
+      // Client-side filtering for Human Agent
+      if (filters != null && filters.containsKey('HumanAgentIdFilter')) {
+        final humanAgentIdFilter = filters['HumanAgentIdFilter'];
+        newRooms = newRooms.where((room) {
+          return room.lastUpdatedBy?.toString() == humanAgentIdFilter;
+        }).toList();
+      }
+      // Account filter now uses AccId sent to backend
+      
+      final nonArchivedNewRooms = newRooms.where((room) => room.status != 4).toList();
+      
+      print('✅ Loaded ${nonArchivedNewRooms.length} more rooms');
+      
+      // Merge with existing rooms
+      final updatedRooms = List<Room>.from(state.rooms)..addAll(nonArchivedNewRooms);
+      
+      // Check if there are more rooms to load
+      final hasMore = nonArchivedNewRooms.length >= 20;
+      
+      state = state.copyWith(
+        isLoadingMoreRooms: false,
+        rooms: updatedRooms,
+        hasMoreRooms: hasMore,
+        currentRoomSkip: currentSkip + 20,
+      );
+    } catch (e) {
+      print('Exception loading more rooms: $e');
+      state = state.copyWith(
+        isLoadingMoreRooms: false,
+        error: e.toString(),
+      );
+    }
+  }
 
   Future<void> loadArchivedRooms({String? search}) async {
     state = state.copyWith(isLoadingArchived: true, error: null);
@@ -587,7 +1002,13 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
   }
 
   Future<void> selectRoom(Room room, {bool? isArchived}) async {
-    state = state.copyWith(isLoading: true, error: null);
+    // IMPORTANT: Clear old messages immediately to prevent showing wrong chat
+    state = state.copyWith(
+      isLoading: true, 
+      error: null, 
+      messages: [], // Clear old messages
+      activeRoom: room, // Set active room immediately
+    );
     final isRoomArchived = isArchived ?? (room.status == 4);
     print('Selecting room: ${room.id} - ${room.name} (Status: ${room.status}, IsArchived: $isRoomArchived)');
 
@@ -977,13 +1398,23 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     await _sendMessageViaAPI(text, tempId: tempId, replyId: replyId);
   }
 
-  Future<void> sendLocationMessage(Map<String, double> location, {String? replyId}) async {
+  Future<void> sendLocationMessage(Map<String, dynamic> location, {String? replyId}) async {
     final activeRoom = state.activeRoom;
     if (activeRoom == null) return;
 
+    final latitude = location['latitude'] as double;
+    final longitude = location['longitude'] as double;
+    final address = location['address'] as String?;
+
     // Format location as text message
-    final locationText = 'Location: ${location['latitude']!.toStringAsFixed(6)}, ${location['longitude']!.toStringAsFixed(6)}\n'
-                         'https://maps.google.com/maps?q=${location['latitude']},${location['longitude']}';
+    String locationText;
+    if (address != null && address.isNotEmpty) {
+      locationText = '📍 $address\n'
+                     'https://maps.google.com/maps?q=$latitude,$longitude';
+    } else {
+      locationText = '📍 Location: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}\n'
+                     'https://maps.google.com/maps?q=$latitude,$longitude';
+    }
 
     // Add optimistic message first
     final tempId = _addOptimisticMessage(locationText, replyId: replyId);
@@ -1566,6 +1997,38 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     state = state.copyWith(archivedRooms: archivedRooms);
   }
 }
+
+  // Public method to add a new room to the home screen
+  // Used when creating a new conversation from the dialog
+  void addNewRoom(Room room) {
+    print('➕ [Add New Room] Adding room: ${room.id} - ${room.name} (status: ${room.status})');
+    
+    // Check if room already exists
+    final existingIndex = state.rooms.indexWhere((r) => r.id == room.id);
+    if (existingIndex != -1) {
+      print('⚠️ [Add New Room] Room already exists, updating instead');
+      _updateRoom(room);
+      return;
+    }
+    
+    // Add new room to the list
+    final rooms = List<Room>.from(state.rooms);
+    rooms.insert(0, room); // Insert at the beginning
+    
+    // Sort rooms (pinned first, then by last message time)
+    rooms.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+
+      if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
+      if (a.lastMessageTime == null) return 1;
+      if (b.lastMessageTime == null) return -1;
+      return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+    });
+    
+    state = state.copyWith(rooms: rooms);
+    print('✅ [Add New Room] Room added successfully, total rooms: ${rooms.length}');
+  }
 
 
  void _addMessage(ChatMessage message) {

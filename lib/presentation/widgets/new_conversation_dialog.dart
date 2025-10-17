@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/new_conversation_service.dart';
+import '../../core/services/api_service.dart';
 import '../../core/models/new_conversation_models.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/models/chat_models.dart';
@@ -216,6 +217,7 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
       print('Creating conversation with targetId: $targetId');
       
       // FIXED: Try to get existing room details first
+      // But if resolved (status = 3), treat as new conversation
       Room? existingRoom;
       try {
         print('Checking for existing room with targetId: $targetId');
@@ -243,9 +245,14 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
           ),
         );
         
-        // If we found an existing room in memory, use it
+        // FIXED: If room exists but is resolved (status = 3), treat as new conversation
         if (existingRoom.id.isNotEmpty) {
-          print('Found existing room in memory: ${existingRoom.id} - ${existingRoom.name}');
+          if (existingRoom.status == 3) {
+            print('Found resolved room: ${existingRoom.id} - Creating new conversation instead');
+            existingRoom = null; // Force create new conversation
+          } else {
+            print('Found existing active room: ${existingRoom.id} - ${existingRoom.name} (status: ${existingRoom.status})');
+          }
         } else {
           existingRoom = null;
         }
@@ -284,35 +291,92 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
         print('Created new room object: ${existingRoom.id} - ${existingRoom.name}');
       }
       
+      // IMPORTANT: For truly new conversations, create the room at server immediately
+      // by sending an empty message
+      if (existingRoom != null && existingRoom!.status == 1 && 
+          (existingRoom!.lastMessage == null || existingRoom!.lastMessage!.isEmpty)) {
+        print('🆕 Creating NEW conversation at server by sending empty message');
+        
+        try {
+          // Send empty message to create room at server
+          final createRoomData = {
+            'LinkId': int.tryParse(targetId!),
+            'ChannelId': int.tryParse(_selectedChannelId!) ?? 1,
+            'AccountIds': _selectedAccountId!,
+            'BodyType': 1, // Text message
+            'Body': '', // Empty body to just create the room
+            'Attachment': '',
+          };
+          
+          print('📤 Creating room at server: LinkId=${targetId}, ChannelId=${_selectedChannelId}, AccountId=${_selectedAccountId}');
+          
+          final response = await ApiService.sendMessage(createRoomData);
+          
+          if (response.isError) {
+            print('❌ Failed to create room at server: ${response.error}');
+            // Don't return - continue with local room, user can send message manually
+          } else {
+            print('✅ Room created successfully at server');
+          }
+          
+          // Wait a bit for server to process
+          await Future.delayed(const Duration(milliseconds: 800));
+          
+          // Refresh room list to get the newly created room from server
+          print('🔄 Refreshing room list to get new room from server');
+          await ref.read(chatProvider.notifier).loadRooms();
+          
+          // Try to find the created room in the refreshed list
+          final chatState = ref.read(chatProvider);
+          final createdRoom = chatState.rooms.firstWhere(
+            (room) {
+              if (_selectedChatType == ChatType.group) {
+                return room.grpId == targetId;
+              } else if (_selectedToType == ToType.contact) {
+                return room.ctId == targetId || room.ctRealId == targetId;
+              } else {
+                return room.id == targetId;
+              }
+            },
+            orElse: () => existingRoom!, // Fallback to local room object
+          );
+          
+          print('✅ Found created room: ${createdRoom.id} - ${createdRoom.name} (status: ${createdRoom.status})');
+          
+          // Use the room from server (which has proper room ID and data)
+          existingRoom = createdRoom as Room?;
+        } catch (e) {
+          print('❌ Exception creating room at server: $e');
+          // Don't fail - just continue with local room
+        }
+      }
+      
       if (mounted) {
-        // Close dialog first
+        // Close dialog
         Navigator.of(context).pop();
         
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Opening conversation: ${targetName}'),
+            content: Text('Conversation created: ${targetName}'),
             backgroundColor: AppTheme.successColor,
             duration: const Duration(seconds: 2),
           ),
         );
         
-        // FIXED: Navigate to ChatScreen with proper room object
-        // The ChatScreen will automatically call selectRoom which will load existing messages
-        print('Navigating to ChatScreen with room: ${existingRoom.id}');
+        // Navigate to ChatScreen with the created room
+        print('Navigating to ChatScreen with room: ${existingRoom?.id}');
+        
+        final isNewConversation = existingRoom?.status == 1 && (existingRoom?.lastMessage == null || existingRoom?.lastMessage?.isEmpty == true);
+        
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => ChatScreen(room: existingRoom!),
+            builder: (context) => ChatScreen(
+              room: existingRoom!,
+              isNewConversation: isNewConversation,
+            ),
           ),
         );
-        
-        // Refresh the room list in background to ensure it includes this conversation
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted) {
-            print('Refreshing room list after new conversation');
-            ref.read(chatProvider.notifier).loadRooms();
-          }
-        });
       }
       
     } catch (e) {
