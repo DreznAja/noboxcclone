@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -431,6 +432,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
     
     // Listen for errors and show them
     ref.listen<ChatState>(chatProvider, (previous, next) {
@@ -482,17 +484,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _isFirstBuild = false;
     }
     
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      resizeToAvoidBottomInset: true,
-      extendBody: false, // Don't extend body behind bottom nav
-      appBar: _isSelectionMode ? _buildSelectionAppBar() : _buildNormalAppBar(),
-      body: GestureDetector(
-        onTap: () {
-          // Dismiss keyboard when tapping outside
-          FocusScope.of(context).unfocus();
-        },
-        child: Stack(
+  return Scaffold(
+    backgroundColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF5F5F5), // UPDATE INI
+    resizeToAvoidBottomInset: true,
+    extendBody: false,
+    appBar: _isSelectionMode ? _buildSelectionAppBar() : _buildNormalAppBar(),
+    body: GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Stack(
         children: [
           Column(
             children: [
@@ -511,21 +512,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue[50],
+                                  color: isDarkMode 
+                                    ? Colors.blue[900]!.withOpacity(0.3)
+                                    : Colors.blue[50], // UPDATE INI
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.blue[200]!, width: 1),
+                                  border: Border.all(
+                                    color: isDarkMode 
+                                      ? Colors.blue[700]!
+                                      : Colors.blue[200]!, // UPDATE INI
+                                    width: 1,
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                                    Icon(
+                                      Icons.info_outline, 
+                                      size: 16, 
+                                      color: isDarkMode 
+                                        ? Colors.blue[300]
+                                        : Colors.blue[700], // UPDATE INI
+                                    ),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
                                         'New conversation created',
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.blue[900],
+                                          color: isDarkMode 
+                                            ? Colors.blue[200]
+                                            : Colors.blue[900], // UPDATE INI
                                         ),
                                         textAlign: TextAlign.center,
                                       ),
@@ -534,24 +550,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 ),
                               ),
                             const SizedBox(height: 16),
-                            const Icon(
+                            Icon(
                               Icons.chat_bubble_outline,
                               size: 64,
-                              color: AppTheme.textSecondary,
+                              color: isDarkMode 
+                                ? AppTheme.darkTextSecondary 
+                                : AppTheme.textSecondary, // UPDATE INI
                             ),
                             const SizedBox(height: 16),
-                            const Text(
+                            Text(
                               'No messages yet',
                               style: TextStyle(
                                 fontSize: 16,
-                                color: AppTheme.textSecondary,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : AppTheme.textSecondary, // UPDATE INI
                               ),
                             ),
-                            const Text(
+                            Text(
                               'Start the conversation!',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: AppTheme.textSecondary,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : AppTheme.textSecondary, // UPDATE INI
                               ),
                             ),
                           ],
@@ -559,14 +581,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       )
                     : Column(
                         children: [
-                          // Load more indicator at top
+                          // Load more indicator
                           if (!chatState.hasMoreMessages)
                             Container(
                               padding: const EdgeInsets.all(16),
-                              child: const Text(
+                              child: Text(
                                 'No more messages',
                                 style: TextStyle(
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : AppTheme.textSecondary, // UPDATE INI
                                   fontSize: 12,
                                 ),
                                 textAlign: TextAlign.center,
@@ -576,7 +600,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           Expanded(
                             child: NotificationListener<ScrollNotification>(
                               onNotification: (scrollInfo) {
-                                // Trigger scroll to bottom setelah ListView selesai build
                                 if (!_hasInitiallyScrolled && scrollInfo is ScrollEndNotification) {
                                   WidgetsBinding.instance.addPostFrameCallback((_) {
                                     _ensureScrollToBottom();
@@ -595,31 +618,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                   controller: _scrollController,
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
                                   physics: const ClampingScrollPhysics(),
-                                  cacheExtent: 500, // Cache widgets for smoother scrolling
-                                  addAutomaticKeepAlives: true, // Keep widgets alive
-                                  addRepaintBoundaries: true, // Isolate repaints
+                                  cacheExtent: 500,
+                                  addAutomaticKeepAlives: true,
+                                  addRepaintBoundaries: true,
                                   itemCount: chatState.messages.length + (chatState.isLoadingMore ? 1 : 0),
                                   itemBuilder: (context, index) {
-                                    // Show loading indicator at the top when loading more
+                                    // Show shimmer when loading more
                                     if (index == 0 && chatState.isLoadingMore) {
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
                                         child: Column(
                                           children: [
-                                            // Shimmer message bubble 1
-                                            _buildShimmerMessageBubble(isFromAgent: true),
+                                            _buildShimmerMessageBubble(isFromAgent: true, isDarkMode: isDarkMode), // UPDATE INI
                                             const SizedBox(height: 8),
-                                            // Shimmer message bubble 2
-                                            _buildShimmerMessageBubble(isFromAgent: false),
+                                            _buildShimmerMessageBubble(isFromAgent: false, isDarkMode: isDarkMode), // UPDATE INI
                                             const SizedBox(height: 8),
-                                            // Shimmer message bubble 3
-                                            _buildShimmerMessageBubble(isFromAgent: true),
+                                            _buildShimmerMessageBubble(isFromAgent: true, isDarkMode: isDarkMode), // UPDATE INI
                                           ],
                                         ),
                                       );
                                     }
                                     
-                                    // Adjust index if loading indicator is shown
                                     final messageIndex = chatState.isLoadingMore ? index - 1 : index;
                                     final message = chatState.messages[messageIndex];
                                     final previousMessage = messageIndex > 0 ? chatState.messages[messageIndex - 1] : null;
@@ -649,7 +668,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               margin: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
+                color: isDarkMode 
+                  ? AppTheme.darkSurface 
+                  : const Color(0xFFF8F9FA), // UPDATE INI
                 borderRadius: BorderRadius.circular(12),
                 border: Border(
                   left: BorderSide(color: AppTheme.primaryColor, width: 4),
@@ -657,7 +678,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               child: Row(
                 children: [
-                  // Reply icon
                   Icon(
                     Icons.reply,
                     size: 16,
@@ -669,7 +689,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Replying to header
                         const Text(
                           'Replying to:',
                           style: TextStyle(
@@ -679,12 +698,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        // Reply content with proper formatting
                         Text(
                           _getReplyPreviewText(_replyingTo!),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Color(0xFF4A4A4A),
+                            color: isDarkMode 
+                              ? AppTheme.darkTextPrimary 
+                              : const Color(0xFF4A4A4A), // UPDATE INI
                             height: 1.2,
                           ),
                           maxLines: 2,
@@ -694,10 +714,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.close,
                       size: 20,
-                      color: AppTheme.textSecondary,
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : AppTheme.textSecondary, // UPDATE INI
                     ),
                     onPressed: _cancelReply,
                     padding: EdgeInsets.zero,
@@ -710,7 +732,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
           
-          // Input (disabled if archived, resolved, or read-only)
+          // Input widgets dengan background sesuai mode
           if (!widget.isArchived && !widget.isReadOnly && widget.room.status != 3)
             ChatInputWidget(
               onSendText: (text) => _handleSendText(text),
@@ -720,16 +742,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           else if (widget.isReadOnly)
             Container(
               padding: const EdgeInsets.all(16),
-              color: Colors.blue[50],
+              color: isDarkMode 
+                ? Colors.blue[900]!.withOpacity(0.3)
+                : Colors.blue[50], // UPDATE INI
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, color: Colors.blue[700], size: 20),
+                  Icon(
+                    Icons.history, 
+                    color: isDarkMode 
+                      ? Colors.blue[300]
+                      : Colors.blue[700], // UPDATE INI
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Viewing conversation history (read-only)',
                     style: TextStyle(
-                      color: Colors.blue[700],
+                      color: isDarkMode 
+                        ? Colors.blue[200]
+                        : Colors.blue[700], // UPDATE INI
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -740,16 +772,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           else if (widget.isArchived)
             Container(
               padding: const EdgeInsets.all(16),
-              color: Colors.grey[200],
+              color: isDarkMode 
+                ? Colors.grey[800]
+                : Colors.grey[200], // UPDATE INI
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.archive, color: Colors.grey[600], size: 20),
+                  Icon(
+                    Icons.archive, 
+                    color: isDarkMode 
+                      ? Colors.grey[400]
+                      : Colors.grey[600], // UPDATE INI
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'This conversation is archived',
                     style: TextStyle(
-                      color: Colors.grey[600],
+                      color: isDarkMode 
+                        ? Colors.grey[400]
+                        : Colors.grey[600], // UPDATE INI
                       fontSize: 14,
                     ),
                   ),
@@ -759,16 +801,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           else if (widget.room.status == 3)
             Container(
               padding: const EdgeInsets.all(16),
-              color: Colors.green[50],
+              color: isDarkMode 
+                ? Colors.green[900]!.withOpacity(0.3)
+                : Colors.green[50], // UPDATE INI
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.check_circle_outline, color: Colors.green[700], size: 20),
+                  Icon(
+                    Icons.check_circle_outline, 
+                    color: isDarkMode 
+                      ? Colors.green[300]
+                      : Colors.green[700], // UPDATE INI
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'This conversation has been resolved',
                     style: TextStyle(
-                      color: Colors.green[700],
+                      color: isDarkMode 
+                        ? Colors.green[200]
+                        : Colors.green[700], // UPDATE INI
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -779,7 +831,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
 
-        // Contact Detail Sliding Panel
+        // Contact Detail Sliding Panel tetap sama
         if (_showContactDetail)
           GestureDetector(
             onTap: () {
@@ -790,7 +842,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: Container(
               color: Colors.black.withOpacity(0.5),
             ),
-              ),
+          ),
 
         AnimatedPositioned(
           duration: const Duration(milliseconds: 300),
@@ -815,10 +867,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
       ],
-        ), // Close GestureDetector
-      ), // Close body
-    );
-  }
+      ),
+    ),
+  );
+}
 
   // Update the _buildNormalAppBar() method in chat_screen.dart
 
@@ -1322,71 +1374,69 @@ void _openContactDetailSlidePanel() {
   }
 
   // Shimmer message bubble for loading more messages
-  Widget _buildShimmerMessageBubble({required bool isFromAgent}) {
-    return Align(
-      alignment: isFromAgent ? Alignment.centerLeft : Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        child: Shimmer.fromColors(
-          baseColor: Colors.grey[300]!, 
-          highlightColor: Colors.grey[100]!,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Sender name shimmer (for agent messages)
-                if (isFromAgent)
-                  Container(
-                    width: 80,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                if (isFromAgent) const SizedBox(height: 8),
-                // Message content shimmer
+// Update _buildShimmerMessageBubble untuk dark mode:
+Widget _buildShimmerMessageBubble({required bool isFromAgent, required bool isDarkMode}) {
+  return Align(
+    alignment: isFromAgent ? Alignment.centerLeft : Alignment.centerRight,
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.75,
+      ),
+      child: Shimmer.fromColors(
+        baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+        highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.grey[800] : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isFromAgent)
                 Container(
-                  width: double.infinity,
-                  height: 14,
+                  width: 80,
+                  height: 12,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDarkMode ? Colors.grey[700] : Colors.white,
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Container(
-                  width: MediaQuery.of(context).size.width * 0.5,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+              if (isFromAgent) const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.grey[700] : Colors.white,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                const SizedBox(height: 8),
-                // Timestamp shimmer
-                Container(
-                  width: 60,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: MediaQuery.of(context).size.width * 0.5,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.grey[700] : Colors.white,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: 60,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.grey[700] : Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

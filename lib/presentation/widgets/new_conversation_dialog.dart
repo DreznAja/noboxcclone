@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/new_conversation_service.dart';
 import '../../core/services/api_service.dart';
@@ -436,249 +437,171 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+return Dialog(
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Container(
+      width: MediaQuery.of(context).size.width * 0.9,
+      height: MediaQuery.of(context).size.height * 0.7,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE INI
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.7,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white, // Background putih
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'New Conversation',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor, // Warna primary
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(
-                    Icons.close,
-                    color: AppTheme.primaryColor, // Warna primary
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 20),
-            
-            // Form fields
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    // Chat Type
-                    _buildDropdownField(
-                      'Chat',
-                      _selectedChatType == ChatType.private ? 'Private' : 'Group',
-                      ['Private', 'Group'],
-                      (value) => _onChatTypeChanged(
-                        value == 'Private' ? ChatType.private : ChatType.group
-                      ),
-                      isRequired: true,
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Channel
-                    _buildChannelDropdown(),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Account - FIXED: Only show if channel is selected
-                    _buildAccountDropdown(),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Private chat specific fields
-                    if (_selectedChatType == ChatType.private) ...[
-                      // To radio buttons
-                      _buildRadioField(),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Contact or Link dropdown
-                      if (_selectedToType == ToType.contact)
-                        _buildContactDropdown()
-                      else
-                        _buildLinkDropdown(),
-                    ],
-                    
-                    // Group chat specific fields
-                    if (_selectedChatType == ChatType.group) ...[
-                      _buildGroupDropdown(),
-                    ],
-                  ],
+      child: Column(
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'New Conversation',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : AppTheme.primaryColor, // UPDATE INI
                 ),
               ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Icon(
+                  Icons.close,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : AppTheme.primaryColor, // UPDATE INI
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Form fields - pass isDarkMode to all builder methods
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildDropdownField(
+                    'Chat',
+                    _selectedChatType == ChatType.private ? 'Private' : 'Group',
+                    ['Private', 'Group'],
+                    (value) => _onChatTypeChanged(
+                      value == 'Private' ? ChatType.private : ChatType.group
+                    ),
+                    isDarkMode: isDarkMode, // TAMBAHKAN
+                    isRequired: true,
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  _buildChannelDropdown(isDarkMode), // TAMBAHKAN PARAMETER
+                  
+                  const SizedBox(height: 16),
+                  
+                  _buildAccountDropdown(isDarkMode), // TAMBAHKAN PARAMETER
+                  
+                  const SizedBox(height: 16),
+                  
+                  if (_selectedChatType == ChatType.private) ...[
+                    _buildRadioField(isDarkMode), // TAMBAHKAN PARAMETER
+                    
+                    const SizedBox(height: 16),
+                    
+                    if (_selectedToType == ToType.contact)
+                      _buildContactDropdown(isDarkMode) // TAMBAHKAN PARAMETER
+                    else
+                      _buildLinkDropdown(isDarkMode), // TAMBAHKAN PARAMETER
+                  ],
+                  
+                  if (_selectedChatType == ChatType.group) ...[
+                    _buildGroupDropdown(isDarkMode), // TAMBAHKAN PARAMETER
+                  ],
+                ],
+              ),
             ),
-            
-            const SizedBox(height: 20),
-            
-            // Action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryColor, // FIXED: Cancel text color primary
-                      side: BorderSide(color: AppTheme.primaryColor), // FIXED: Border color primary
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : AppTheme.primaryColor, // UPDATE INI
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _createConversation,
-                    child: _isLoading 
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Create'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : AppTheme.primaryColor, // UPDATE INI
                     ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _createConversation,
+                  child: _isLoading 
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white, // TAMBAHKAN
+                          ),
+                        )
+                      : const Text('Create'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor, // Tetap biru
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildDropdownField(
-    String label,
-    String? value,
-    List<String> options,
-    Function(String?) onChanged, {
-    bool isRequired = false,
-  }) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black, // Warna hitam
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButton<String>(
-              value: options.contains(value) ? value : null,
-              hint: const Text('--select--', style: TextStyle(color: Colors.grey)),
-              isExpanded: true,
-              underline: const SizedBox(),
-              iconEnabledColor: Colors.black, // Arrow hitam
-              style: const TextStyle(color: Colors.black), // Teks item hitam
-              dropdownColor: Colors.white, // FIXED: Background dropdown putih
-              items: options.map((String option) {
-                return DropdownMenuItem<String>(
-                  value: option,
-                  child: Text(option, style: const TextStyle(color: Colors.black)),
-                );
-              }).toList(),
-              onChanged: onChanged,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildChannelDropdown() {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 80,
-          child: Text(
-            'Channel',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black, // Warna hitam
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: _isLoadingChannels
-                ? const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Loading channels...',
-                        style: TextStyle(color: Colors.grey)),
-                  )
-                : DropdownButton<String>(
-                    value: _channels.any((c) => c.id == _selectedChannelId) ? _selectedChannelId : null,
-                    hint: const Text('--select--',
-                        style: TextStyle(color: Colors.grey)),
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    iconEnabledColor: Colors.black, // Arrow hitam
-                    style: const TextStyle(color: Colors.black), // Teks item hitam
-                    dropdownColor: Colors.white, // FIXED: Background dropdown putih
-                    items: _channels.map((ChannelOption channel) {
-                      return DropdownMenuItem<String>(
-                        value: channel.id,
-                        child: Text(channel.name, style: const TextStyle(color: Colors.black)),
-                      );
-                    }).toList(),
-                    onChanged: _onChannelChanged,
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-
-Widget _buildAccountDropdown() {
+Widget _buildDropdownField(
+  String label,
+  String? value,
+  List<String> options,
+  Function(String?) onChanged, {
+  required bool isDarkMode, // TAMBAHKAN
+  bool isRequired = false,
+}) {
   return Row(
     children: [
-      const SizedBox(
+      SizedBox(
         width: 80,
         child: Text(
-          'Account',
+          label,
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: Colors.black, // Warna hitam
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
           ),
         ),
       ),
@@ -686,28 +609,212 @@ Widget _buildAccountDropdown() {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300, // UPDATE
+            ),
             borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN
+          ),
+          child: DropdownButton<String>(
+            value: options.contains(value) ? value : null,
+            hint: Text(
+              '--select--', 
+              style: TextStyle(
+                color: isDarkMode 
+                  ? AppTheme.darkTextSecondary 
+                  : Colors.grey, // UPDATE
+              ),
+            ),
+            isExpanded: true,
+            underline: const SizedBox(),
+            iconEnabledColor: isDarkMode 
+              ? AppTheme.darkTextPrimary 
+              : Colors.black, // UPDATE
+            style: TextStyle(
+              color: isDarkMode 
+                ? AppTheme.darkTextPrimary 
+                : Colors.black, // UPDATE
+            ),
+            dropdownColor: isDarkMode 
+              ? AppTheme.darkSurface 
+              : Colors.white, // UPDATE
+            items: options.map((String option) {
+              return DropdownMenuItem<String>(
+                value: option,
+                child: Text(
+                  option, 
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : Colors.black, // UPDATE
+                  ),
+                ),
+              );
+            }).toList(),
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildChannelDropdown(bool isDarkMode) { // TAMBAHKAN PARAMETER
+  return Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(
+          'Channel',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
+          ),
+        ),
+      ),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300, // UPDATE
+            ),
+            borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN
+          ),
+          child: _isLoadingChannels
+              ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Loading channels...',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey, // UPDATE
+                    ),
+                  ),
+                )
+              : DropdownButton<String>(
+                  value: _channels.any((c) => c.id == _selectedChannelId) ? _selectedChannelId : null,
+                  hint: Text(
+                    '--select--',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey, // UPDATE
+                    ),
+                  ),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  iconEnabledColor: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : Colors.black, // UPDATE
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : Colors.black, // UPDATE
+                  ),
+                  dropdownColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : Colors.white, // UPDATE
+                  items: _channels.map((ChannelOption channel) {
+                    return DropdownMenuItem<String>(
+                      value: channel.id,
+                      child: Text(
+                        channel.name, 
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black, // UPDATE
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _onChannelChanged,
+                ),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildAccountDropdown(bool isDarkMode) { // TAMBAHKAN PARAMETER
+  return Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(
+          'Account',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
+          ),
+        ),
+      ),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300, // UPDATE
+            ),
+            borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN
           ),
           child: _isLoadingAccounts
-              ? const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text('Loading accounts...',
-                      style: TextStyle(color: Colors.grey)),
+              ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Loading accounts...',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey, // UPDATE
+                    ),
+                  ),
                 )
               : DropdownButton<String>(
                   value: _accounts.any((a) => a.id == _selectedAccountId) ? _selectedAccountId : null,
-                  hint: const Text('--select--',
-                      style: TextStyle(color: Colors.grey)),
+                  hint: Text(
+                    '--select--',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey, // UPDATE
+                    ),
+                  ),
                   isExpanded: true,
                   underline: const SizedBox(),
-                  iconEnabledColor: Colors.black, // Arrow hitam
-                  style: const TextStyle(color: Colors.black), // Teks item hitam
-                  dropdownColor: Colors.white, // Background dropdown putih
+                  iconEnabledColor: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : Colors.black, // UPDATE
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : Colors.black, // UPDATE
+                  ),
+                  dropdownColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : Colors.white, // UPDATE
                   items: _accounts.map((AccountOption account) {
                     return DropdownMenuItem<String>(
                       value: account.id,
-                      child: Text(account.name, style: const TextStyle(color: Colors.black)),
+                      child: Text(
+                        account.name, 
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black, // UPDATE
+                        ),
+                      ),
                     );
                   }).toList(),
                   onChanged: _selectedChannelId == null ? null : (value) => setState(() => _selectedAccountId = value),
@@ -718,222 +825,329 @@ Widget _buildAccountDropdown() {
   );
 }
 
-  Widget _buildRadioField() {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 80,
-          child: Text(
-            'To',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black, // Warna hitam
-            ),
+Widget _buildRadioField(bool isDarkMode) { // TAMBAHKAN PARAMETER
+  return Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(
+          'To',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
           ),
         ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+      ),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300, // UPDATE
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.start, // FIXED: Align to start
-              children: [
-                // Contact radio button
-                Row(
-                  mainAxisSize: MainAxisSize.min, // FIXED: Minimize size
-                  children: [
-                    Radio<ToType>(
-                      value: ToType.contact,
-                      groupValue: _selectedToType,
-                      onChanged: _onToTypeChanged,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // FIXED: Reduce tap area
-                      visualDensity: VisualDensity.compact, // FIXED: Compact radio
-                      activeColor: AppTheme.primaryColor, // FIXED: Radio button color when selected
+            borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Radio<ToType>(
+                    value: ToType.contact,
+                    groupValue: _selectedToType,
+                    onChanged: _onToTypeChanged,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    activeColor: AppTheme.primaryColor, // Tetap biru
+                  ),
+                  Text(
+                    'Contact',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : Colors.black, // UPDATE
                     ),
-                    const Text(
-                      'Contact',
-                      style: TextStyle(color: Colors.black), // FIXED: Text color primary
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Radio<ToType>(
+                    value: ToType.link,
+                    groupValue: _selectedToType,
+                    onChanged: _onToTypeChanged,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    activeColor: AppTheme.primaryColor, // Tetap biru
+                  ),
+                  Text(
+                    'Link',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : Colors.black, // UPDATE
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildContactDropdown(bool isDarkMode) {
+  return Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(
+          'Contact',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+          ),
+        ),
+      ),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300,
+            ),
+            borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+          ),
+          child: _isLoadingContacts
+              ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Loading contacts...',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey,
+                    ),
+                  ),
+                )
+              : DropdownButton<String>(
+                  value: _contacts.any((c) => c.id == _selectedContactId) ? _selectedContactId : null,
+                  hint: Text(
+                    '--select--',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey,
+                    ),
+                  ),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  iconEnabledColor: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : Colors.black,
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : Colors.black,
+                  ),
+                  dropdownColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : Colors.white,
+                  items: _contacts.map((ContactOption contact) {
+                    return DropdownMenuItem<String>(
+                      value: contact.id,
+                      child: Text(
+                        contact.name, 
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) => setState(() => _selectedContactId = value),
                 ),
-                const SizedBox(width: 16), // FIXED: Reduced spacing
-                // Link radio button
-                Row(
-                  mainAxisSize: MainAxisSize.min, // FIXED: Minimize size
-                  children: [
-                    Radio<ToType>(
-                      value: ToType.link,
-                      groupValue: _selectedToType,
-                      onChanged: _onToTypeChanged,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // FIXED: Reduce tap area
-                      visualDensity: VisualDensity.compact, // FIXED: Compact radio
-                      activeColor: AppTheme.primaryColor, // FIXED: Radio button color when selected
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildLinkDropdown(bool isDarkMode) {
+  return Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(
+          'Link',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+          ),
+        ),
+      ),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300,
+            ),
+            borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+          ),
+          child: _isLoadingLinks
+              ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Loading links...',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey,
                     ),
-                    const Text(
-                      'Link',
-                      style: TextStyle(color: Colors.black), // FIXED: Text color primary
+                  ),
+                )
+              : DropdownButton<String>(
+                  value: _links.any((l) => l.id == _selectedLinkId) ? _selectedLinkId : null,
+                  hint: Text(
+                    '--select--',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey,
                     ),
-                  ],
+                  ),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  iconEnabledColor: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : Colors.black,
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : Colors.black,
+                  ),
+                  dropdownColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : Colors.white,
+                  items: _links.map((LinkOption link) {
+                    return DropdownMenuItem<String>(
+                      value: link.id,
+                      child: Text(
+                        link.name, 
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) => setState(() => _selectedLinkId = value),
                 ),
-              ],
-            ),
-          ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
-  Widget _buildContactDropdown() {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 80,
-          child: Text(
-            'Contact',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black, // Warna hitam
-            ),
+Widget _buildGroupDropdown(bool isDarkMode) {
+  return Row(
+    children: [
+      SizedBox(
+        width: 80,
+        child: Text(
+          'Group',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
           ),
         ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+      ),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isDarkMode 
+                ? Colors.grey.shade700 
+                : Colors.grey.shade300,
             ),
-            child: _isLoadingContacts
-                ? const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Loading contacts...',
-                        style: TextStyle(color: Colors.grey)),
-                  )
-                : DropdownButton<String>(
-                    value: _contacts.any((c) => c.id == _selectedContactId) ? _selectedContactId : null,
-                    hint: const Text('--select--',
-                        style: TextStyle(color: Colors.grey)),
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    iconEnabledColor: Colors.black, // Arrow hitam
-                    style: const TextStyle(color: Colors.black), // Teks item hitam
-                    dropdownColor: Colors.white, // FIXED: Background dropdown putih
-                    items: _contacts.map((ContactOption contact) {
-                      return DropdownMenuItem<String>(
-                        value: contact.id,
-                        child: Text(contact.name, style: const TextStyle(color: Colors.black)),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedContactId = value),
+            borderRadius: BorderRadius.circular(8),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+          ),
+          child: _isLoadingGroups
+              ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Loading groups...',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey,
+                    ),
                   ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLinkDropdown() {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 80,
-          child: Text(
-            'Link',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black, // Warna hitam
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: _isLoadingLinks
-                ? const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Loading links...',
-                        style: TextStyle(color: Colors.grey)),
-                  )
-                : DropdownButton<String>(
-                    value: _links.any((l) => l.id == _selectedLinkId) ? _selectedLinkId : null,
-                    hint: const Text('--select--',
-                        style: TextStyle(color: Colors.grey)),
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    iconEnabledColor: Colors.black, // Arrow hitam
-                    style: const TextStyle(color: Colors.black), // Teks item hitam
-                    dropdownColor: Colors.white, // FIXED: Background dropdown putih
-                    items: _links.map((LinkOption link) {
-                      return DropdownMenuItem<String>(
-                        value: link.id,
-                        child: Text(link.name, style: const TextStyle(color: Colors.black)),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedLinkId = value),
+                )
+              : DropdownButton<String>(
+                  value: _groups.any((g) => g.id == _selectedGroupId) ? _selectedGroupId : null,
+                  hint: Text(
+                    '--select--',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey,
+                    ),
                   ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGroupDropdown() {
-    return Row(
-      children: [
-        const SizedBox(
-          width: 80,
-          child: Text(
-            'Group',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black, // Warna hitam
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: _isLoadingGroups
-                ? const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('Loading groups...',
-                        style: TextStyle(color: Colors.grey)),
-                  )
-                : DropdownButton<String>(
-                    value: _groups.any((g) => g.id == _selectedGroupId) ? _selectedGroupId : null,
-                    hint: const Text('--select--',
-                        style: TextStyle(color: Colors.grey)),
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    iconEnabledColor: Colors.black, // Arrow hitam
-                    style: const TextStyle(color: Colors.black), // Teks item hitam
-                    dropdownColor: Colors.white, // FIXED: Background dropdown putih
-                    items: _groups.map((GroupOption group) {
-                      return DropdownMenuItem<String>(
-                        value: group.id,
-                        child: Text(group.name, style: const TextStyle(color: Colors.black)),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedGroupId = value),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  iconEnabledColor: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : Colors.black,
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : Colors.black,
                   ),
-          ),
+                  dropdownColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : Colors.white,
+                  items: _groups.map((GroupOption group) {
+                    return DropdownMenuItem<String>(
+                      value: group.id,
+                      child: Text(
+                        group.name, 
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) => setState(() => _selectedGroupId = value),
+                ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 }

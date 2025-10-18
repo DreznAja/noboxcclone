@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
@@ -18,7 +20,7 @@ import '../screens/media/image_viewer_screen.dart';
 import '../screens/media/video_player_screen.dart';
 import 'forward_dialog.dart';
 
-class MessageBubbleWidget extends StatelessWidget {
+class MessageBubbleWidget extends ConsumerWidget {
   final ChatMessage message;
   final bool showSenderInfo;
   final bool isSelected;
@@ -42,140 +44,145 @@ class MessageBubbleWidget extends StatelessWidget {
     this.onDelete,
   });
 
-  @override
-  Widget build(BuildContext context) {
+@override
+Widget build(BuildContext context, WidgetRef ref) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     // Check if this is a system message
-    if (MessageDetectionUtils.isSystemMessage(message)) {
-      return _buildSystemMessage(context);
-    }
-    
-    final isMe = MessageDetectionUtils.isAgentMessage(message);
-    
-    return GestureDetector(
-        onLongPress: onLongPress,
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-          child: Column(
-            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+   if (MessageDetectionUtils.isSystemMessage(message)) {
+    return _buildSystemMessage(context, isDarkMode); // TAMBAHKAN isDarkMode
+  }
+  
+  final isMe = MessageDetectionUtils.isAgentMessage(message);
+  
+  return GestureDetector(
+    onLongPress: onLongPress,
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Message container
-              Row(
-                mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Message bubble - now takes full width without avatars
-                  Flexible(
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.85,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                        children: [
-                          // Reply preview
-                          if (message.replyId != null) _buildReplyPreview(context, isMe),
-                          
-                          // Message content
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? (isMe ? AppTheme.primaryColor.withOpacity(0.8) : AppTheme.otherMessageColor.withOpacity(0.8))
-                                  : (isMe ? AppTheme.primaryColor : Colors.white),
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(12),
-                                topRight: const Radius.circular(12),
-                                bottomLeft: Radius.circular(isMe ? 12 : 2),
-                                bottomRight: Radius.circular(isMe ? 2 : 12),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
-                                  blurRadius: 1,
-                                  offset: const Offset(0, 0.5),
-                                ),
-                              ],
-                            ),
-                            child: _buildMessageContent(context, isMe),
-                          ),
-                        ],
-                      ),
-                    ),
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.85,
                   ),
-                ],
+                  child: Column(
+                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      // Reply preview
+                      if (message.replyId != null) _buildReplyPreview(context, isMe, isDarkMode), // TAMBAHKAN isDarkMode
+                      
+                      // Message content
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? (isMe 
+                                  ? AppTheme.primaryColor.withOpacity(0.8) 
+                                  : (isDarkMode 
+                                      ? AppTheme.darkSurface.withOpacity(0.8) 
+                                      : AppTheme.otherMessageColor.withOpacity(0.8))) // UPDATE INI
+                              : (isMe 
+                                  ? AppTheme.primaryColor 
+                                  : (isDarkMode ? AppTheme.darkSurface : Colors.white)), // UPDATE INI
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(12),
+                            topRight: const Radius.circular(12),
+                            bottomLeft: Radius.circular(isMe ? 12 : 2),
+                            bottomRight: Radius.circular(isMe ? 2 : 12),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08), // UPDATE INI
+                              blurRadius: 1,
+                              offset: const Offset(0, 0.5),
+                            ),
+                          ],
+                        ),
+                        child: _buildMessageContent(context, isMe, isDarkMode), // TAMBAHKAN isDarkMode
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
-        ),
-    );
-  }
-
-  Widget _buildSystemMessage(BuildContext context) {
-    final cleanMessage = MessageDetectionUtils.cleanMessageContent(message.message ?? '');
-    final localTime = message.timestamp.toLocal();
-    final dateFormat = DateFormat('dd MMM yyyy HH:mm', 'id_ID');
-    final formattedTime = dateFormat.format(localTime);
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Row(
-        children: [
-          // Left line
-          Expanded(
-            flex: 1,
-            child: Container(
-              height: 1,
-              color: Colors.grey.shade300,
-            ),
-          ),
-          
-          // Message content - made flexible to prevent overflow
-          Flexible(
-            flex: 3,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    cleanMessage,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    formattedTime,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade400,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          // Right line
-          Expanded(
-            flex: 1,
-            child: Container(
-              height: 1,
-              color: Colors.grey.shade300,
-            ),
-          ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
+
+Widget _buildSystemMessage(BuildContext context, bool isDarkMode) {
+  final cleanMessage = MessageDetectionUtils.cleanMessageContent(message.message ?? '');
+  final localTime = message.timestamp.toLocal();
+  final dateFormat = DateFormat('dd MMM yyyy HH:mm', 'id_ID');
+  final formattedTime = dateFormat.format(localTime);
+  
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+    child: Row(
+      children: [
+        Expanded(
+          flex: 1,
+          child: Container(
+            height: 1,
+            color: isDarkMode ? Colors.white.withOpacity(0.2) : Colors.grey.shade300, // UPDATE
+          ),
+        ),
+        
+        Flexible(
+          flex: 3,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  cleanMessage,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600, // UPDATE
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  formattedTime,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextSecondary.withOpacity(0.7) 
+                      : Colors.grey.shade400, // UPDATE
+                    fontWeight: FontWeight.w400,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        Expanded(
+          flex: 1,
+          child: Container(
+            height: 1,
+            color: isDarkMode ? Colors.white.withOpacity(0.2) : Colors.grey.shade300, // UPDATE
+          ),
+        ),
+      ],
+    ),
+  );
+}
   
   Widget _buildTimestampRow(bool isMe) {
     final localTime = message.timestamp.toLocal();
@@ -202,72 +209,75 @@ class MessageBubbleWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildReplyPreview(BuildContext context, bool isMe) {
-    if (message.replyId == null || message.replyId!.isEmpty) return const SizedBox.shrink();
-    
-    if (message.replyId!.startsWith('temp_')) {
-      print('🔍 Skipping reply preview for temporary message ID: ${message.replyId}');
-      return const SizedBox.shrink();
-    }
-    
-    final replyContent = _getReplyContent();
-    final replySender = _getReplySender();
-    
-    if (replyContent.isEmpty && replySender == 'Unknown') {
-      return const SizedBox.shrink();
-    }
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: isMe ? Colors.blue.withOpacity(0.1) : const Color(0xFFE8F5E8),
-        borderRadius: BorderRadius.circular(6),
-        border: Border(
-          left: BorderSide(
-            color: isMe ? Colors.blue.withOpacity(0.8) : const Color(0xFF25D366), 
-            width: 3
-          ),
+Widget _buildReplyPreview(BuildContext context, bool isMe, bool isDarkMode) {
+  if (message.replyId == null || message.replyId!.isEmpty) return const SizedBox.shrink();
+  
+  if (message.replyId!.startsWith('temp_')) {
+    print('🔍 Skipping reply preview for temporary message ID: ${message.replyId}');
+    return const SizedBox.shrink();
+  }
+  
+  final replyContent = _getReplyContent();
+  final replySender = _getReplySender();
+  
+  if (replyContent.isEmpty && replySender == 'Unknown') {
+    return const SizedBox.shrink();
+  }
+  
+  return Container(
+    margin: const EdgeInsets.only(bottom: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(
+      color: isMe 
+        ? Colors.blue.withOpacity(0.1) 
+        : (isDarkMode 
+            ? Colors.green[900]!.withOpacity(0.3) 
+            : const Color(0xFFE8F5E8)), // UPDATE
+      borderRadius: BorderRadius.circular(6),
+      border: Border(
+        left: BorderSide(
+          color: isMe ? Colors.blue.withOpacity(0.8) : const Color(0xFF25D366), 
+          width: 3
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Add reply indicator
-          Row(
-            children: [
-              Icon(
-                Icons.reply,
-                size: 12,
-                color: isMe ? Colors.blue.withOpacity(0.9) : const Color(0xFF25D366),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Reply to:',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isMe ? Colors.blue.withOpacity(0.7) : const Color(0xFF25D366).withOpacity(0.7),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            replySender,
-            style: TextStyle(
-              fontSize: 12,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.reply,
+              size: 12,
               color: isMe ? Colors.blue.withOpacity(0.9) : const Color(0xFF25D366),
-              fontWeight: FontWeight.w600,
             ),
+            const SizedBox(width: 4),
+            Text(
+              'Reply to:',
+              style: TextStyle(
+                fontSize: 10,
+                color: isMe ? Colors.blue.withOpacity(0.7) : const Color(0xFF25D366).withOpacity(0.7),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          replySender,
+          style: TextStyle(
+            fontSize: 12,
+            color: isMe ? Colors.blue.withOpacity(0.9) : const Color(0xFF25D366),
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(height: 2),
-          _buildReplyContentWidget(isMe),
-        ],
-      ),
-    );
-  }
+        ),
+        const SizedBox(height: 2),
+        _buildReplyContentWidget(isMe, isDarkMode), // TAMBAHKAN isDarkMode
+      ],
+    ),
+  );
+}
   
   String _getReplyContent() {
     final replyText = message.replyMessage?.trim() ?? '';
@@ -314,209 +324,199 @@ class MessageBubbleWidget extends StatelessWidget {
     return 'Unknown';
   }
   
-  Widget _buildReplyContentWidget(bool isMe) {
-    final replyContent = _getReplyContent();
-    
-    if ((message.replyType == 3 || message.replyType == 7 || message.replyType == 4) && 
-        message.replyFiles != null && message.replyFiles!.isNotEmpty) {
-      try {
-        final dynamic parsed = jsonDecode(message.replyFiles!);
-        String? imageUrl;
-        
-        if (parsed is List && parsed.isNotEmpty) {
-          final fileInfo = parsed[0];
-          if (fileInfo is Map<String, dynamic>) {
-            final filename = fileInfo['Filename'] ?? fileInfo['filename'];
-            if (filename != null) {
-              imageUrl = filename.toString().startsWith('http') 
-                  ? filename.toString()
-                  : '${AppConfig.baseUrl}upload/$filename';
-            }
+Widget _buildReplyContentWidget(bool isMe, bool isDarkMode) {
+  final replyContent = _getReplyContent();
+  
+  if ((message.replyType == 3 || message.replyType == 7 || message.replyType == 4) && 
+      message.replyFiles != null && message.replyFiles!.isNotEmpty) {
+    try {
+      final dynamic parsed = jsonDecode(message.replyFiles!);
+      String? imageUrl;
+      
+      if (parsed is List && parsed.isNotEmpty) {
+        final fileInfo = parsed[0];
+        if (fileInfo is Map<String, dynamic>) {
+          final filename = fileInfo['Filename'] ?? fileInfo['filename'];
+          if (filename != null) {
+            imageUrl = filename.toString().startsWith('http') 
+                ? filename.toString()
+                : '${AppConfig.baseUrl}upload/$filename';
           }
         }
-        
-        if (imageUrl != null) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  color: Colors.grey.shade300,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    width: 32,
-                    height: 32,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey.shade200,
-                      child: Icon(
-                        message.replyType == 4 ? Icons.videocam : Icons.image,
-                        size: 14,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey.shade200,
-                      child: Icon(
-                        message.replyType == 4 ? Icons.videocam : Icons.image,
-                        size: 14,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  replyContent,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isMe ? Colors.white.withOpacity(0.85) : const Color(0xFF4A4A4A),
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          );
-        }
-      } catch (e) {
-        print('Error parsing reply files: $e');
       }
+      
+      if (imageUrl != null) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: isDarkMode ? Colors.grey[700] : Colors.grey.shade300, // UPDATE
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                  width: 32,
+                  height: 32,
+                  placeholder: (context, url) => Container(
+                    color: isDarkMode ? Colors.grey[800] : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200), // UPDATE
+                    child: Icon(
+                      message.replyType == 4 ? Icons.videocam : Icons.image,
+                      size: 14,
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey, // UPDATE
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: isDarkMode ? Colors.grey[800] : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200), // UPDATE
+                    child: Icon(
+                      message.replyType == 4 ? Icons.videocam : Icons.image,
+                      size: 14,
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey, // UPDATE
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                replyContent,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isMe 
+                    ? Colors.white.withOpacity(0.85) 
+                    : (isDarkMode ? AppTheme.darkTextPrimary : const Color(0xFF4A4A4A)), // UPDATE
+                  height: 1.2,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        );
+      }
+    } catch (e) {
+      print('Error parsing reply files: $e');
     }
-    
-    return Text(
-      replyContent,
-      style: TextStyle(
-        fontSize: 13,
-        color: isMe ? Colors.blue.withOpacity(0.85) : const Color(0xFF4A4A4A),
-        height: 1.2,
+  }
+  
+  return Text(
+    replyContent,
+    style: TextStyle(
+      fontSize: 13,
+      color: isMe 
+        ? Colors.blue.withOpacity(0.85) 
+        : (isDarkMode ? AppTheme.darkTextPrimary : const Color(0xFF4A4A4A)), // UPDATE
+      height: 1.2,
+    ),
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+  );
+}
+
+
+Widget _buildMessageContent(BuildContext context, bool isMe, bool isDarkMode) {
+  if (message.type == 1 && MessageUtils.isLocationMessage(message.message)) {
+    return _buildLocationMessage(isMe, isDarkMode);
+  }
+  
+  switch (message.type) {
+    case 1: return _buildTextMessage(isMe, isDarkMode);
+    case 2: return _buildAudioMessage(isMe, isDarkMode);
+    case 3: return _buildImageMessage(context, isMe, isDarkMode);
+    case 4: return _buildVideoMessage(context, isMe, isDarkMode);
+    case 5: return _buildDocumentMessage(isMe, isDarkMode);
+    case 7: return _buildStickerMessage(context, isMe, isDarkMode);
+    case 9: return _buildLocationMessage(isMe, isDarkMode);
+    default: return _buildTextMessage(isMe, isDarkMode);
+  }
+}
+
+Widget _buildTextMessage(bool isMe, bool isDarkMode) {
+  final cleanMessage = MessageDetectionUtils.cleanMessageContent(message.message ?? '');
+   
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Flexible(
+        child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode), // TAMBAHKAN isDarkMode
       ),
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-    );
-  }
-
-  Widget _buildMessageContent(BuildContext context, bool isMe) {
-    if (message.type == 1 && MessageUtils.isLocationMessage(message.message)) {
-      return _buildLocationMessage(isMe);
-    }
-    
-    switch (message.type) {
-      case 1: // Text
-        return _buildTextMessage(isMe);
-      case 2: // Audio
-        return _buildAudioMessage(isMe);
-      case 3: // Image
-        return _buildImageMessage(context, isMe);
-      case 4: // Video
-        return _buildVideoMessage(context, isMe);
-      case 5: // Document
-        return _buildDocumentMessage(isMe);
-      case 7: // Sticker
-        return _buildStickerMessage(context, isMe);
-      case 9: // Location
-        return _buildLocationMessage(isMe);
-      default:
-        return _buildTextMessage(isMe);
-    }
-  }
-
-  Widget _buildTextMessage(bool isMe) {
-    final cleanMessage = MessageDetectionUtils.cleanMessageContent(message.message ?? '');
-     
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Flexible(
-          child: _buildTextWithLinks(cleanMessage, isMe),
-        ),
-        const SizedBox(width: 8),
-        _buildTimestampRow(isMe),
-      ],
+      const SizedBox(width: 8),
+      _buildTimestampRow(isMe),
+    ],
+  );
+}
+  
+Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode) {
+  final urlRegex = RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
+  final matches = urlRegex.allMatches(text);
+  
+  if (matches.isEmpty) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: isMe 
+          ? Colors.white 
+          : (isDarkMode ? AppTheme.darkTextPrimary : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary)), // UPDATE
+        fontSize: 16,
+        height: 1.3,
+      ),
     );
   }
   
-  Widget _buildTextWithLinks(String text, bool isMe) {
-    // Regex untuk mendeteksi URL
-    final urlRegex = RegExp(
-      r'https?://[^\s]+|www\.[^\s]+',
-      caseSensitive: false,
-    );
-    
-    final matches = urlRegex.allMatches(text);
-    
-    // Jika tidak ada link, return simple text
-    if (matches.isEmpty) {
-      return Text(
-        text,
-        style: TextStyle(
-          color: isMe ? Colors.white : AppTheme.textPrimary,
-          fontSize: 16,
-          height: 1.3,
-        ),
-      );
-    }
-    
-    // Build TextSpan dengan link berwarna biru
-    final List<TextSpan> spans = [];
-    int currentIndex = 0;
-    
-    for (final match in matches) {
-      // Add text sebelum link
-      if (match.start > currentIndex) {
-        spans.add(TextSpan(
-          text: text.substring(currentIndex, match.start),
-          style: TextStyle(
-            color: isMe ? Colors.white : AppTheme.textPrimary,
-            fontSize: 16,
-            height: 1.3,
-          ),
-        ));
-      }
-      
-      // Add link dengan warna biru
-      final url = match.group(0)!;
+  final List<TextSpan> spans = [];
+  int currentIndex = 0;
+  
+  for (final match in matches) {
+    if (match.start > currentIndex) {
       spans.add(TextSpan(
-        text: url,
+        text: text.substring(currentIndex, match.start),
         style: TextStyle(
-          color: Colors.blue,
-          fontSize: 16,
-          height: 1.3,
-          decoration: TextDecoration.underline,
-        ),
-        recognizer: TapGestureRecognizer()
-          ..onTap = () => _launchURL(url),
-      ));
-      
-      currentIndex = match.end;
-    }
-    
-    // Add remaining text after last link
-    if (currentIndex < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(currentIndex),
-        style: TextStyle(
-          color: isMe ? Colors.white : AppTheme.textPrimary,
+          color: isMe 
+            ? Colors.white 
+            : (isDarkMode ? AppTheme.darkTextPrimary : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary)), // UPDATE
           fontSize: 16,
           height: 1.3,
         ),
       ));
     }
     
-    return RichText(
-      text: TextSpan(children: spans),
-    );
+    final url = match.group(0)!;
+    spans.add(TextSpan(
+      text: url,
+      style: const TextStyle(
+        color: Colors.blue, // LINK TETAP BIRU
+        fontSize: 16,
+        height: 1.3,
+        decoration: TextDecoration.underline,
+      ),
+      recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
+    ));
+    
+    currentIndex = match.end;
   }
+  
+  if (currentIndex < text.length) {
+    spans.add(TextSpan(
+      text: text.substring(currentIndex),
+      style: TextStyle(
+        color: isMe 
+          ? Colors.white 
+          : (isDarkMode ? AppTheme.darkTextPrimary : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary)), // UPDATE
+        fontSize: 16,
+        height: 1.3,
+      ),
+    ));
+  }
+  
+  return RichText(text: TextSpan(children: spans));
+}
   
   Future<void> _launchURL(String url) async {
     // Add https:// if missing
@@ -533,7 +533,7 @@ class MessageBubbleWidget extends StatelessWidget {
     }
   }
 
-  Widget _buildImageMessage(BuildContext context, bool isMe) {
+  Widget _buildImageMessage(BuildContext context, bool isMe, bool isDarkMode) {
   final imageUrl = _getFileUrl();
   String? caption = message.message?.trim();
   // Fallback: try to get caption from file info if Msg is empty
@@ -551,7 +551,7 @@ class MessageBubbleWidget extends StatelessWidget {
           width: 200,
           height: 150,
           decoration: BoxDecoration(
-            color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade200,
+            color: isMe ? Colors.white.withOpacity(0.2) : (isDarkMode ? Colors.grey[800] : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -612,7 +612,7 @@ class MessageBubbleWidget extends StatelessWidget {
                 placeholder: (context, url) => Container(
                   width: maxWidth,
                   height: 200,
-                  color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade200,
+                  color: isMe ? Colors.white.withOpacity(0.2) : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
                   child: const Center(
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
@@ -620,7 +620,7 @@ class MessageBubbleWidget extends StatelessWidget {
                 errorWidget: (context, url, error) => Container(
                   width: 200,
                   height: 200,
-                  color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade200,
+                  color: isMe ? Colors.white.withOpacity(0.2) : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -656,7 +656,7 @@ class MessageBubbleWidget extends StatelessWidget {
           child: Text(
             MessageDetectionUtils.cleanMessageContent(caption!),
             style: TextStyle(
-              color: isMe ? Colors.white : AppTheme.textPrimary,
+              color: isMe ? Colors.white : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
               fontSize: 14,
               height: 1.3,
             ),
@@ -670,7 +670,7 @@ class MessageBubbleWidget extends StatelessWidget {
   );
 }
 
- Widget _buildVideoMessage(BuildContext context, bool isMe) {
+ Widget _buildVideoMessage(BuildContext context, bool isMe, bool isDarkMode) {
   final videoUrl = _getFileUrl();
   String? caption = message.message?.trim();
   // Fallback: try to get caption from file info if Msg is empty
@@ -853,7 +853,7 @@ class MessageBubbleWidget extends StatelessWidget {
           child: Text(
             MessageDetectionUtils.cleanMessageContent(caption!),
             style: TextStyle(
-              color: isMe ? Colors.white : AppTheme.textPrimary,
+              color: isMe ? Colors.white : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
               fontSize: 14,
               height: 1.3,
             ),
@@ -883,7 +883,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
   }
 }
 
-  Widget _buildAudioMessage(bool isMe) {
+  Widget _buildAudioMessage(bool isMe, bool isDarkMode) {
   final audioUrl = _getFileUrl();
   
   if (audioUrl == null || audioUrl.isEmpty) {
@@ -894,7 +894,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
           width: 280,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade100,
+            color: isMe ? Colors.white.withOpacity(0.2) : (isDarkMode ? Colors.grey[800] : Colors.grey.shade100),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -937,7 +937,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
   );
 }
 
-  Widget _buildDocumentMessage(bool isMe) {
+  Widget _buildDocumentMessage(bool isMe, bool isDarkMode) {
   String fileName = 'Document';
   final documentUrl = _getFileUrl();
   String? caption = message.message?.trim();
@@ -974,7 +974,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade100,
+            color: isMe ? Colors.white.withOpacity(0.2) : (isDarkMode ? Colors.grey[800] : Colors.grey.shade100),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -994,7 +994,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
                       fileName,
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
-                        color: isMe ? Colors.white : AppTheme.textPrimary,
+                        color: isMe ? Colors.white : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1018,7 +1018,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
         Text(
           MessageDetectionUtils.cleanMessageContent(caption!),
           style: TextStyle(
-            color: isMe ? Colors.white : AppTheme.textPrimary,
+            color: isMe ? Colors.white : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
             fontSize: 14,
             height: 1.3,
           ),
@@ -1031,7 +1031,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
   );
 }
 
- Widget _buildStickerMessage(BuildContext context, bool isMe) {
+ Widget _buildStickerMessage(BuildContext context, bool isMe, bool isDarkMode) {
   final stickerUrl = _getFileUrl();
   if (stickerUrl == null || stickerUrl.isEmpty) {
     return Column(
@@ -1041,7 +1041,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
           width: 120,
           height: 120,
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
+            color: (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -1088,7 +1088,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
+                  color: (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -1110,7 +1110,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
   );
 }
 
- Widget _buildLocationMessage(bool isMe) {
+ Widget _buildLocationMessage(bool isMe, bool isDarkMode) {
   final messageText = message.message ?? '';
   
   double? latitude;
@@ -1147,7 +1147,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
           width: 280,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade100,
+            color: isMe ? Colors.white.withOpacity(0.2) : (isDarkMode ? Colors.grey[800] : Colors.grey.shade100),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isMe ? Colors.white.withOpacity(0.3) : Colors.grey.withOpacity(0.3),
@@ -1169,7 +1169,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
                     'Location',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: isMe ? Colors.white : AppTheme.textPrimary,
+                      color: isMe ? Colors.white : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
                       fontSize: 16,
                     ),
                   ),
@@ -1182,7 +1182,7 @@ Future<String?> _generateThumbnail(String videoUrl) async {
                 width: double.infinity,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: isMe ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+                  color: isMe ? Colors.white.withOpacity(0.1) : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isMe ? Colors.white.withOpacity(0.2) : Colors.grey.withOpacity(0.2),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/models/chat_models.dart';
 import '../../core/theme/app_theme.dart';
@@ -9,6 +10,7 @@ import '../../core/services/account_service.dart';
 import '../../core/providers/chat_provider.dart';
 import 'room_shimmer_widget.dart';
 
+// Update RoomListWidget untuk dark mode shimmer
 class RoomListWidget extends ConsumerStatefulWidget {
   final List<Room> rooms;
   final bool isLoading;
@@ -48,35 +50,35 @@ class RoomListWidget extends ConsumerStatefulWidget {
 class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
   @override
   Widget build(BuildContext context) {
-    // Debug: Log when widget rebuilds with new data
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
     print('🏠 RoomListWidget rebuild: ${widget.rooms.length} rooms, loading: ${widget.isLoading}');
     
-    // Show shimmer for initial load (no data yet)
+    // Show shimmer for initial load or refresh
     if (widget.isLoading && widget.rooms.isEmpty) {
       return const RoomShimmerWidget();
     }
     
-    // Show shimmer for refresh (data exists but refreshing)
     if (widget.isLoading && widget.rooms.isNotEmpty) {
       return const RoomShimmerWidget();
     }
 
     if (widget.rooms.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.inbox_outlined,
               size: 48,
-              color: AppTheme.textSecondary,
+              color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'No conversations found',
               style: TextStyle(
                 fontSize: 16,
-                color: AppTheme.textSecondary,
+                color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
               ),
             ),
           ],
@@ -84,26 +86,22 @@ class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
       );
     }
 
-    // Sort rooms: pinned first, then by last message time
+    // Sort rooms
     final sortedRooms = List<Room>.from(widget.rooms);
     sortedRooms.sort((a, b) {
-      // First, sort by pin status (pinned rooms first)
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       
-      // Then sort by last message time (newest first)
       if (a.lastMessageTime == null && b.lastMessageTime == null) return 0;
       if (a.lastMessageTime == null) return 1;
       if (b.lastMessageTime == null) return -1;
       return b.lastMessageTime!.compareTo(a.lastMessageTime!);
     });
 
-    // Calculate item count: rooms + loading indicator
     final itemCount = widget.isLoadingMore ? sortedRooms.length + 1 : sortedRooms.length;
 
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification scrollInfo) {
-        // Trigger load more when scrolled to 80% of the list
         if (!widget.isArchivedList && 
             !widget.isLoadingMore && 
             widget.hasMore && 
@@ -119,11 +117,11 @@ class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
       child: ListView.builder(
         itemCount: itemCount,
         itemBuilder: (context, index) {
-          // Show shimmer effect at the bottom when loading more
+          // Show shimmer at bottom when loading more
           if (index >= sortedRooms.length) {
             return Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
+              baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+              highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
@@ -133,8 +131,8 @@ class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
                     Container(
                       width: 48,
                       height: 48,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.grey[700] : Colors.white,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -149,48 +147,39 @@ class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // Name shimmer
                               Container(
                                 width: 120,
                                 height: 14,
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: isDarkMode ? Colors.grey[700] : Colors.white,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
-                              
-                              // Time shimmer
                               Container(
                                 width: 40,
                                 height: 12,
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: isDarkMode ? Colors.grey[700] : Colors.white,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
                             ],
                           ),
-                          
                           const SizedBox(height: 8),
-                          
-                          // Account/Bot name shimmer
                           Container(
                             width: 80,
                             height: 12,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: isDarkMode ? Colors.grey[700] : Colors.white,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
-                          
                           const SizedBox(height: 8),
-                          
-                          // Last message shimmer
                           Container(
                             width: double.infinity,
                             height: 12,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: isDarkMode ? Colors.grey[700] : Colors.white,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -231,8 +220,7 @@ class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
     );
   }
 }
-
-class _RoomListItem extends StatelessWidget {
+class _RoomListItem extends ConsumerWidget {
   final Room room;
   final bool isSelected;
   final bool isSelectionMode;
@@ -252,7 +240,9 @@ class _RoomListItem extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
     return Container(
       color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : null,
       child: Column(
@@ -260,7 +250,9 @@ class _RoomListItem extends StatelessWidget {
           // Top separator line
           Container(
             height: 0.5,
-            color: Colors.grey.shade300,
+            color: isDarkMode 
+              ? Colors.white.withOpacity(0.1)
+              : Colors.grey.shade300,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           
@@ -274,7 +266,7 @@ class _RoomListItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Avatar atau Selection checkbox
-                  _buildAvatarOrCheckbox(),
+                  _buildAvatarOrCheckbox(isDarkMode),
                   
                   const SizedBox(width: 12),
                   
@@ -295,13 +287,13 @@ class _RoomListItem extends StatelessWidget {
                                       style: TextStyle(
                                         fontWeight: room.unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
                                         fontSize: 16,
-                                        color: Colors.black,
+                                        color: isDarkMode ? Colors.white : Colors.black,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  // Muted AI Agent icon - robot merah
+                                  // Muted AI Agent icon
                                   if (room.isMuteBot) ...[
                                     const SizedBox(width: 6),
                                     const Icon(
@@ -318,13 +310,13 @@ class _RoomListItem extends StatelessWidget {
                             if (room.lastMessageTime != null)
                               Text(
                                 _formatMessageTime(room.lastMessageTime!),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                                 ),
                               ),
                             
-                            // Pin icon - tampil di normal mode dan selection mode
+                            // Pin icon
                             if (room.isPinned) ...[
                               const SizedBox(width: 6),
                               const Icon(
@@ -348,13 +340,13 @@ class _RoomListItem extends StatelessWidget {
                                 child: Text(
                                   room.lastMessage ?? 'No messages',
                                   style: TextStyle(
-                                    // Need Reply ON → Merah (selalu, apapun status baca)
-                                    // Need Reply OFF → Hitam (unread) atau Abu-abu (read) - default behavior
+                                    // Need Reply ON → Merah (selalu)
+                                    // Need Reply OFF → Putih (dark) / Hitam (light) jika unread, Abu-abu jika read
                                     color: room.needReply
                                         ? Colors.red
                                         : room.unreadCount > 0
-                                            ? Colors.black
-                                            : AppTheme.textSecondary,
+                                            ? (isDarkMode ? Colors.white : Colors.black)
+                                            : (isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
                                     fontWeight: room.needReply || room.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
                                     fontSize: 14,
                                   ),
@@ -364,7 +356,7 @@ class _RoomListItem extends StatelessWidget {
                               ),
                             ),
                             
-                            // Badge count - tampil di normal mode dan selection mode
+                            // Badge count
                             if (room.unreadCount > 0)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -388,11 +380,11 @@ class _RoomListItem extends StatelessWidget {
                         
                         // Tags and Funnel row
                         if (room.tags.isNotEmpty || room.funnel != null) ...[
-                          _buildTagsAndFunnelRow(room),
+                          _buildTagsAndFunnelRow(room, isDarkMode),
                           const SizedBox(height: 3),
                         ],
                         
-                        // Bot name and Status chip row - dalam satu baris
+                        // Bot name and Status chip row
                         Row(
                           children: [
                             _getChannelIcon(room.channelId),
@@ -400,9 +392,9 @@ class _RoomListItem extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 _getBotName(room),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
@@ -424,7 +416,9 @@ class _RoomListItem extends StatelessWidget {
           // Bottom separator line
           Container(
             height: 0.5,
-            color: Colors.grey.shade300,
+            color: isDarkMode 
+              ? Colors.white.withOpacity(0.1)
+              : Colors.grey.shade300,
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
         ],
@@ -432,7 +426,7 @@ class _RoomListItem extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatarOrCheckbox() {
+  Widget _buildAvatarOrCheckbox(bool isDarkMode) {
     if (isSelectionMode) {
       // Selection mode: tampilkan checkbox
       return Container(
@@ -468,17 +462,79 @@ class _RoomListItem extends StatelessWidget {
             backgroundImage: _isValidImageUrl(room.contactImage ?? room.linkImage)
                 ? NetworkImage(room.contactImage ?? room.linkImage!)
                 : null,
-            backgroundColor: AppTheme.neutralLight,
+            backgroundColor: isDarkMode ? AppTheme.darkSurface : AppTheme.neutralLight,
             child: !_isValidImageUrl(room.contactImage ?? room.linkImage)
                 ? Icon(
                     room.isGroup ? Icons.group : Icons.person,
-                    color: AppTheme.textSecondary,
+                    color: isDarkMode ? Colors.white : AppTheme.textSecondary,
                   )
                 : null,
           ),
         ],
       );
     }
+  }
+
+  Widget _buildTagsAndFunnelRow(Room room, bool isDarkMode) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        children: [
+          // Tags
+          if (room.tags.isNotEmpty) ...[
+            Icon(
+              Icons.local_offer,
+              size: 12,
+              color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                room.tags.join(', '),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+          
+          // Spacing between tags and funnel
+          if (room.tags.isNotEmpty && room.funnel != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 1,
+              height: 12,
+              color: (isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary).withOpacity(0.3),
+            ),
+            const SizedBox(width: 8),
+          ],
+          
+          // Funnel
+          if (room.funnel != null) ...[
+            Icon(
+              Icons.filter_alt,
+              size: 12,
+              color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                room.funnel!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _getChannelIcon(int channelId) {
@@ -559,7 +615,7 @@ class _RoomListItem extends StatelessWidget {
         text = 'Resolved';
         color = AppTheme.successColor;
         break;
-      case 4: // Support for archived status
+      case 4:
         text = 'Archived';
         color = AppTheme.textSecondary;
         break;
@@ -592,119 +648,43 @@ class _RoomListItem extends StatelessWidget {
     return url.startsWith('http://') || url.startsWith('https://');
   }
 
-  Widget _buildTagsAndFunnelRow(Room room) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
-      child: Row(
-        children: [
-          // Tags
-          if (room.tags.isNotEmpty) ...[
-            Icon(
-              Icons.local_offer,
-              size: 12,
-              color: AppTheme.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                room.tags.join(', '),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-          
-          // Spacing between tags and funnel
-          if (room.tags.isNotEmpty && room.funnel != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              width: 1,
-              height: 12,
-              color: AppTheme.textSecondary.withOpacity(0.3),
-            ),
-            const SizedBox(width: 8),
-          ],
-          
-          // Funnel
-          if (room.funnel != null) ...[
-            Icon(
-              Icons.filter_alt,
-              size: 12,
-              color: AppTheme.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                room.funnel!,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   String _formatMessageTime(DateTime messageTime) {
-    // Convert to local timezone if it's UTC
     final localTime = messageTime.isUtc ? messageTime.toLocal() : messageTime;
     
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final messageDate = DateTime(localTime.year, localTime.month, localTime.day);
     
-    // Check if message is from today
     if (messageDate.isAtSameMomentAs(today)) {
-      // Today: show only time (HH:mm)
       return DateFormat('HH:mm').format(localTime);
     } else {
-      // Yesterday or before: show date and time (d MMM, HH:mm)
       return DateFormat('d MMM, HH:mm').format(localTime);
     }
   }
 
   String _getBotName(Room room) {
-    // FIXED: Match ChatScreen AppBar display logic exactly
-    // Priority: accountName -> botName -> AccountService -> channelName -> fallback
-    
-    // Priority 1: Use accountName if available (from DetailRoom)
     if (room.accountName != null && room.accountName!.isNotEmpty) {
       return room.accountName!;
     }
     
-    // Priority 2: Use botName if available
     if (room.botName != null && room.botName!.isNotEmpty) {
       return room.botName!;
     }
 
-    // Priority 3: Try AccountService to get account name for this channel
-    // This provides dynamic names from backend that can change
     try {
       final accountService = AccountService();
       final accounts = accountService.getAccountsForChannel(room.channelId);
       if (accounts.isNotEmpty) {
-        // Return account name as-is from backend
         return accounts.first.name;
       }
     } catch (e) {
-      // Silently fail, will use fallback
+      // Silently fail
     }
 
-    // Priority 4: Use channelName from API if not "Not Found"
     if (room.channelName.isNotEmpty && room.channelName != 'Not Found') {
       return room.channelName;
     }
 
-    // Priority 5: Final fallback - use generic name based on channel ID
     return _getChannelNameFromId(room.channelId);
   }
 

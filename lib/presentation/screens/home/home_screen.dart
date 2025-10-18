@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:nobox_chat/core/services/signalr_service.dart';
 import '../../../core/services/account_service.dart';
 import '../../../core/services/api_service.dart';
@@ -545,7 +546,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
-
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
     // Listen for state changes and handle errors
     ref.listen<ChatState>(chatProvider, (previous, next) {
       if (previous != null && next.rooms.length != previous.rooms.length) {
@@ -580,200 +581,206 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       }
     });
 
-    return PopScope(
-      canPop: !_isSelectionMode,
-      onPopInvoked: (didPop) {
-        if (!didPop && _isSelectionMode) {
-          _exitSelectionMode();
-        }
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: _isSelectionMode 
-            ? _buildSelectionAppBar() 
-            : (_isSearchMode ? _buildSearchAppBar() : _buildNormalAppBar()),
-        ),
-        body: RefreshIndicator(
-          onRefresh: _handleRefresh,
-          color: AppTheme.primaryColor,
-          backgroundColor: Colors.white,
-          child: Column(
-            children: [
-              // Tabs
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+return PopScope(
+    canPop: !_isSelectionMode,
+    onPopInvoked: (didPop) {
+      if (!didPop && _isSelectionMode) {
+        _exitSelectionMode();
+      }
+    },
+    child: Scaffold(
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: _isSelectionMode 
+          ? _buildSelectionAppBar() 
+          : (_isSearchMode ? _buildSearchAppBar() : _buildNormalAppBar()),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        color: AppTheme.primaryColor,
+        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+        child: Column(
+          children: [
+            // Tabs
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                border: Border(
+                  bottom: BorderSide(
+                    color: isDarkMode 
+                      ? Colors.white.withOpacity(0.1) 
+                      : const Color(0xFFE2E8F0),
+                    width: 1,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    _buildTab('all', 'All'),
-                    _buildTab('unassigned', 'Unassigned'),
-                    _buildTab('assigned', 'Assigned'),
-                    _buildTab('resolved', 'Resolved'),
-                  ],
-                ),
               ),
-
-              // // Archived Conversation Section
-              // Container(
-              //   color: Colors.white,
-              //   padding: const EdgeInsets.only(bottom: 6),
-              //   child: InkWell(
-              //     onTap: _navigateToArchive,
-              //     child: Container(
-              //       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              //       child: Row(
-              //         crossAxisAlignment: CrossAxisAlignment.center,
-              //         children: [
-              //           Container(
-              //             width: 44,
-              //             height: 44,
-              //             alignment: Alignment.center,
-              //             child: const Icon(
-              //               Icons.archive_outlined,
-              //               color: Color(0xFF007AFF),
-              //               size: 35,
-              //             ),
-              //           ),
-              //           const SizedBox(width: 12),
-              //           const Expanded(
-              //             child: Text(
-              //               'Archived Conversation',
-              //               style: TextStyle(
-              //                 fontSize: 16,
-              //                 fontWeight: FontWeight.w500,
-              //                 color: Colors.black,
-              //               ),
-              //             ),
-              //           ),
-              //           const Icon(
-              //             Icons.chevron_right,
-              //             color: Colors.grey,
-              //             size: 24,
-              //           ),
-              //         ],
-              //       ),
-              //     ),
-              //   ),
-              // ),
-              
-              // Room List
-              Expanded(
-                child: RoomListWidget(
-                  rooms: chatState.rooms,
-                  isLoading: chatState.isLoading,
-                  isLoadingMore: chatState.isLoadingMoreRooms,
-                  hasMore: chatState.hasMoreRooms,
-                  selectedRoomId: null,
-                  onRoomTap: _isSelectionMode ? null : _navigateToChat,
-                  isSelectionMode: _isSelectionMode,
-                  selectedRoomIds: _selectedRoomIds,
-                  onRoomLongPress: _enterSelectionMode,
-                  onRoomSelectionToggle: _toggleRoomSelection,
-                  searchQuery: _searchController.text.isNotEmpty ? _searchController.text : null,
-                  filters: _getCurrentFilters(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        floatingActionButton: Container(
-          margin: const EdgeInsets.only(bottom: 20, right: 10),
-          child: SizedBox(
-            width: 60,
-            height: 60,
-            child: FloatingActionButton(
-              onPressed: _onFloatingActionButtonPressed,
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              elevation: 6,
-              child: const Icon(Icons.add, size: 30),
-            ),
-          ),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      ),
-    );
-  }
-
-  // AppBar widgets remain the same...
-  Widget _buildNormalAppBar() {
-    return Container(
-      color: AppTheme.primaryColor,
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-      child: SizedBox(
-        height: 60,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(width: 12),
-            Image.asset('assets/nobox.png', width: 40, height: 40, fit: BoxFit.contain),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text('NoBox Chat', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: 'Poppins')),
+                  _buildTab('all', 'All'),
+                  _buildTab('unassigned', 'Unassigned'),
+                  _buildTab('assigned', 'Assigned'),
+                  _buildTab('resolved', 'Resolved'),
                 ],
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: () => setState(() => _isSearchMode = true),
-                  icon: const Icon(Icons.search, color: Colors.white, size: 27),
-                  padding: const EdgeInsets.all(8),
-                ),
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    IconButton(
-                      onPressed: _showFilterDialog,
-                      icon: const Icon(Icons.filter_alt, color: Colors.white, size: 27),
-                      padding: const EdgeInsets.all(8),
-                    ),
-                    if (_filterOptions.hasActiveFilters)
-                      Positioned(
-                        right: 6, top: 6,
-                        child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
-                      ),
-                  ],
-                ),
-              ],
+            
+            // Room List
+            Expanded(
+              child: RoomListWidget(
+                rooms: chatState.rooms,
+                isLoading: chatState.isLoading,
+                isLoadingMore: chatState.isLoadingMoreRooms,
+                hasMore: chatState.hasMoreRooms,
+                selectedRoomId: null,
+                onRoomTap: _isSelectionMode ? null : _navigateToChat,
+                isSelectionMode: _isSelectionMode,
+                selectedRoomIds: _selectedRoomIds,
+                onRoomLongPress: _enterSelectionMode,
+                onRoomSelectionToggle: _toggleRoomSelection,
+                searchQuery: _searchController.text.isNotEmpty ? _searchController.text : null,
+                filters: _getCurrentFilters(),
+              ),
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Colors.white, size: 27),
-              color: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              onSelected: (value) async {
-                if (value == 'logout') {
-                  _handleLogout();
-                } else if (value == 'debug') {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const WhatsAppDebugScreen()));
-                } else if (value == 'archive') {
-                  _navigateToArchive();
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'archive', child: Row(children: [Icon(Icons.archive, color: Colors.blue), SizedBox(width: 12), Text('Archived Conversation', style: TextStyle(color: Colors.black))])),
-                const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 12), Text('Logout', style: TextStyle(color: Colors.red))])),
-              ],
-              padding: const EdgeInsets.all(8),
-            ),
-            const SizedBox(width: 4),
           ],
         ),
       ),
-    );
+      floatingActionButton: Container(
+        margin: const EdgeInsets.only(bottom: 20, right: 10),
+        child: SizedBox(
+          width: 60,
+          height: 60,
+          child: FloatingActionButton(
+            onPressed: _onFloatingActionButtonPressed,
+            backgroundColor: AppTheme.primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 6,
+            child: const Icon(Icons.add, size: 30),
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    ),
+  );
+
   }
+
+Widget _buildNormalAppBar() {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  return Container(
+    color: AppTheme.primaryColor,
+    padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+    child: SizedBox(
+      height: 60,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(width: 12),
+          Image.asset('assets/nobox.png', width: 40, height: 40, fit: BoxFit.contain),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('NoBox Chat', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, fontFamily: 'Poppins')),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _isSearchMode = true),
+                icon: const Icon(Icons.search, color: Colors.white, size: 27),
+                padding: const EdgeInsets.all(8),
+              ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    onPressed: _showFilterDialog,
+                    icon: const Icon(Icons.filter_alt, color: Colors.white, size: 27),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                  if (_filterOptions.hasActiveFilters)
+                    Positioned(
+                      right: 6, top: 6,
+                      child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white, size: 27),
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (value) async {
+              if (value == 'logout') {
+                _handleLogout();
+              } else if (value == 'debug') {
+                Navigator.of(context).push(MaterialPageRoute(builder: (context) => const WhatsAppDebugScreen()));
+              } else if (value == 'archive') {
+                _navigateToArchive();
+              } else if (value == 'theme') {
+                await ref.read(themeProvider.notifier).toggleTheme();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'theme',
+                child: Row(
+                  children: [
+                    Icon(
+                      isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                      color: isDarkMode ? Colors.white : Colors.black,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      isDarkMode ? 'Light Mode' : 'Dark Mode',
+                      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'archive',
+                child: Row(
+                  children: [
+                    Icon(Icons.archive, color: isDarkMode ? Colors.white : Colors.blue),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Archived Conversation',
+                      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    const Icon(Icons.logout, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Logout',
+                      style: TextStyle(color: isDarkMode ? Colors.red.shade300 : Colors.red),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            padding: const EdgeInsets.all(8),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildSelectionAppBar() {
     final chatState = ref.read(chatProvider);
@@ -846,17 +853,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildTab(String value, String label) {
-    final isSelected = _selectedTab == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _selectTab(value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isSelected ? AppTheme.primaryColor : Colors.transparent, width: 2))),
-          child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary, fontSize: 14)),
+Widget _buildTab(String value, String label) {
+  final isSelected = _selectedTab == value;
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  return Expanded(
+    child: GestureDetector(
+      onTap: () => _selectTab(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? AppTheme.primaryColor : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected 
+              ? AppTheme.primaryColor 
+              : (isDarkMode ? Colors.white : AppTheme.textSecondary),
+            fontSize: 14,
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

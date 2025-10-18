@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/chat_provider.dart';
+import '../../../../core/providers/theme_provider.dart'; // TAMBAHKAN INI
 import '../../../../core/services/api_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/models/chat_models.dart';
@@ -93,6 +94,7 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
 
     return PopScope(
       canPop: !_isSelectionMode,
@@ -102,7 +104,7 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE INI
         appBar:
             _isSelectionMode ? _buildSelectionAppBar() : _buildNormalAppBar(),
         body: Column(
@@ -110,29 +112,46 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
             // Search bar
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE INI
                 border: Border(
-                  bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                  bottom: BorderSide(
+                    color: isDarkMode 
+                      ? Colors.white.withOpacity(0.1) 
+                      : const Color(0xFFE2E8F0), // UPDATE INI
+                    width: 1,
+                  ),
                 ),
               ),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : const Color(0xFFF1F5F9), // UPDATE INI
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextField(
                   controller: _searchController,
-                  decoration: const InputDecoration(
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black, // TAMBAHKAN INI
+                  ),
+                  decoration: InputDecoration(
                     hintText: 'Search conversation',
                     hintStyle: TextStyle(
-                      color: Colors.grey,
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey, // UPDATE INI
                       fontSize: 16,
                     ),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey),
+                    prefixIcon: Icon(
+                      Icons.search, 
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey, // UPDATE INI
+                    ),
                     border: InputBorder.none,
                     contentPadding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   ),
                   onChanged: _handleSearch,
                 ),
@@ -142,31 +161,41 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
             // Archived room list
             Expanded(
               child: chatState.isLoadingArchived
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryColor, // TAMBAHKAN INI
+                      ),
+                    )
                   : chatState.archivedRooms.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 Icons.archive_outlined,
                                 size: 64,
-                                color: AppTheme.textSecondary,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : AppTheme.textSecondary, // UPDATE INI
                               ),
-                              SizedBox(height: 16),
+                              const SizedBox(height: 16),
                               Text(
                                 'No archived conversations',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : AppTheme.textSecondary, // UPDATE INI
                                 ),
                               ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               Text(
                                 'Archived conversations will appear here',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : AppTheme.textSecondary, // UPDATE INI
                                 ),
                               ),
                             ],
@@ -232,6 +261,7 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
                           selectedRoomIds: _selectedRoomIds,
                           onRoomLongPress: _enterSelectionMode,
                           onRoomSelectionToggle: _toggleRoomSelection,
+                          isArchivedList: true, // PENTING: Tambahkan ini
                         ),
             ),
           ],
@@ -242,7 +272,7 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
 
   PreferredSizeWidget _buildNormalAppBar() {
     return AppBar(
-      backgroundColor: AppTheme.primaryColor,
+      backgroundColor: AppTheme.primaryColor, // Tetap biru
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -261,7 +291,7 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
 
   PreferredSizeWidget _buildSelectionAppBar() {
     return AppBar(
-      backgroundColor: AppTheme.primaryColor,
+      backgroundColor: AppTheme.primaryColor, // Tetap biru
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
