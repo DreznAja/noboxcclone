@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:nobox_chat/main.dart';
 import '../app_config.dart';
 import '../models/auth_models.dart';
 import '../models/chat_models.dart';
@@ -48,22 +50,64 @@ class ApiService {
         }
         handler.next(options);
       },
-      onError: (error, handler) async {
-        print('API Error: ${error.message}');
-        
-        // Handle 401 Unauthorized - token expired or invalid
-        if (error.response?.statusCode == 401) {
-          print('🔴 Token expired or invalid - notifying for auto re-login');
-          
-          // Notify listeners that session has expired
-          // Don't clear token here - let the UI handle re-login first
-          _sessionExpiredController.add(null);
-          
-          print('✅ Session expired event emitted');
+onError: (error, handler) async {
+  if (error.response?.statusCode == 401 || error.response?.statusCode == 400) {
+    print('⚠️ Token expired — trying silent re-login...');
+
+    // Ambil username & password terakhir
+    final savedUsername = StorageService.getSetting<String>('last_username');
+    final savedPassword = StorageService.getSetting<String>('last_password');
+
+    if (savedUsername != null && savedPassword != null) {
+      try {
+        // Coba login ulang otomatis
+        final response = await ApiService.login(
+          LoginRequest(username: savedUsername, password: savedPassword),
+        );
+
+        if (!response.isError && response.data != null) {
+          print('✅ Silent re-login successful. Retrying original request...');
+
+          // Simpan token baru
+          await StorageService.saveToken(response.data!);
+
+          // Tambahkan token baru ke header dan ulangi request lama
+          error.requestOptions.headers['Authorization'] =
+              'Bearer ${response.data!}';
+
+          final cloneReq = await _dio!.fetch(error.requestOptions);
+          return handler.resolve(cloneReq);
+        } else {
+          print('❌ Silent re-login failed. User must login manually.');
         }
-        
-        handler.next(error);
-      },
+      } catch (e) {
+        print('❌ Silent re-login exception: $e');
+      }
+    } else {
+      print('⚠️ No saved credentials. Manual login required.');
+    }
+
+    // Kalau semua gagal → fallback ke auto logout
+    await StorageService.clearAll();
+
+    Future.microtask(() {
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sesi kamu telah berakhir. Silakan login ulang.'),
+          ),
+        );
+      }
+    });
+
+    await Future.delayed(const Duration(milliseconds: 300));
+    navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
+    return;
+  }
+
+  handler.next(error);
+},
     ));
   }
 

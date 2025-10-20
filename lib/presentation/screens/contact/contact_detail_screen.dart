@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/models/tag_models.dart' as tag_models;
 import 'package:nobox_chat/core/models/tag_models.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:nobox_chat/presentation/widgets/add_note_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nobox_chat/core/models/contact_detail_models.dart';
@@ -157,6 +158,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   Widget build(BuildContext context) {
     final contactState = ref.watch(contactDetailProvider);
     final tagState = ref.watch(tagProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
     // Listen for errors (suppress for groups as they might not have contact detail API)
     // DISABLED: Don't show error alerts for contact not found - just log it
@@ -178,7 +180,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             backgroundColor: AppTheme.errorColor,
             action: SnackBarAction(
               label: 'Dismiss',
-              textColor: Colors.white,
+              textColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
               onPressed: () {
                 ref.read(tagProvider.notifier).clearError();
               },
@@ -213,20 +215,20 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       }
     });
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        title: Text(
-          widget.isGroup ? 'Extra Panel' : 'Contact Detail',
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+return Scaffold(
+  backgroundColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF8F9FA), // ← UBAH INI
+  appBar: AppBar(
+    backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white, // ← UBAH INI
+    foregroundColor: isDarkMode ? Colors.white : Colors.black, // ← UBAH INI
+    elevation: 0,
+    title: Text(
+      widget.isGroup ? 'Extra Panel' : 'Contact Detail',
+      style: TextStyle(
+        color: isDarkMode ? Colors.white : Colors.black, // ← UBAH INI
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
         // actions: [
         //   IconButton(
         //     icon: const Icon(Icons.close, color: Colors.black),
@@ -271,7 +273,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                         label: const Text('Retry'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white,
+                          foregroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
                         ),
                       ),
                     ],
@@ -351,8 +353,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildGroupNameHeader() {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
@@ -362,11 +366,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             backgroundImage: _isValidImageUrl(widget.contactImage)
                 ? NetworkImage(widget.contactImage!)
                 : null,
-            backgroundColor: Colors.grey.shade200,
+            backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
             child: !_isValidImageUrl(widget.contactImage)
-                ? const Icon(
+                ? Icon(
                     Icons.group,
-                    color: Colors.grey,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                     size: 28,
                   )
                 : null,
@@ -381,19 +385,19 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               children: [
                 Text(
                   widget.contactName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                   ),
                 ),
                 if (widget.groupDescription != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     widget.groupDescription!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey,
+                      color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -408,8 +412,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildContactHeader(ContactDetail contact) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
@@ -419,11 +425,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             backgroundImage: _isValidImageUrl(contact.image)
                 ? NetworkImage(contact.image!)
                 : null,
-            backgroundColor: Colors.grey.shade200,
+            backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
             child: !_isValidImageUrl(contact.image)
                 ? Icon(
                     contact.isGroup ? Icons.group : Icons.person,
-                    color: Colors.grey,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                     size: 28,
                   )
                 : null,
@@ -438,10 +444,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               children: [
                 Text(
                   contact.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                   ),
                 ),
                 if (contact.phone != null) ...[
@@ -456,9 +462,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                       const SizedBox(width: 6),
                       Text(
                         contact.phone!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey,
+                          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                         ),
                       ),
                     ],
@@ -481,21 +487,23 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildConversationHistorySection() {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: ListTile(
-        title: const Text(
+        title: Text(
           'Conversation History',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
-            color: Colors.black,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
           ),
         ),
-        trailing: const Icon(
+        trailing: Icon(
           Icons.arrow_forward_ios,
           size: 16,
-          color: Colors.grey,
+          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
         ),
         onTap: () {
           // Navigate to conversation history screen
@@ -535,8 +543,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildContactSection(ContactDetail contact) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -544,12 +554,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 8),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Contact',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                   ),
                 ),
                 const Spacer(),
@@ -586,11 +596,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Name',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -612,20 +622,22 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildGroupSection(ContactDetail contact) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 12),
             child: Text(
               'Group Info',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Colors.black,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
           ),
@@ -637,11 +649,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Name
-                const Text(
+                Text(
                   'Name',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -658,11 +670,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 // Description
                 if (contact.description != null && contact.description!.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Description',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey,
+                      color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -679,11 +691,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 // External ID
                 if (contact.externalId != null && contact.externalId!.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Group ID',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey,
+                      color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -700,11 +712,11 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                 // Assigned Agents
                 if (contact.agents != null && contact.agents!.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Assigned Agents',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey,
+                      color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -762,6 +774,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     // Get account name from current room
     final chatState = ref.watch(chatProvider);
     String accountName = 'Bot WA'; // Default fallback
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
     
     // Find the current room to get account/bot name
     if (_currentRoomId != null) {
@@ -774,18 +787,18 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     }
     
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 16, top: 16, bottom: 16),
             child: Text(
               'Conversation',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Colors.black,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
           ),
@@ -798,6 +811,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildConversationItem(String title, String value, {bool hasSwitch = false, bool switchValue = false}) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
       child: Row(
@@ -808,9 +822,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Colors.black,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -856,6 +870,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   Widget _buildFunnelSection() {
     final contactState = ref.watch(contactDetailProvider);
     final chatState = ref.watch(chatProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
     
     // Get funnel info from active room if available
     String? currentFunnelName = contactState.funnel?.name;
@@ -869,7 +884,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     }
     
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -877,12 +892,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 16),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Funnel',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                   ),
                 ),
                 const Spacer(),
@@ -909,10 +924,14 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                         key: _funnelKey,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0F8FF),
+                          color: isDarkMode 
+                            ? AppTheme.darkBackground.withOpacity(0.5) 
+                            : const Color(0xFFF0F8FF), // ← UBAH INI
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: const Color(0xFF007AFF).withOpacity(0.3),
+                            color: isDarkMode 
+                              ? Colors.white.withOpacity(0.2) 
+                              : const Color(0xFF007AFF).withOpacity(0.3), // ← UBAH INI JUGA
                             width: 1,
                           ),
                         ),
@@ -921,9 +940,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                             Expanded(
                               child: Text(
                                 currentFunnelName!,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.black,
+                                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -932,10 +951,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                               onTap: currentFunnelId != null ? () => _removeFunnel(widget.contactId) : null,
                               child: Container(
                                 padding: const EdgeInsets.all(4),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.close,
                                   size: 16,
-                                  color: Colors.grey,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                                 ),
                               ),
                             ),
@@ -944,10 +963,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                               onTap: () => _showFunnelDropdown(),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.keyboard_arrow_down,
                                   size: 16,
-                                  color: Colors.grey,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                                 ),
                               ),
                             ),
@@ -958,20 +977,24 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                         key: _funnelKey,
                         onTap: () => _showFunnelDropdown(),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
+  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+  decoration: BoxDecoration(
+    color: isDarkMode ? AppTheme.darkBackground : Colors.grey.shade50, // ← UBAH INI
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(
+      color: isDarkMode 
+        ? Colors.white.withOpacity(0.1) 
+        : Colors.grey.shade300 // ← UBAH INI
+    ),
+  ),
                           child: Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: Text(
                                   'No funnel assigned',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.grey,
+                                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
@@ -997,122 +1020,140 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     );
   }
 
-  Widget _buildMessageTagsSection(tag_models.TagState tagState) {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 16),
-            child: Row(
-              children: [
-                const Text(
-                  'Message Tags',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                  ),
+// Update bagian _buildMessageTagsSection
+Widget _buildMessageTagsSection(tag_models.TagState tagState) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 16),
+          child: Row(
+            children: [
+              Text(
+                'Message Tags',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, color: Colors.blue, size: 20),
-                  onPressed: _showAddTagDialog,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Create new tag',
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.add, color: Colors.blue, size: 20),
-                  onPressed: () => _showTagSelectionDialog(tagState),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Assign tags to contact',
-                ),
-              ],
-            ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, color: Colors.blue, size: 20),
+                onPressed: _showAddTagDialog,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Create new tag',
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.add, color: Colors.blue, size: 20),
+                onPressed: () => _showTagSelectionDialog(tagState),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Assign tags to contact',
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-            child: tagState.isLoadingRoomTags
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                : tagState.roomTags.isNotEmpty
-                    ? Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: tagState.roomTags.map((tag) => _buildTagChip(tag)).toList(),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: const Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'No tags added yet',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+          child: tagState.isLoadingRoomTags
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              : tagState.roomTags.isNotEmpty
+                  ? Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: tagState.roomTags.map((tag) => _buildTagChip(tag)).toList(),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? AppTheme.darkBackground : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDarkMode 
+                            ? Colors.white.withOpacity(0.1) 
+                            : Colors.grey.shade300
                         ),
                       ),
-          ),
-        ],
-      ),
-    );
-  }
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'No tags added yet',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+        ),
+      ],
+    ),
+  );
+}
 
-  Widget _buildTagChip(tag_models.MessageTag tag) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2196F3).withOpacity(0.3)),
+// Update _buildTagChip
+Widget _buildTagChip(tag_models.MessageTag tag) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: isDarkMode 
+        ? const Color(0xFF1976D2).withOpacity(0.3)
+        : const Color(0xFFE3F2FD),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: isDarkMode
+          ? const Color(0xFF1976D2).withOpacity(0.5)
+          : const Color(0xFF2196F3).withOpacity(0.3)
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            tag.name,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF1976D2),
-              fontWeight: FontWeight.w500,
-            ),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          tag.name,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDarkMode ? Colors.white : const Color(0xFF1976D2),
+            fontWeight: FontWeight.w500,
           ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: () => _removeTag(tag),
-            child: const Icon(
-              Icons.close,
-              size: 14,
-              color: Color(0xFF1976D2),
-            ),
+        ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: () => _removeTag(tag),
+          child: Icon(
+            Icons.close,
+            size: 14,
+            color: isDarkMode ? Colors.white : const Color(0xFF1976D2),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildNotesSection(ContactDetailState state) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1120,12 +1161,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 16),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Notes',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                   ),
                 ),
                 const Spacer(),
@@ -1155,14 +1196,14 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.grey.shade300),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         'No notes added yet',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey,
+                          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -1177,6 +1218,8 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
  Widget _buildNoteItem(ContactNote note) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
       child: Row(
@@ -1185,9 +1228,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
           Expanded(
             child: Text(
               note.content,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Colors.black,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
           ),
@@ -1213,8 +1256,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildCampaignSection(ContactCampaign? campaign) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
@@ -1223,12 +1268,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Campaign',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1262,8 +1307,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildDealSection(ContactDeal? deal) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
@@ -1272,12 +1319,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Deal',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1292,9 +1339,9 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '${deal.pipeline ?? ''} ${deal.stage != null ? '• ${deal.stage}' : ''}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey,
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                       ),
                     ),
                   ],
@@ -1321,8 +1368,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
@@ -1331,12 +1380,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Form Template',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1370,13 +1419,15 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   Widget _buildFormResultSection(ContactFormResult? formResult) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1385,7 +1436,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     ),
                   ),
                   SizedBox(height: 4),
@@ -1461,86 +1512,91 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     );
   }
 
-  void _deleteNote(ContactNote note, String contactId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.delete_outline,
-                color: Color(0xFF1976D2),
-                size: 24,
-              ),
+void _deleteNote(ContactNote note, String contactId) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                ? const Color(0xFF1976D2).withOpacity(0.2)
+                : const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 12),
-            const Text(
-              'Delete Note',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Are you sure you want to delete this note? This action cannot be undone.',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.black87,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
+            child: const Icon(
+              Icons.delete_outline,
+              color: Color(0xFF1976D2),
+              size: 24,
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              ref.read(contactDetailProvider.notifier).deleteNote(note.id, contactId);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Note deleted successfully'),
-                  backgroundColor: AppTheme.successColor,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              'Delete',
-              style: TextStyle(fontWeight: FontWeight.w600),
+          const SizedBox(width: 12),
+          Text(
+            'Delete Note',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
             ),
           ),
         ],
       ),
-    );
-  }
+      content: Text(
+        'Are you sure you want to delete this note? This action cannot be undone.',
+        style: TextStyle(
+          fontSize: 14,
+          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black87,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            ref.read(contactDetailProvider.notifier).deleteNote(note.id, contactId);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Note deleted successfully'),
+                backgroundColor: AppTheme.successColor,
+              ),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1976D2),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: const Text(
+            'Delete',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   void _showFunnelDialog() {
     showDialog(
@@ -1570,147 +1626,154 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       ),
     );
   }
+  
+void _showFunnelDropdown() {
+  final contactState = ref.read(contactDetailProvider);
+  final isDarkMode = ref.read(themeProvider).isDarkMode;
 
-  void _showFunnelDropdown() {
-    final contactState = ref.read(contactDetailProvider);
+  if (contactState.availableFunnels.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No funnels available. Please create funnels first.'),
+        backgroundColor: AppTheme.warningColor,
+      ),
+    );
+    return;
+  }
 
-    if (contactState.availableFunnels.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No funnels available. Please create funnels first.'),
-          backgroundColor: AppTheme.warningColor,
-        ),
-      );
-      return;
-    }
+  final RenderBox renderBox = _funnelKey.currentContext!.findRenderObject() as RenderBox;
+  final position = renderBox.localToGlobal(Offset.zero);
+  final size = renderBox.size;
 
-    final RenderBox renderBox = _funnelKey.currentContext!.findRenderObject() as RenderBox;
-    final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
-
-    _funnelOverlayEntry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          GestureDetector(
-            onTap: _removeFunnelOverlay,
-            child: Container(
-              color: Colors.transparent,
-              width: double.infinity,
-              height: double.infinity,
-            ),
+  _funnelOverlayEntry = OverlayEntry(
+    builder: (context) => Stack(
+      children: [
+        GestureDetector(
+          onTap: _removeFunnelOverlay,
+          child: Container(
+            color: Colors.transparent,
+            width: double.infinity,
+            height: double.infinity,
           ),
-          Positioned(
-            left: position.dx,
-            top: position.dy + size.height + 4,
-            width: size.width,
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 250),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: ListView.builder(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: contactState.availableFunnels.length,
-                  itemBuilder: (context, index) {
-                    final funnel = contactState.availableFunnels[index];
-                    final isSelected = funnel.id == contactState.funnel?.id;
+        ),
+        Positioned(
+          left: position.dx,
+          top: position.dy + size.height + 4,
+          width: size.width,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 250),
+              decoration: BoxDecoration(
+                color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: contactState.availableFunnels.length,
+                itemBuilder: (context, index) {
+                  final funnel = contactState.availableFunnels[index];
+                  final isSelected = funnel.id == contactState.funnel?.id;
 
-                    return InkWell(
-                      onTap: () async {
-                        _removeFunnelOverlay();
-                        if (_currentRoomId != null) {
-                          final success = await ref.read(contactDetailProvider.notifier).assignFunnel(_currentRoomId!, funnel.id);
+                  return InkWell(
+                    onTap: () async {
+                      _removeFunnelOverlay();
+                      if (_currentRoomId != null) {
+                        final success = await ref.read(contactDetailProvider.notifier).assignFunnel(_currentRoomId!, funnel.id);
 
-                          if (success) {
-                            // Provider already updates state, no need to reload
-                            // Just reload rooms to sync with web
-                            await ref.read(chatProvider.notifier).loadRooms();
-                            print('🔄 Reloaded rooms after funnel assignment');
+                        if (success) {
+                          await ref.read(chatProvider.notifier).loadRooms();
+                          print('🔄 Reloaded rooms after funnel assignment');
 
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Funnel "${funnel.name}" assigned successfully'),
-                                  backgroundColor: AppTheme.successColor,
-                                ),
-                              );
-                            }
-                          } else {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Funnel assignment is only available via web dashboard'),
-                                  backgroundColor: AppTheme.warningColor,
-                                  duration: Duration(seconds: 4),
-                                ),
-                              );
-                            }
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Funnel "${funnel.name}" assigned successfully'),
+                                backgroundColor: AppTheme.successColor,
+                              ),
+                            );
                           }
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Room ID not found. Please try again.'),
-                              backgroundColor: AppTheme.errorColor,
-                            ),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Funnel assignment is only available via web dashboard'),
+                                backgroundColor: AppTheme.warningColor,
+                                duration: Duration(seconds: 4),
+                              ),
+                            );
+                          }
                         }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFF0F8FF) : Colors.white,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.grey.shade200,
-                              width: index < contactState.availableFunnels.length - 1 ? 1 : 0,
-                            ),
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Room ID not found. Please try again.'),
+                            backgroundColor: AppTheme.errorColor,
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected 
+                          ? (isDarkMode 
+                              ? AppTheme.primaryColor.withOpacity(0.2) 
+                              : const Color(0xFFF0F8FF))
+                          : (isDarkMode ? AppTheme.darkSurface : Colors.white),
+                        border: Border(
+                          bottom: BorderSide(
+                            color: isDarkMode 
+                              ? Colors.white.withOpacity(0.1) 
+                              : Colors.grey.shade200,
+                            width: index < contactState.availableFunnels.length - 1 ? 1 : 0,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                funnel.name,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: isSelected ? const Color(0xFF007AFF) : Colors.black,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              funnel.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isSelected 
+                                  ? (isDarkMode ? Colors.white : const Color(0xFF007AFF))
+                                  : (isDarkMode ? AppTheme.darkTextPrimary : Colors.black),
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                               ),
                             ),
-                            if (isSelected)
-                              const Icon(
-                                Icons.check,
-                                size: 18,
-                                color: Color(0xFF007AFF),
-                              ),
-                          ],
-                        ),
+                          ),
+                          if (isSelected)
+                            Icon(
+                              Icons.check,
+                              size: 18,
+                              color: isDarkMode ? Colors.white : const Color(0xFF007AFF),
+                            ),
+                        ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
-        ],
-      ),
-    );
+        ),
+      ],
+    ),
+  );
 
-    Overlay.of(context).insert(_funnelOverlayEntry!);
-  }
+  Overlay.of(context).insert(_funnelOverlayEntry!);
+}
 
   void _removeFunnelOverlay() {
     _funnelOverlayEntry?.remove();
@@ -1736,12 +1799,13 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
 
     final isCurrentlyBlocked = contact.isBlocked;
     final action = isCurrentlyBlocked ? 'Unblock' : 'Block';
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
     
     // Show confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -1782,10 +1846,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
-            child: const Text(
+            child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.grey,
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1794,7 +1858,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
+              foregroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -1939,6 +2003,8 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   }
 
   void _removeFunnel(String contactId) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     // Use roomId instead of contactId
     if (_currentRoomId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1953,7 +2019,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -1992,10 +2058,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
-            child: const Text(
+            child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.grey,
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -2031,7 +2097,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
+              foregroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -2134,6 +2200,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   void _removeTag(tag_models.MessageTag tag) {
     // Find the correct room ID for this contact
     final chatState = ref.read(chatProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
     String roomIdToUse = widget.contactId;
     
     // Look for a room that matches this contact
@@ -2149,7 +2216,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -2190,10 +2257,10 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
-            child: const Text(
+            child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.grey,
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -2227,7 +2294,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
+              foregroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               elevation: 0,
               shape: RoundedRectangleBorder(

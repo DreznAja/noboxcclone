@@ -39,17 +39,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _checkAuthStatus();
   }
 
-  void _checkAuthStatus() {
-    final token = StorageService.getToken();
-    final userData = StorageService.getUserData();
-    
-    if (token != null && userData != null) {
-      state = state.copyWith(
-        isAuthenticated: true,
-        userData: UserData.fromJson(userData),
-      );
+void _checkAuthStatus() async {
+  final token = StorageService.getToken();
+  final userData = StorageService.getUserData();
+
+  if (token != null && userData != null) {
+    state = state.copyWith(
+      isAuthenticated: true,
+      userData: UserData.fromJson(userData),
+    );
+  } else {
+    // 🚀 Kalau token kosong tapi ada username/password tersimpan → auto login
+    final savedUsername = StorageService.getSetting<String>('last_username');
+    final savedPassword = StorageService.getSetting<String>('last_password');
+
+    if (savedUsername != null && savedPassword != null) {
+      print('🔁 Attempting silent login...');
+      await login(savedUsername, savedPassword);
     }
   }
+}
+
 
   Future<bool> login(String username, String password, {bool saveCredentials = true}) async {
     state = state.copyWith(isLoading: true, error: null);

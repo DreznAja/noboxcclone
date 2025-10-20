@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import '../../core/models/contact_detail_models.dart';
 import '../../core/theme/app_theme.dart';
 
-class FunnelSelectionDialog extends StatefulWidget {
+class FunnelSelectionDialog extends ConsumerStatefulWidget {
   final List<ContactFunnel> availableFunnels;
   final ContactFunnel? currentFunnel;
   final Function(String funnelId) onFunnelSelected;
@@ -15,10 +17,10 @@ class FunnelSelectionDialog extends StatefulWidget {
   });
 
   @override
-  State<FunnelSelectionDialog> createState() => _FunnelSelectionDialogState();
+  ConsumerState<FunnelSelectionDialog> createState() => _FunnelSelectionDialogState();
 }
 
-class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
+class _FunnelSelectionDialogState extends ConsumerState<FunnelSelectionDialog> {
   String? _selectedFunnelId;
   final TextEditingController _searchController = TextEditingController();
   List<ContactFunnel> _filteredFunnels = [];
@@ -60,6 +62,8 @@ class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -69,7 +73,7 @@ class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
         height: MediaQuery.of(context).size.height * 0.7,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? AppTheme.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -83,7 +87,7 @@ class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.primaryColor,
                   ),
                 ),
                 IconButton(
@@ -98,30 +102,38 @@ class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
             const SizedBox(height: 16),
 
             // Search bar
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Search funnels...',
-                  hintStyle: TextStyle(color: Colors.grey),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-            ),
+Container(
+  decoration: BoxDecoration(
+    color: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF1F5F9), // ← UBAH INI
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(
+      color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.shade300 // ← UBAH INI
+    ),
+  ),
+  child: TextField(
+    controller: _searchController,
+    style: TextStyle(color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black), // ← TAMBAHKAN INI
+    decoration: InputDecoration(
+      hintText: 'Search funnels...',
+      hintStyle: TextStyle(
+        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey // ← UBAH INI
+      ),
+      prefixIcon: Icon(
+        Icons.search, 
+        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey // ← UBAH INI
+      ),
+      border: InputBorder.none,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ),
+  ),
+),
 
             const SizedBox(height: 16),
 
             // Funnel list
             Expanded(
               child: _filteredFunnels.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -135,7 +147,7 @@ class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
                             'No funnels found',
                             style: TextStyle(
                               fontSize: 16,
-                              color: AppTheme.textSecondary,
+                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                             ),
                           ),
                         ],
@@ -227,14 +239,16 @@ class _FunnelSelectionDialogState extends State<FunnelSelectionDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryColor,
-                      side: BorderSide(color: AppTheme.primaryColor),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
+  onPressed: () => Navigator.of(context).pop(),
+  style: OutlinedButton.styleFrom(
+    foregroundColor: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.primaryColor, // ← UBAH INI
+    side: BorderSide(
+      color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.primaryColor // ← UBAH INI
+    ),
+    padding: const EdgeInsets.symmetric(vertical: 12),
+  ),
+  child: const Text('Cancel'),
+),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

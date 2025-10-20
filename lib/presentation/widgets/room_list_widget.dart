@@ -239,192 +239,190 @@ class _RoomListItem extends ConsumerWidget {
     required this.onLongPress,
   });
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
-    
-    return Container(
-      color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : null,
-      child: Column(
-        children: [
-          // Top separator line
-          Container(
-            height: 0.5,
-            color: isDarkMode 
-              ? Colors.white.withOpacity(0.1)
-              : Colors.grey.shade300,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-          ),
-          
-          InkWell(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: isSelectedForAction ? AppTheme.primaryColor.withOpacity(0.1) : null,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar atau Selection checkbox
-                  _buildAvatarOrCheckbox(isDarkMode),
-                  
-                  const SizedBox(width: 12),
-                  
-                  // Content area
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // First row: Name, Mute Bot Icon, Time, Pin
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      room.name,
-                                      style: TextStyle(
-                                        fontWeight: room.unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
-                                        fontSize: 16,
-                                        color: isDarkMode ? Colors.white : Colors.black,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  // Muted AI Agent icon
-                                  if (room.isMuteBot) ...[
-                                    const SizedBox(width: 6),
-                                    const Icon(
-                                      Icons.smart_toy,
-                                      size: 16,
-                                      color: Colors.red,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            
-                            // Time
-                            if (room.lastMessageTime != null)
-                              Text(
-                                _formatMessageTime(room.lastMessageTime!),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                                ),
-                              ),
-                            
-                            // Pin icon
-                            if (room.isPinned) ...[
-                              const SizedBox(width: 6),
-                              const Icon(
-                                Icons.push_pin,
-                                size: 16,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ],
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 3),
+// REPLACE bagian separator dan InkWell di _RoomListItem dengan ini:
 
-                        // Second row: Last message, Badge count
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                child: Text(
-                                  room.lastMessage ?? 'No messages',
-                                  style: TextStyle(
-                                    // Need Reply ON → Merah (selalu)
-                                    // Need Reply OFF → Putih (dark) / Hitam (light) jika unread, Abu-abu jika read
-                                    color: room.needReply
-                                        ? Colors.red
-                                        : room.unreadCount > 0
-                                            ? (isDarkMode ? Colors.white : Colors.black)
-                                            : (isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
-                                    fontWeight: room.needReply || room.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
-                                    fontSize: 14,
+@override
+Widget build(BuildContext context, WidgetRef ref) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  return Container(
+    color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : null,
+    child: Column(
+      children: [
+        // Top separator line - HAPUS margin untuk full width
+        Container(
+          height: 0.5,
+          color: isDarkMode 
+            ? Colors.white.withOpacity(0.1)
+            : Colors.grey.shade300,
+        ),
+        
+        InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: isSelectedForAction ? AppTheme.primaryColor.withOpacity(0.1) : null,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar atau Selection checkbox
+                _buildAvatarOrCheckbox(isDarkMode),
+                
+                const SizedBox(width: 12),
+                
+                // Content area (tetap sama)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // First row: Name, Mute Bot Icon, Time, Pin
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    room.name,
+                                    style: TextStyle(
+                                      fontWeight: room.unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
+                                      fontSize: 16,
+                                      color: isDarkMode ? Colors.white : Colors.black,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                // Muted AI Agent icon
+                                if (room.isMuteBot) ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.smart_toy,
+                                    size: 16,
+                                    color: Colors.red,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          
+                          // Time
+                          if (room.lastMessageTime != null)
+                            Text(
+                              _formatMessageTime(room.lastMessageTime!),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                               ),
                             ),
-                            
-                            // Badge count
-                            if (room.unreadCount > 0)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  room.unreadCount > 99 ? '99+' : room.unreadCount.toString(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 3),
-                        
-                        // Tags and Funnel row
-                        if (room.tags.isNotEmpty || room.funnel != null) ...[
-                          _buildTagsAndFunnelRow(room, isDarkMode),
-                          const SizedBox(height: 3),
-                        ],
-                        
-                        // Bot name and Status chip row
-                        Row(
-                          children: [
-                            _getChannelIcon(room.channelId),
+                          
+                          // Pin icon
+                          if (room.isPinned) ...[
                             const SizedBox(width: 6),
-                            Expanded(
+                            const Icon(
+                              Icons.push_pin,
+                              size: 16,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ],
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 3),
+
+                      // Second row: Last message, Badge count
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
                               child: Text(
-                                _getBotName(room),
+                                room.lastMessage ?? 'No messages',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                                  fontWeight: FontWeight.w500,
+                                  color: room.needReply
+                                      ? Colors.red
+                                      : room.unreadCount > 0
+                                          ? (isDarkMode ? Colors.white : Colors.black)
+                                          : (isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                                  fontWeight: room.needReply || room.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                                  fontSize: 14,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _getStatusChip(isArchivedList ? 4 : room.status),
-                          ],
-                        ),
+                          ),
+                          
+                          // Badge count
+                          if (room.unreadCount > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                room.unreadCount > 99 ? '99+' : room.unreadCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 3),
+                      
+                      // Tags and Funnel row
+                      if (room.tags.isNotEmpty || room.funnel != null) ...[
+                        _buildTagsAndFunnelRow(room, isDarkMode),
+                        const SizedBox(height: 3),
                       ],
-                    ),
+                      
+                      // Bot name and Status chip row
+                      Row(
+                        children: [
+                          _getChannelIcon(room.channelId),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _getBotName(room),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _getStatusChip(isArchivedList ? 4 : room.status),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          
-          // Bottom separator line
-          Container(
-            height: 0.5,
-            color: isDarkMode 
-              ? Colors.white.withOpacity(0.1)
-              : Colors.grey.shade300,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        
+        // Bottom separator line - HAPUS margin untuk full width
+        Container(
+          height: 0.5,
+          color: isDarkMode 
+            ? Colors.white.withOpacity(0.1)
+            : Colors.grey.shade300,
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildAvatarOrCheckbox(bool isDarkMode) {
     if (isSelectionMode) {

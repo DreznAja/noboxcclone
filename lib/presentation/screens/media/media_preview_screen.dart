@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart'; // TAMBAHKAN INI
 import 'package:nobox_chat/presentation/screens/media/video_player_screen.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -30,7 +31,6 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto focus on caption input for better UX
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _captionFocusNode.requestFocus();
     });
@@ -64,12 +64,10 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
     });
 
     try {
-      // Convert file to base64
       final bytes = await widget.mediaFile.readAsBytes();
       final base64Data = base64Encode(bytes);
       final filename = widget.mediaFile.path.split('/').last;
 
-      // Return the data to the previous screen
       Navigator.of(context).pop({
         'type': _getMediaTypeString(),
         'base64Data': base64Data,
@@ -91,16 +89,16 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
     }
   }
 
-  Widget _buildMediaPreview() {
+  Widget _buildMediaPreview(bool isDarkMode) { // TAMBAHKAN PARAMETER
     switch (widget.mediaType) {
       case 'image':
         return _buildImagePreview();
       case 'video':
         return _buildVideoPreview();
       case 'document':
-        return _buildDocumentPreview();
+        return _buildDocumentPreview(isDarkMode); // PASS PARAMETER
       default:
-        return _buildDocumentPreview();
+        return _buildDocumentPreview(isDarkMode); // PASS PARAMETER
     }
   }
 
@@ -123,7 +121,6 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
   Widget _buildVideoPreview() {
     return GestureDetector(
       onTap: () {
-        // Preview the video before sending
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => VideoPlayerScreen(
@@ -149,7 +146,6 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Play button
             Container(
               width: 80,
               height: 80,
@@ -163,8 +159,6 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
                 color: Colors.white,
               ),
             ),
-            
-            // Video info
             Positioned(
               bottom: 16,
               left: 16,
@@ -191,8 +185,6 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
                 ),
               ),
             ),
-            
-            // Tap to preview hint
             Positioned(
               bottom: 16,
               right: 16,
@@ -217,7 +209,7 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
     );
   }
 
-  Widget _buildDocumentPreview() {
+  Widget _buildDocumentPreview(bool isDarkMode) { // TAMBAHKAN PARAMETER
     final filename = widget.mediaFile.path.split('/').last;
     final fileSize = widget.mediaFile.lengthSync();
     final fileSizeText = MediaService.formatFileSize(fileSize);
@@ -225,9 +217,13 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
     return Container(
       padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.neutralLight,
+        color: isDarkMode ? AppTheme.darkSurface : AppTheme.neutralLight, // UPDATE
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(
+          color: isDarkMode 
+            ? Colors.white.withOpacity(0.1) 
+            : Colors.grey.shade300, // UPDATE
+        ),
       ),
       child: Row(
         children: [
@@ -254,7 +250,9 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.textPrimary, // UPDATE
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -264,7 +262,9 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
                   fileSizeText,
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppTheme.textSecondary,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextSecondary 
+                      : AppTheme.textSecondary, // UPDATE
                   ),
                 ),
               ],
@@ -299,8 +299,10 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
+    
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.black, // Tetap hitam untuk media preview
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
@@ -330,14 +332,14 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
               width: double.infinity,
               padding: EdgeInsets.all(16),
               child: Center(
-                child: _buildMediaPreview(),
+                child: _buildMediaPreview(isDarkMode), // PASS PARAMETER
               ),
             ),
           ),
           
           // Caption Input and Send Button
           Container(
-            color: Colors.white,
+            color: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE
             padding: EdgeInsets.only(
               left: 16,
               right: 16,
@@ -346,41 +348,54 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
             ),
             child: Column(
               children: [
-                // Caption Input
-                Container(
-                  decoration: BoxDecoration(
-                    color: Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: Colors.grey.shade300,
-                      width: 1,
-                    ),
+                // Caption Input - FIXED: Gunakan border di InputDecoration
+                TextField(
+                  controller: _captionController,
+                  focusNode: _captionFocusNode,
+                  maxLines: 4,
+                  minLines: 1,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.textPrimary, // UPDATE
                   ),
-                  child: TextField(
-                    controller: _captionController,
-                    focusNode: _captionFocusNode,
-                    maxLines: 4,
-                    minLines: 1,
-                    style: TextStyle(
+                  decoration: InputDecoration(
+                    hintText: widget.mediaType == 'document' 
+                        ? 'Add a message...'
+                        : 'Add a caption...',
+                    hintStyle: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : AppTheme.textSecondary, // UPDATE
                       fontSize: 16,
-                      color: AppTheme.textPrimary,
                     ),
-                    decoration: InputDecoration(
-                      hintText: widget.mediaType == 'document' 
-                          ? 'Add a message...'
-                          : 'Add a caption...',
-                      hintStyle: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 16,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
+                    filled: true,
+                    fillColor: isDarkMode 
+                      ? AppTheme.darkSurface 
+                      : Color(0xFFF1F5F9), // UPDATE
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(
+                        color: isDarkMode 
+                          ? Colors.white.withOpacity(0.1) 
+                          : Colors.grey.shade300, // UPDATE
+                        width: 1,
                       ),
                     ),
-                    textInputAction: TextInputAction.newline,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(
+                        color: AppTheme.primaryColor,
+                        width: 2,
+                      ),
+                    ),
                   ),
+                  textInputAction: TextInputAction.newline,
                 ),
                 
                 SizedBox(height: 16),

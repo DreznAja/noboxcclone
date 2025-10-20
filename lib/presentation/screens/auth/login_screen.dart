@@ -86,23 +86,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
+// TIDAK ADA PERUBAHAN DI IMPORT - Tetap seperti original
+// TIDAK PERLU import theme_provider karena login screen tidak pakai dark mode
 
-    ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-        ref.read(authProvider.notifier).clearError();
-      }
-    });
+@override
+Widget build(BuildContext context) {
+  final authState = ref.watch(authProvider);
 
-    return Scaffold(
+  ref.listen<AuthState>(authProvider, (previous, next) {
+    if (next.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(next.error!),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      ref.read(authProvider.notifier).clearError();
+    }
+  });
+
+  // WRAP DENGAN THEME UNTUK FORCE LIGHT MODE
+  return Theme(
+    data: ThemeData.light().copyWith(
+      scaffoldBackgroundColor: Colors.white,
+      // Force input decoration theme to light
+      inputDecorationTheme: const InputDecorationTheme(
+        fillColor: Colors.white,
+        filled: false,
+      ),
+      // Force text theme to dark colors
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: Color(0xFF1A1A1A)),
+        bodyMedium: TextStyle(color: Color(0xFF1A1A1A)),
+      ),
+    ),
+    child: Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
@@ -113,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo from assets
+                  // Logo
                   Image.asset(
                     'assets/nobox2.png',
                     width: 120,
@@ -123,7 +141,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   
                   const SizedBox(height: 40),
                   
-                  // Title with enhanced typography
+                  // Title
                   const Text(
                     'NoBoxChat',
                     style: TextStyle(
@@ -147,158 +165,182 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   
                   const SizedBox(height: 32),
                   
-                  // Username field with enhanced styling
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Username',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.grey.withOpacity(0.2),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: TextFormField(
-                          controller: _usernameController,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFF1A1A1A),
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: 'Enter your username',
-                            hintStyle: TextStyle(
-                              color: Color(0xFF999999),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.person_outline_rounded,
-                              color: Color(0xFF666666),
-                              size: 22,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 20,
-                            ),
-                          ),
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.next,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Username is required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Password field with enhanced styling
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Password',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.grey.withOpacity(0.2),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFF1A1A1A),
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Enter your password',
-                            hintStyle: const TextStyle(
-                              color: Color(0xFF999999),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.lock_outline_rounded,
-                              color: Color(0xFF666666),
-                              size: 22,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                                color: const Color(0xFF666666),
-                                size: 22,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 20,
-                            ),
-                          ),
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _handleLogin(),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Password is required';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Username field - FIXED ROUNDED CORNERS
+Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    const Text(
+      'Username',
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF1A1A1A),
+      ),
+    ),
+    const SizedBox(height: 8),
+    TextFormField(
+      controller: _usernameController,
+      style: const TextStyle(
+        fontSize: 16,
+        color: Color(0xFF1A1A1A),
+      ),
+      decoration: InputDecoration(
+        hintText: 'Enter your username',
+        hintStyle: const TextStyle(
+          color: Color(0xFF999999),
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+        ),
+        prefixIcon: const Icon(
+          Icons.person_outline_rounded,
+          color: Color(0xFF666666),
+          size: 22,
+        ),
+        fillColor: Colors.white,
+        filled: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 20,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Colors.grey.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Color(0xFF007AFF),
+            width: 2,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 1,
+          ),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 2,
+          ),
+        ),
+      ),
+      keyboardType: TextInputType.text,
+      textInputAction: TextInputAction.next,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Username is required';
+        }
+        return null;
+      },
+    ),
+  ],
+),
+
+const SizedBox(height: 20),
+
+// Password field - FIXED ROUNDED CORNERS
+Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    const Text(
+      'Password',
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF1A1A1A),
+      ),
+    ),
+    const SizedBox(height: 8),
+    TextFormField(
+      controller: _passwordController,
+      obscureText: _obscurePassword,
+      style: const TextStyle(
+        fontSize: 16,
+        color: Color(0xFF1A1A1A),
+      ),
+      decoration: InputDecoration(
+        hintText: 'Enter your password',
+        hintStyle: const TextStyle(
+          color: Color(0xFF999999),
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+        ),
+        prefixIcon: const Icon(
+          Icons.lock_outline_rounded,
+          color: Color(0xFF666666),
+          size: 22,
+        ),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscurePassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+            color: const Color(0xFF666666),
+            size: 22,
+          ),
+          onPressed: () {
+            setState(() {
+              _obscurePassword = !_obscurePassword;
+            });
+          },
+        ),
+        fillColor: Colors.white,
+        filled: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 20,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Colors.grey.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Color(0xFF007AFF),
+            width: 2,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 1,
+          ),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 2,
+          ),
+        ),
+      ),
+      textInputAction: TextInputAction.done,
+      onFieldSubmitted: (_) => _handleLogin(),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Password is required';
+        }
+        return null;
+      },
+    ),
+  ],
+),
                   
                   const SizedBox(height: 32),
                   
-                  // Enhanced Login Button
+                  // Login Button
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -342,7 +384,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   
                   const SizedBox(height: 40),
                   
-                  // Footer - Keep the original "Powered by Nobox"
+                  // Footer
                   const Text(
                     'Powered by Nobox',
                     textAlign: TextAlign.center,
@@ -357,6 +399,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

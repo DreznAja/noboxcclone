@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart'; // TAMBAHKAN IMPORT INI
 import '../../core/models/filter_models.dart';
 import '../../core/services/filter_api_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -90,6 +91,8 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
+    
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -99,7 +102,7 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
         height: MediaQuery.of(context).size.height * 0.8,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -113,12 +116,19 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor, // UPDATE
                   ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(Icons.close, color: AppTheme.primaryColor),
+                  icon: Icon(
+                    Icons.close, 
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor, // UPDATE
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -152,10 +162,20 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                     });
                     print('Filters reset');
                   },
-                  child: const Text('Reset'),
+                  child: Text(
+                    'Reset',
+                    style: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : AppTheme.primaryColor, // UPDATE
+                    ),
+                  ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primaryColor,
-                    side: BorderSide(color: AppTheme.primaryColor),
+                    side: BorderSide(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : AppTheme.primaryColor, // UPDATE
+                    ),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                 ),
@@ -168,124 +188,138 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
             // Filter options
             Expanded(
               child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              // Status
-                              _buildDropdownField(
-                                'Status',
-                                _filters.status,
-                                ['Assigned', 'Unassigned', 'Resolved'],
-                                (value) => setState(() => _filters.status = value),
-                              ),
+                child: Column(
+                  children: [
+                    // Status
+                    _buildDropdownField(
+                      'Status',
+                      _filters.status,
+                      ['Assigned', 'Unassigned', 'Resolved'],
+                      (value) => setState(() => _filters.status = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
 
-                              // Is Mute AI Agent
-                              _buildDropdownField(
-                                'Is Mute Ai Agent',
-                                _filters.isMuteAiAgent,
-                                ['Active', 'Inactive'],
-                                (value) => setState(() => _filters.isMuteAiAgent = value),
-                              ),
+                    // Is Mute AI Agent
+                    _buildDropdownField(
+                      'Is Mute Ai Agent',
+                      _filters.isMuteAiAgent,
+                      ['Active', 'Inactive'],
+                      (value) => setState(() => _filters.isMuteAiAgent = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
 
-                              // Read Status
-                              _buildDropdownField(
-                                'Read Status',
-                                _filters.readStatus,
-                                ['Is Read', 'Unread'],
-                                (value) => setState(() => _filters.readStatus = value),
-                              ),
+                    // Read Status
+                    _buildDropdownField(
+                      'Read Status',
+                      _filters.readStatus,
+                      ['Is Read', 'Unread'],
+                      (value) => setState(() => _filters.readStatus = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
 
-                              // Channel
-                              _buildApiDropdownField(
-                                'Channel',
-                                _filters.channelId,
-                                _channels,
-                                (value) => setState(() => _filters.channelId = value),
-                              ),
+                    // Channel
+                    _buildApiDropdownField(
+                      'Channel',
+                      _filters.channelId,
+                      _channels,
+                      (value) => setState(() => _filters.channelId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
 
-                              // Chat
-                              _buildDropdownField(
-                                'Chat',
-                                _filters.chatType,
-                                ['Private', 'Group'],
-                                (value) => setState(() => _filters.chatType = value),
-                              ),
+                    // Chat
+                    _buildDropdownField(
+                      'Chat',
+                      _filters.chatType,
+                      ['Private', 'Group'],
+                      (value) => setState(() => _filters.chatType = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
 
-              // Account - Uses Account ID
-              _buildApiDropdownField(
-                'Account',
-                _filters.accountId,
-                _accounts,
-                (value) => setState(() => _filters.accountId = value),
+                    // Account
+                    _buildApiDropdownField(
+                      'Account',
+                      _filters.accountId,
+                      _accounts,
+                      (value) => setState(() => _filters.accountId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Contact
+                    _buildApiDropdownField(
+                      'Contact',
+                      _filters.contactId,
+                      _contacts,
+                      (value) => setState(() => _filters.contactId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Link
+                    _buildApiDropdownField(
+                      'Link',
+                      _filters.linkId,
+                      _links,
+                      (value) => setState(() => _filters.linkId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Group
+                    _buildApiDropdownField(
+                      'Group',
+                      _filters.groupId,
+                      _groups,
+                      (value) => setState(() => _filters.groupId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Campaign
+                    _buildApiDropdownField(
+                      'Campaign',
+                      _filters.campaignId,
+                      _campaigns,
+                      (value) => setState(() => _filters.campaignId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Funnel
+                    _buildApiDropdownField(
+                      'Funnel',
+                      _filters.funnelId,
+                      _funnels,
+                      (value) => setState(() => _filters.funnelId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Deal
+                    _buildApiDropdownField(
+                      'Deal',
+                      _filters.dealId,
+                      _deals,
+                      (value) => setState(() => _filters.dealId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Tags
+                    _buildApiDropdownField(
+                      'Tags',
+                      _filters.tagId,
+                      _tags,
+                      (value) => setState(() => _filters.tagId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    // Human Agents
+                    _buildApiDropdownField(
+                      'Human Agents',
+                      _filters.humanAgentId,
+                      _humanAgents,
+                      (value) => setState(() => _filters.humanAgentId = value),
+                      isDarkMode: isDarkMode, // TAMBAHKAN
+                    ),
+
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
-
-                              // Contact
-                              _buildApiDropdownField(
-                                'Contact',
-                                _filters.contactId,
-                                _contacts,
-                                (value) => setState(() => _filters.contactId = value),
-                              ),
-
-                              // Link
-                              _buildApiDropdownField(
-                                'Link',
-                                _filters.linkId,
-                                _links,
-                                (value) => setState(() => _filters.linkId = value),
-                              ),
-
-                              // Group
-                              _buildApiDropdownField(
-                                'Group',
-                                _filters.groupId,
-                                _groups,
-                                (value) => setState(() => _filters.groupId = value),
-                              ),
-
-                              // Campaign
-                              _buildApiDropdownField(
-                                'Campaign',
-                                _filters.campaignId,
-                                _campaigns,
-                                (value) => setState(() => _filters.campaignId = value),
-                              ),
-
-                              // Funnel
-                              _buildApiDropdownField(
-                                'Funnel',
-                                _filters.funnelId,
-                                _funnels,
-                                (value) => setState(() => _filters.funnelId = value),
-                              ),
-
-                              // Deal
-                              _buildApiDropdownField(
-                                'Deal',
-                                _filters.dealId,
-                                _deals,
-                                (value) => setState(() => _filters.dealId = value),
-                              ),
-
-                              // Tags
-                              _buildApiDropdownField(
-                                'Tags',
-                                _filters.tagId,
-                                _tags,
-                                (value) => setState(() => _filters.tagId = value),
-                              ),
-
-                              // Human Agents
-                              _buildApiDropdownField(
-                                'Human Agents',
-                                _filters.humanAgentId,
-                                _humanAgents,
-                                (value) => setState(() => _filters.humanAgentId = value),
-                              ),
-
-                              const SizedBox(height: 20),
-                            ],
-                          ),
-                        ),
             ),
           ],
         ),
@@ -297,8 +331,9 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     String label,
     String? value,
     List<String> options,
-    Function(String?) onChanged,
-  ) {
+    Function(String?) onChanged, {
+    required bool isDarkMode, // TAMBAHKAN
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -307,10 +342,10 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.black,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
               ),
             ),
           ),
@@ -318,41 +353,53 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
+                color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE
+                border: Border.all(
+                  color: isDarkMode 
+                    ? Colors.grey.shade700 
+                    : Colors.grey.shade300, // UPDATE
+                ),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  canvasColor: Colors.white, // Background dropdown menu
+              child: DropdownButton<String>(
+                value: value,
+                hint: Text(
+                  '--select--',
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextSecondary 
+                      : Colors.grey, // UPDATE
+                  ),
                 ),
-                child: DropdownButton<String>(
-                  value: value,
-                  hint: const Text(
-                    '--select--',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  iconEnabledColor: Colors.black,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 14,
-                  ),
-                  items: options.map((String option) {
-                    return DropdownMenuItem<String>(
-                      value: option,
-                      child: Text(
-                        option,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 14,
-                        ),
+                isExpanded: true,
+                underline: const SizedBox(),
+                iconEnabledColor: isDarkMode 
+                  ? AppTheme.darkTextPrimary 
+                  : Colors.black, // UPDATE
+                style: TextStyle(
+                  color: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : Colors.black, // UPDATE
+                  fontSize: 14,
+                ),
+                dropdownColor: isDarkMode 
+                  ? AppTheme.darkSurface 
+                  : Colors.white, // TAMBAHKAN
+                items: options.map((String option) {
+                  return DropdownMenuItem<String>(
+                    value: option,
+                    child: Text(
+                      option,
+                      style: TextStyle(
+                        color: isDarkMode 
+                          ? AppTheme.darkTextPrimary 
+                          : Colors.black, // UPDATE
+                        fontSize: 14,
                       ),
-                    );
-                  }).toList(),
-                  onChanged: onChanged,
-                ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: onChanged,
               ),
             ),
           ),
@@ -365,8 +412,9 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     String label,
     String? value,
     List<FilterDataItem> options,
-    Function(String?) onChanged,
-  ) {
+    Function(String?) onChanged, {
+    required bool isDarkMode, // TAMBAHKAN
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -375,10 +423,10 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.black,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
               ),
             ),
           ),
@@ -386,60 +434,83 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
+                color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE
+                border: Border.all(
+                  color: isDarkMode 
+                    ? Colors.grey.shade700 
+                    : Colors.grey.shade300, // UPDATE
+                ),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: _isLoadingData
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Row(
                         children: [
                           SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: isDarkMode 
+                                ? AppTheme.darkTextPrimary 
+                                : AppTheme.primaryColor, // UPDATE
+                            ),
                           ),
-                          SizedBox(width: 8),
-                          Text('Loading...', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Loading...', 
+                            style: TextStyle(
+                              color: isDarkMode 
+                                ? AppTheme.darkTextSecondary 
+                                : Colors.grey, // UPDATE
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     )
-                  : Theme(
-                      data: Theme.of(context).copyWith(
-                        canvasColor: Colors.white, // Background dropdown menu
-                      ),
-                      child: DropdownButton<String>(
-                        value: value,
-                        hint: const Text(
-                          '--select--',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 14,
-                          ),
-                        ),
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        iconEnabledColor: Colors.black,
-                        style: const TextStyle(
-                          color: Colors.black,
+                  : DropdownButton<String>(
+                      value: value,
+                      hint: Text(
+                        '--select--',
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextSecondary 
+                            : Colors.grey, // UPDATE
                           fontSize: 14,
                         ),
-                        items: options.map((FilterDataItem item) {
-                          return DropdownMenuItem<String>(
-                            value: item.id,
-                            child: Text(
-                              item.name.isNotEmpty ? item.name : 'ID: ${item.id}',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 14,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: onChanged,
                       ),
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      iconEnabledColor: isDarkMode 
+                        ? AppTheme.darkTextPrimary 
+                        : Colors.black, // UPDATE
+                      style: TextStyle(
+                        color: isDarkMode 
+                          ? AppTheme.darkTextPrimary 
+                          : Colors.black, // UPDATE
+                        fontSize: 14,
+                      ),
+                      dropdownColor: isDarkMode 
+                        ? AppTheme.darkSurface 
+                        : Colors.white, // TAMBAHKAN
+                      items: options.map((FilterDataItem item) {
+                        return DropdownMenuItem<String>(
+                          value: item.id,
+                          child: Text(
+                            item.name.isNotEmpty ? item.name : 'ID: ${item.id}',
+                            style: TextStyle(
+                              color: isDarkMode 
+                                ? AppTheme.darkTextPrimary 
+                                : Colors.black, // UPDATE
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: onChanged,
                     ),
             ),
           ),

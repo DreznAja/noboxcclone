@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart'; // TAMBAHKAN INI
 import '../../../core/models/chat_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/account_service.dart';
@@ -74,7 +75,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
       MaterialPageRoute(
         builder: (context) => ChatScreen(
           room: room,
-          isReadOnly: true, // Read-only mode for history conversations
+          isReadOnly: true,
         ),
       ),
     );
@@ -99,11 +100,13 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
+    
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF8F9FA), // UPDATE
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: AppTheme.primaryColor, // Tetap biru
+        foregroundColor: Colors.white, // UPDATE
         elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,7 +114,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
             const Text(
               'Conversation History',
               style: TextStyle(
-                color: Colors.black,
+                color: Colors.white, // UPDATE
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
@@ -119,7 +122,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
             Text(
               widget.contactName,
               style: const TextStyle(
-                color: Colors.grey,
+                color: Colors.white70, // UPDATE
                 fontSize: 12,
                 fontWeight: FontWeight.normal,
               ),
@@ -128,31 +131,41 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                color: AppTheme.primaryColor, // TAMBAHKAN
+              ),
+            )
           : _error != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.error_outline,
                         size: 64,
-                        color: Colors.grey,
+                        color: isDarkMode 
+                          ? AppTheme.darkTextSecondary 
+                          : Colors.grey, // UPDATE
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Failed to load conversation history',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey,
+                          color: isDarkMode 
+                            ? AppTheme.darkTextSecondary 
+                            : Colors.grey, // UPDATE
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         _error!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: isDarkMode 
+                            ? AppTheme.darkTextSecondary 
+                            : Colors.grey, // UPDATE
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -161,6 +174,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                         onPressed: _loadConversationHistory,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
                         ),
                         child: const Text('Retry'),
                       ),
@@ -175,14 +189,18 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                           Icon(
                             Icons.history,
                             size: 64,
-                            color: Colors.grey.shade400,
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary 
+                              : Colors.grey.shade400, // UPDATE
                           ),
                           const SizedBox(height: 16),
-                          const Text(
+                          Text(
                             'No conversation history',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey,
+                              color: isDarkMode 
+                                ? AppTheme.darkTextSecondary 
+                                : Colors.grey, // UPDATE
                             ),
                           ),
                         ],
@@ -191,24 +209,31 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: _historyRooms.length,
-                      separatorBuilder: (context, index) => const Divider(height: 1),
+                      separatorBuilder: (context, index) => Divider(
+                        height: 1, 
+                        color: isDarkMode 
+                          ? Colors.white.withOpacity(0.1) 
+                          : null, // UPDATE
+                      ),
                       itemBuilder: (context, index) {
                         final room = _historyRooms[index];
-                        return _buildHistoryItem(room);
+                        return _buildHistoryItem(room, isDarkMode); // PASS PARAMETER
                       },
                     ),
     );
   }
 
-  Widget _buildHistoryItem(Room room) {
+  Widget _buildHistoryItem(Room room, bool isDarkMode) { // TAMBAHKAN PARAMETER
     return Container(
-      color: Colors.white,
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE
       child: Column(
         children: [
           // Top separator line
           Container(
             height: 0.5,
-            color: Colors.grey.shade300,
+            color: isDarkMode 
+              ? Colors.white.withOpacity(0.1) 
+              : Colors.grey.shade300, // UPDATE
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
           
@@ -225,11 +250,15 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                     backgroundImage: _isValidImageUrl(room.contactImage ?? room.linkImage)
                         ? NetworkImage(room.contactImage ?? room.linkImage!)
                         : null,
-                    backgroundColor: Colors.grey.shade200,
+                    backgroundColor: isDarkMode 
+                      ? Colors.grey.shade800 
+                      : Colors.grey.shade200, // UPDATE
                     child: !_isValidImageUrl(room.contactImage ?? room.linkImage)
                         ? Icon(
                             room.isGroup ? Icons.group : Icons.person,
-                            color: Colors.grey,
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary 
+                              : Colors.grey, // UPDATE
                           )
                         : null,
                   ),
@@ -247,10 +276,12 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                             Expanded(
                               child: Text(
                                 room.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w500,
                                   fontSize: 16,
-                                  color: Colors.black,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextPrimary 
+                                    : Colors.black, // UPDATE
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -261,9 +292,11 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                             if (room.lastMessageTime != null)
                               Text(
                                 _formatDateTime(room.lastMessageTime),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : AppTheme.textSecondary, // UPDATE
                                 ),
                               ),
                           ],
@@ -274,8 +307,10 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                         // Second row: Last message
                         Text(
                           room.lastMessage ?? 'No messages',
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
+                          style: TextStyle(
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary 
+                              : AppTheme.textSecondary, // UPDATE
                             fontSize: 14,
                           ),
                           maxLines: 1,
@@ -286,7 +321,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                         
                         // Tags and Funnel row
                         if (room.tags.isNotEmpty || room.funnel != null) ...[
-                          _buildTagsAndFunnelRow(room),
+                          _buildTagsAndFunnelRow(room, isDarkMode), // PASS PARAMETER
                           const SizedBox(height: 3),
                         ],
                         
@@ -298,9 +333,11 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                             Expanded(
                               child: Text(
                                 _getBotName(room),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : AppTheme.textSecondary, // UPDATE
                                   fontWeight: FontWeight.w500,
                                 ),
                                 maxLines: 1,
@@ -322,7 +359,9 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
           // Bottom separator line
           Container(
             height: 0.5,
-            color: Colors.grey.shade300,
+            color: isDarkMode 
+              ? Colors.white.withOpacity(0.1) 
+              : Colors.grey.shade300, // UPDATE
             margin: const EdgeInsets.symmetric(horizontal: 16),
           ),
         ],
@@ -360,19 +399,19 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
     IconData icon;
 
     switch (channelId) {
-      case 2: // Telegram
+      case 2:
         color = const Color(0xFF0088CC);
         icon = Icons.send;
         break;
-      case 3: // Instagram
+      case 3:
         color = const Color(0xFFE4405F);
         icon = Icons.camera_alt;
         break;
-      case 4: // Messenger
+      case 4:
         color = const Color(0xFF0084FF);
         icon = Icons.messenger;
         break;
-      case 19: // Email
+      case 19:
         color = const Color(0xFFEA4335);
         icon = Icons.email;
         break;
@@ -397,17 +436,14 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
   }
 
   String _getBotName(Room room) {
-    // Priority 1: Use accountName if available
     if (room.accountName != null && room.accountName!.isNotEmpty) {
       return room.accountName!;
     }
     
-    // Priority 2: Use botName if available
     if (room.botName != null && room.botName!.isNotEmpty) {
       return room.botName!;
     }
 
-    // Priority 3: Try AccountService to get account name
     try {
       final accountService = AccountService();
       final accounts = accountService.getAccountsForChannel(room.channelId);
@@ -418,12 +454,10 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
       // Silently fail
     }
     
-    // Priority 4: Use channelName if not "Not Found"
     if (room.channelName.isNotEmpty && room.channelName != 'Not Found') {
       return room.channelName;
     }
     
-    // Priority 5: Final fallback
     return _getChannelNameFromId(room.channelId);
   }
   
@@ -451,19 +485,19 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
     Color color;
 
     switch (status) {
-      case 1: // Open
+      case 1:
         label = 'Open';
         color = const Color(0xFF10B981);
         break;
-      case 2: // Pending
+      case 2:
         label = 'Pending';
         color = const Color(0xFFF59E0B);
         break;
-      case 3: // Resolved
+      case 3:
         label = 'Resolved';
         color = const Color(0xFF3B82F6);
         break;
-      case 4: // Archived
+      case 4:
         label = 'Archived';
         color = const Color(0xFF6B7280);
         break;
@@ -490,7 +524,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
     );
   }
 
-  Widget _buildTagsAndFunnelRow(Room room) {
+  Widget _buildTagsAndFunnelRow(Room room, bool isDarkMode) { // TAMBAHKAN PARAMETER
     return Row(
       children: [
         // Tags
@@ -503,20 +537,35 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: isDarkMode 
+                      ? Colors.blue.shade900.withOpacity(0.3) 
+                      : Colors.blue.shade50, // UPDATE
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.blue.shade200, width: 1),
+                    border: Border.all(
+                      color: isDarkMode 
+                        ? Colors.blue.shade700 
+                        : Colors.blue.shade200, // UPDATE
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.label, size: 10, color: Colors.blue.shade700),
+                      Icon(
+                        Icons.label, 
+                        size: 10, 
+                        color: isDarkMode 
+                          ? Colors.blue.shade300 
+                          : Colors.blue.shade700, // UPDATE
+                      ),
                       const SizedBox(width: 2),
                       Text(
                         tag,
                         style: TextStyle(
                           fontSize: 10,
-                          color: Colors.blue.shade700,
+                          color: isDarkMode 
+                            ? Colors.blue.shade300 
+                            : Colors.blue.shade700, // UPDATE
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -531,14 +580,18 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
               margin: const EdgeInsets.only(left: 4),
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.grey.shade200,
+                color: isDarkMode 
+                  ? Colors.grey.shade800 
+                  : Colors.grey.shade200, // UPDATE
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 '+${room.tags.length - 2}',
                 style: TextStyle(
                   fontSize: 10,
-                  color: Colors.grey.shade700,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
+                    : Colors.grey.shade700, // UPDATE
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -551,20 +604,35 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.purple.shade50,
+              color: isDarkMode 
+                ? Colors.purple.shade900.withOpacity(0.3) 
+                : Colors.purple.shade50, // UPDATE
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.purple.shade200, width: 1),
+              border: Border.all(
+                color: isDarkMode 
+                  ? Colors.purple.shade700 
+                  : Colors.purple.shade200, // UPDATE
+                width: 1,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.filter_alt, size: 10, color: Colors.purple.shade700),
+                Icon(
+                  Icons.filter_alt, 
+                  size: 10, 
+                  color: isDarkMode 
+                    ? Colors.purple.shade300 
+                    : Colors.purple.shade700, // UPDATE
+                ),
                 const SizedBox(width: 2),
                 Text(
                   room.funnel!,
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.purple.shade700,
+                    color: isDarkMode 
+                      ? Colors.purple.shade300 
+                      : Colors.purple.shade700, // UPDATE
                     fontWeight: FontWeight.w500,
                   ),
                 ),

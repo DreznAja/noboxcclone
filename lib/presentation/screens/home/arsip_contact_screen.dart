@@ -110,53 +110,66 @@ class _ArsipContactScreenState extends ConsumerState<ArsipContactScreen> {
         body: Column(
           children: [
             // Search bar
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE INI
-                border: Border(
-                  bottom: BorderSide(
-                    color: isDarkMode 
-                      ? Colors.white.withOpacity(0.1) 
-                      : const Color(0xFFE2E8F0), // UPDATE INI
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDarkMode 
-                    ? AppTheme.darkSurface 
-                    : const Color(0xFFF1F5F9), // UPDATE INI
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: TextStyle(
-                    color: isDarkMode ? Colors.white : Colors.black, // TAMBAHKAN INI
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search conversation',
-                    hintStyle: TextStyle(
-                      color: isDarkMode 
-                        ? AppTheme.darkTextSecondary 
-                        : Colors.grey, // UPDATE INI
-                      fontSize: 16,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search, 
-                      color: isDarkMode 
-                        ? AppTheme.darkTextSecondary 
-                        : Colors.grey, // UPDATE INI
-                    ),
-                    border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                  onChanged: _handleSearch,
-                ),
-              ),
-            ),
+// REPLACE bagian Search bar dengan ini:
+
+// Search bar
+// Search bar - FIXED ROUNDED
+Container(
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+    border: Border(
+      bottom: BorderSide(
+        color: isDarkMode 
+          ? Colors.white.withOpacity(0.1) 
+          : const Color(0xFFE2E8F0),
+        width: 1,
+      ),
+    ),
+  ),
+  child: TextField(
+    controller: _searchController,
+    style: TextStyle(
+      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+    ),
+    decoration: InputDecoration(
+      hintText: 'Search conversation',
+      hintStyle: TextStyle(
+        color: isDarkMode 
+          ? AppTheme.darkTextSecondary 
+          : Colors.grey,
+        fontSize: 16,
+      ),
+      prefixIcon: Icon(
+        Icons.search, 
+        color: isDarkMode 
+          ? AppTheme.darkTextSecondary 
+          : Colors.grey,
+      ),
+      filled: true,
+      fillColor: isDarkMode 
+        ? AppTheme.darkSurface 
+        : const Color(0xFFF1F5F9),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: AppTheme.primaryColor,
+          width: 2,
+        ),
+      ),
+    ),
+    onChanged: _handleSearch,
+  ),
+),
 
             // Archived room list
             Expanded(

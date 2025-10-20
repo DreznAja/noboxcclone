@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 
-class AddNoteDialog extends StatefulWidget {
+class AddNoteDialog extends ConsumerStatefulWidget {
   final Function(String) onSave;
 
   const AddNoteDialog({
@@ -10,10 +12,10 @@ class AddNoteDialog extends StatefulWidget {
   });
 
   @override
-  State<AddNoteDialog> createState() => _AddNoteDialogState();
+  ConsumerState<AddNoteDialog> createState() => _AddNoteDialogState();
 }
 
-class _AddNoteDialogState extends State<AddNoteDialog> {
+class _AddNoteDialogState extends ConsumerState<AddNoteDialog> {
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
@@ -42,6 +44,8 @@ class _AddNoteDialogState extends State<AddNoteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -50,7 +54,7 @@ class _AddNoteDialogState extends State<AddNoteDialog> {
         width: MediaQuery.of(context).size.width * 0.9,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? AppTheme.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -65,7 +69,7 @@ class _AddNoteDialogState extends State<AddNoteDialog> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.primaryColor,
                   ),
                 ),
                 IconButton(
@@ -82,30 +86,46 @@ class _AddNoteDialogState extends State<AddNoteDialog> {
             // Content input
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(
+                  color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.shade300
+                ),
               ),
               child: TextField(
-                controller: _contentController,
-                focusNode: _focusNode,
-                maxLines: 5,
-                minLines: 3,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppTheme.textPrimary,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'Enter your note...',
-                  hintStyle: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 16,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.all(16),
-                ),
-                textInputAction: TextInputAction.newline,
-              ),
+  controller: _contentController,
+  focusNode: _focusNode,
+  maxLines: 5,
+  minLines: 3,
+  style: TextStyle(
+    fontSize: 16,
+    color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+  ),
+  decoration: InputDecoration(
+    hintText: 'Enter your note...',
+    hintStyle: TextStyle(
+      color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+      fontSize: 16,
+    ),
+    filled: true,
+    fillColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF1F5F9),
+    contentPadding: const EdgeInsets.all(16),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.shade300,
+      ),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: AppTheme.primaryColor,
+        width: 2,
+      ),
+    ),
+  ),
+  textInputAction: TextInputAction.newline,
+),
             ),
 
             const SizedBox(height: 20),
@@ -118,8 +138,10 @@ class _AddNoteDialogState extends State<AddNoteDialog> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryColor,
-                      side: BorderSide(color: AppTheme.primaryColor),
+                      foregroundColor: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.primaryColor,
+                      side: BorderSide(
+                        color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.primaryColor
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),

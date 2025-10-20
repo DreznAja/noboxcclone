@@ -875,6 +875,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // Update the _buildNormalAppBar() method in chat_screen.dart
 
 PreferredSizeWidget _buildNormalAppBar() {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
   return AppBar(
     backgroundColor: AppTheme.primaryColor,
     foregroundColor: Colors.white,
@@ -950,74 +951,82 @@ PreferredSizeWidget _buildNormalAppBar() {
           tooltip: widget.room.isGroup ? 'Group Info' : 'Contact Info',
         ),
       
-      if (!widget.isArchived)
-        PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, color: Colors.white),
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          onSelected: (String value) {
-            switch (value) {
-              case 'add_agent':
-                _handleAddAgent();
-                break;
-              case 'resolve':
-                _handleResolve();
-                break;
-              case 'archive':
-                _handleArchive();
-                break;
-              case 'add_note':
-                _handleAddNote();
-                break;
-              case 'help':
-                _handleHelp();
-                break;
-            }
-          },
-          itemBuilder: (BuildContext context) => [
-            const PopupMenuItem(
-              value: 'add_agent',
-              child: Row(
-                children: [
-                  Icon(Icons.person_add_outlined, size: 20, color: Colors.blue),
-                  SizedBox(width: 12),
-                  Text(
-                    'Add Human Agent',
-                    style: TextStyle(color: Colors.blue),
-                  ),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'resolve',
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
-                  SizedBox(width: 12),
-                  Text(
-                    'Mark as Resolved',
-                    style: TextStyle(color: Colors.green),
-                  ),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'help',
-              child: Row(
-                children: [
-                  Icon(Icons.help_outline, size: 20, color: Colors.red),
-                  SizedBox(width: 12),
-                  Text(
-                    'Help',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ],
+      // REPLACE bagian PopupMenuButton di _buildNormalAppBar dengan ini:
+
+if (!widget.isArchived)
+  PopupMenuButton<String>(
+    icon: const Icon(Icons.more_vert, color: Colors.white),
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE INI
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+    ),
+    onSelected: (String value) {
+      switch (value) {
+        case 'add_agent':
+          _handleAddAgent();
+          break;
+        case 'resolve':
+          _handleResolve();
+          break;
+        case 'archive':
+          _handleArchive();
+          break;
+        case 'add_note':
+          _handleAddNote();
+          break;
+        case 'help':
+          _handleHelp();
+          break;
+      }
+    },
+    itemBuilder: (BuildContext context) => [
+      PopupMenuItem(
+        value: 'add_agent',
+        child: Row(
+          children: [
+            const Icon(Icons.person_add_outlined, size: 20, color: Colors.blue),
+            const SizedBox(width: 12),
+            Text(
+              'Add Human Agent',
+              style: TextStyle(
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.blue, // UPDATE INI
               ),
             ),
           ],
         ),
+      ),
+      PopupMenuItem(
+        value: 'resolve',
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
+            const SizedBox(width: 12),
+            Text(
+              'Mark as Resolved',
+              style: TextStyle(
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.green, // UPDATE INI
+              ),
+            ),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'help',
+        child: Row(
+          children: [
+            const Icon(Icons.help_outline, size: 20, color: Colors.red),
+            const SizedBox(width: 12),
+            Text(
+              'Help',
+              style: TextStyle(
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.red, // UPDATE INI
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
     ],
   );
 }

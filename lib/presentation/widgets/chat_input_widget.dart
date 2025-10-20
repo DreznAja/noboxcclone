@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'dart:io';
 import 'voice_recorder_widget.dart';
@@ -13,9 +14,6 @@ import '../../core/providers/quick_reply_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/location_service.dart';
 import '../screens/media/media_preview_screen.dart';
-import 'package:latlong2/latlong.dart';
-import '../screens/location/location_picker_screen.dart';
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
 class ChatInputWidget extends ConsumerStatefulWidget {
   final Function(String) onSendText;
@@ -45,8 +43,18 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
   void initState() {
     super.initState();
     _textController.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
     // Load quick reply templates on init
     Future.microtask(() => ref.read(quickReplyProvider.notifier).loadTemplates());
+  }
+
+  void _onFocusChanged() {
+    // When TextField is focused, hide emoji picker
+    if (_focusNode.hasFocus && _showEmojiPicker) {
+      setState(() {
+        _showEmojiPicker = false;
+      });
+    }
   }
 
   void _onTextChanged() {
@@ -57,6 +65,8 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
       if (!_showQuickReply) {
         setState(() {
           _showQuickReply = true;
+          // Auto-hide emoji picker when typing
+          _showEmojiPicker = false;
         });
       }
       // Search templates based on command
@@ -99,6 +109,30 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     widget.onSendText(text);
   }
 
+  void _toggleEmojiPicker() {
+    setState(() {
+      _showEmojiPicker = !_showEmojiPicker;
+      _showAttachmentOptions = false;
+      
+      if (_showEmojiPicker) {
+        // Hide keyboard when emoji picker is shown
+        _focusNode.unfocus();
+      } else {
+        // Show keyboard when emoji picker is hidden
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  void _onEmojiSelected(Category? category, Emoji emoji) {
+    // Add emoji to text field
+    _textController.text += emoji.emoji;
+    // Move cursor to end
+    _textController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _textController.text.length),
+    );
+  }
+
   void _onQuickReplySelected(QuickReplyTemplate template) {
     // Replace the text with template content
     _textController.text = template.content;
@@ -111,22 +145,6 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     
     // Focus back on input
     _focusNode.requestFocus();
-  }
-
-  void _onEmojiSelected(Emoji emoji) {
-    final text = _textController.text;
-    final selection = _textController.selection;
-    final newText = text.replaceRange(
-      selection.start,
-      selection.end,
-      emoji.emoji,
-    );
-    _textController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: selection.start + emoji.emoji.length,
-      ),
-    );
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -298,93 +316,8 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
   }
 
   Future<void> _sendLocation() async {
-    // Show dialog to choose between current location or select location
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.location_on,
-                color: Color(0xFF1976D2),
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Send Location',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.my_location,
-                  color: Colors.blue.shade700,
-                ),
-              ),
-              title: const Text('Current Location'),
-              subtitle: const Text('Send your current GPS location'),
-              onTap: () => Navigator.of(context).pop('current'),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.map,
-                  color: Colors.green.shade700,
-                ),
-              ),
-              title: const Text('Select Location'),
-              subtitle: const Text('Choose location from map'),
-              onTap: () => Navigator.of(context).pop('select'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (choice == null) {
-      setState(() {
-        _showAttachmentOptions = false;
-      });
-      return;
-    }
-
-    if (choice == 'current') {
-      await _sendCurrentLocation();
-    } else if (choice == 'select') {
-      await _selectAndSendLocation();
-    }
-  }
-
-  Future<void> _sendCurrentLocation() async {
     try {
+      // Show loading indicator
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
@@ -403,68 +336,34 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
         ),
       );
 
+      // Get current location
       final location = await LocationService.getCurrentLocation();
+      
+      // Hide loading indicator
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
+      // Send location using the chat provider
       final chatNotifier = ref.read(chatProvider.notifier);
       await chatNotifier.sendLocationMessage(
         location,
         replyId: widget.replyingTo?.id,
       );
       
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location sent successfully'),
+        SnackBar(
+          content: Text(widget.replyingTo != null ? 'Location reply sent successfully' : 'Location sent successfully'),
           backgroundColor: AppTheme.successColor,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      _showError('Failed to get location: $e');
-    }
-    
-    setState(() {
-      _showAttachmentOptions = false;
-      _showVoiceRecorder = false;
-    });
-  }
-
-  Future<void> _selectAndSendLocation() async {
-    try {
-      final result = await Navigator.push<Map<String, dynamic>>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const LocationPickerScreen(),
-        ),
-      );
-
-      if (result == null) {
-        setState(() {
-          _showAttachmentOptions = false;
-        });
-        return;
-      }
-
-      final lat = result['latitude'] as double;
-      final lng = result['longitude'] as double;
-      final address = result['address'] as String;
-
-      final chatNotifier = ref.read(chatProvider.notifier);
-      await chatNotifier.sendLocationMessage(
-        {'latitude': lat, 'longitude': lng, 'address': address},
-        replyId: widget.replyingTo?.id,
       );
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location sent successfully'),
-          backgroundColor: AppTheme.successColor,
-          duration: Duration(seconds: 2),
-        ),
-      );
     } catch (e) {
-      _showError('Failed to send location: $e');
+      // Hide loading indicator
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      
+      // Show error message
+      _showError('Failed to get location: $e');
     }
     
     setState(() {
@@ -477,6 +376,7 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     setState(() {
       _showAttachmentOptions = false;
       _showVoiceRecorder = true;
+      _showEmojiPicker = false;
     });
   }
 
@@ -517,278 +417,275 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     final isDarkMode = ref.watch(themeProvider).isDarkMode;
     
     // If voice recorder is active, show it as overlay
-  if (_showVoiceRecorder) {
-    return VoiceRecorderWidget(
-      onSendVoice: _sendVoiceNote,
-      onCancel: _cancelVoiceRecording, 
-      onComplete: (String path, String filename) {  },
-    );
-  }
-
+    if (_showVoiceRecorder) {
+      return VoiceRecorderWidget(
+        onSendVoice: _sendVoiceNote,
+        onCancel: _cancelVoiceRecording,
+        onComplete: (String path, String filename) {},
+      );
+    }
     
-return Column(
-    children: [
-      // Quick Reply Overlay
-      if (_showQuickReply)
-        QuickReplyOverlay(
-          onTemplateSelected: _onQuickReplySelected,
-          maxHeight: 300,
-        ),
-      
-      // Emoji Picker
-      if (_showEmojiPicker)
-        SizedBox(
-          height: 350,
-          child: EmojiPicker(
-            onEmojiSelected: (category, emoji) {
-              _onEmojiSelected(emoji);
-            },
-            config: Config(
-              height: 350,
-              checkPlatformCompatibility: true,
-              emojiViewConfig: EmojiViewConfig(
-                columns: 8,
-                emojiSizeMax: 28,
-                verticalSpacing: 0,
-                horizontalSpacing: 0,
-                gridPadding: EdgeInsets.zero,
-                backgroundColor: isDarkMode 
-                  ? AppTheme.darkSurface 
-                  : const Color(0xFFF8FAFC), // UPDATE INI
-                buttonMode: ButtonMode.MATERIAL,
-                recentsLimit: 28,
-              ),
-              skinToneConfig: SkinToneConfig(
-                enabled: true,
-                dialogBackgroundColor: isDarkMode 
-                  ? AppTheme.darkSurface 
-                  : Colors.white, // UPDATE INI
-              ),
-              categoryViewConfig: CategoryViewConfig(
-                initCategory: Category.RECENT,
-                backgroundColor: isDarkMode 
-                  ? AppTheme.darkSurface 
-                  : const Color(0xFFF8FAFC), // UPDATE INI
-                indicatorColor: AppTheme.primaryColor,
-                iconColorSelected: AppTheme.primaryColor,
-                iconColor: isDarkMode 
-                  ? AppTheme.darkTextSecondary 
-                  : const Color(0xFF94A3B8), // UPDATE INI
-                categoryIcons: const CategoryIcons(),
-              ),
-              bottomActionBarConfig: BottomActionBarConfig(
-                enabled: true,
-                backgroundColor: isDarkMode 
-                  ? AppTheme.darkBackground 
-                  : Colors.white, // UPDATE INI
-                buttonColor: Colors.transparent,
-                buttonIconColor: isDarkMode 
-                  ? AppTheme.darkTextSecondary 
-                  : const Color(0xFF64748B), // UPDATE INI
-              ),
-              searchViewConfig: SearchViewConfig(
-                backgroundColor: isDarkMode 
-                  ? AppTheme.darkSurface 
-                  : const Color(0xFFF8FAFC), // UPDATE INI
-                buttonIconColor: isDarkMode 
-                  ? AppTheme.darkTextSecondary 
-                  : const Color(0xFF64748B), // UPDATE INI
-              ),
-            ),
+    return Column(
+      children: [
+        // Quick Reply Overlay
+        if (_showQuickReply)
+          QuickReplyOverlay(
+            onTemplateSelected: _onQuickReplySelected,
+            maxHeight: 300,
           ),
-        ),
-      
-      // Attachment options
-      if (_showAttachmentOptions)
+        
+        // Input area
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isDarkMode 
-              ? AppTheme.darkSurface 
-              : const Color(0xFFF8FAFC), // UPDATE INI
+              ? AppTheme.darkBackground 
+              : Colors.white,
             border: Border(
               top: BorderSide(
                 color: isDarkMode 
                   ? Colors.white.withOpacity(0.1)
-                  : const Color(0xFFE2E8F0), // UPDATE INI
+                  : const Color(0xFFE2E8F0),
                 width: 1,
               ),
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _AttachmentOption(
-                icon: Icons.camera_alt,
-                label: 'Camera',
-                onTap: () => _pickImage(ImageSource.camera),
-                isDarkMode: isDarkMode, // Pass isDarkMode
+              // Attachment button
+              IconButton(
+                icon: Icon(
+                  _showAttachmentOptions ? Icons.close : Icons.attach_file,
+                  color: AppTheme.primaryColor,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showAttachmentOptions = !_showAttachmentOptions;
+                    _showEmojiPicker = false;
+                  });
+                },
               ),
-              _AttachmentOption(
-                icon: Icons.photo_library,
-                label: 'Gallery',
-                onTap: () => _pickImage(ImageSource.gallery),
-                isDarkMode: isDarkMode, // Pass isDarkMode
+              
+              // Text input dengan emoji button di dalamnya
+              Expanded(
+                child: TextFormField(
+                  controller: _textController,
+                  focusNode: _focusNode,
+                  style: TextStyle(
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: widget.replyingTo != null 
+                        ? 'Reply to message...' 
+                        : 'Type a message...',
+                    hintStyle: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : AppTheme.textSecondary,
+                    ),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(24)),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode 
+                      ? AppTheme.darkSurface 
+                      : const Color(0xFFF1F5F9),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    // Emoji button di dalam text field (sebelah kanan)
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _showEmojiPicker ? Icons.close : Icons.emoji_emotions_outlined,
+                        color: AppTheme.primaryColor,
+                      ),
+                      onPressed: _toggleEmojiPicker,
+                    ),
+                  ),
+                  maxLines: 5,
+                  minLines: 1,
+                  onFieldSubmitted: (_) => _sendTextMessage(),
+                ),
               ),
-              _AttachmentOption(
-                icon: Icons.videocam,
-                label: 'Video',
-                onTap: _pickVideo,
-                isDarkMode: isDarkMode, // Pass isDarkMode
-              ),
-              _AttachmentOption(
-                icon: Icons.insert_drive_file,
-                label: 'Document',
-                onTap: _pickDocument,
-                isDarkMode: isDarkMode, // Pass isDarkMode
-              ),
-              _AttachmentOption(
-                icon: Icons.location_on,
-                label: 'Location',
-                onTap: _sendLocation,
-                isDarkMode: isDarkMode, // Pass isDarkMode
-              ),
+              
+              const SizedBox(width: 8),
+              
+              // Send button or Voice button
+              _textController.text.trim().isNotEmpty
+                  ? Container(
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.send,
+                          color: Colors.white,
+                        ),
+                        onPressed: _sendTextMessage,
+                      ),
+                    )
+                  : Container(
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.mic,
+                          color: Colors.white,
+                        ),
+                        onPressed: _startVoiceRecording,
+                      ),
+                    ),
             ],
           ),
         ),
-      
-      // Input area
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDarkMode 
-            ? AppTheme.darkBackground 
-            : Colors.white, // UPDATE INI
-          border: Border(
-            top: BorderSide(
+        
+        // Attachment options (dipindah ke bawah)
+        if (_showAttachmentOptions)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
               color: isDarkMode 
-                ? Colors.white.withOpacity(0.1)
-                : const Color(0xFFE2E8F0), // UPDATE INI
-              width: 1,
+                ? AppTheme.darkSurface 
+                : const Color(0xFFF8FAFC),
+              border: Border(
+                top: BorderSide(
+                  color: isDarkMode 
+                    ? Colors.white.withOpacity(0.1)
+                    : const Color(0xFFE2E8F0),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _AttachmentOption(
+                  icon: Icons.camera_alt,
+                  label: 'Camera',
+                  onTap: () => _pickImage(ImageSource.camera),
+                  isDarkMode: isDarkMode,
+                ),
+                _AttachmentOption(
+                  icon: Icons.photo_library,
+                  label: 'Gallery',
+                  onTap: () => _pickImage(ImageSource.gallery),
+                  isDarkMode: isDarkMode,
+                ),
+                _AttachmentOption(
+                  icon: Icons.videocam,
+                  label: 'Video',
+                  onTap: _pickVideo,
+                  isDarkMode: isDarkMode,
+                ),
+                _AttachmentOption(
+                  icon: Icons.insert_drive_file,
+                  label: 'Document',
+                  onTap: _pickDocument,
+                  isDarkMode: isDarkMode,
+                ),
+                _AttachmentOption(
+                  icon: Icons.location_on,
+                  label: 'Location',
+                  onTap: _sendLocation,
+                  isDarkMode: isDarkMode,
+                ),
+              ],
             ),
           ),
-        ),
-        child: Row(
-          children: [
-            // Attachment button
-            IconButton(
-              icon: Icon(
-                _showAttachmentOptions ? Icons.close : Icons.attach_file,
-                color: AppTheme.primaryColor, // Tetap biru
-              ),
-              onPressed: () {
-                setState(() {
-                  _showAttachmentOptions = !_showAttachmentOptions;
-                  _showEmojiPicker = false;
-                });
+        
+        // Emoji Picker Panel (dipindah ke paling bawah)
+        if (_showEmojiPicker)
+          SizedBox(
+            height: 250,
+            child: EmojiPicker(
+              onEmojiSelected: (Category? category, Emoji emoji) {
+                _textController.text += emoji.emoji;
+                _textController.selection = TextSelection.fromPosition(
+                  TextPosition(offset: _textController.text.length),
+                );
               },
-            ),
-            
-            // Emoji button
-            IconButton(
-              icon: Icon(
-                _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions,
-                color: AppTheme.primaryColor, // Tetap biru
-              ),
-              onPressed: () {
-                setState(() {
-                  _showEmojiPicker = !_showEmojiPicker;
-                  _showAttachmentOptions = false;
-                  if (_showEmojiPicker) {
-                    _focusNode.unfocus();
-                  } else {
-                    _focusNode.requestFocus();
-                  }
-                });
+              onBackspacePressed: () {
+                if (_textController.text.isNotEmpty) {
+                  _textController.text = _textController.text.substring(0, _textController.text.length - 1);
+                }
               },
-            ),
-            
-            // Text input
-            Expanded(
-              child: TextFormField(
-                controller: _textController,
-                focusNode: _focusNode,
-                style: TextStyle(
-                  color: isDarkMode 
-                    ? AppTheme.darkTextPrimary 
-                    : AppTheme.textPrimary, // UPDATE INI
-                ),
-                decoration: InputDecoration(
-                  hintText: widget.replyingTo != null 
-                      ? 'Reply to message...' 
-                      : 'Type a message...',
-                  hintStyle: TextStyle(
-                    color: isDarkMode 
-                      ? AppTheme.darkTextSecondary 
-                      : AppTheme.textSecondary, // UPDATE INI
-                  ),
-                  border: const OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(24)),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode 
+              config: Config(
+                height: 250,
+                checkPlatformCompatibility: true,
+                viewOrderConfig: const ViewOrderConfig(),
+                skinToneConfig: SkinToneConfig(
+                  enabled: true,
+                  dialogBackgroundColor: isDarkMode 
                     ? AppTheme.darkSurface 
-                    : const Color(0xFFF1F5F9), // UPDATE INI
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    : Colors.white,
                 ),
-                maxLines: 5,
-                minLines: 1,
-                onFieldSubmitted: (_) => _sendTextMessage(),
+                categoryViewConfig: CategoryViewConfig(
+                  initCategory: Category.RECENT,
+                  backgroundColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : const Color(0xFFF8FAFC),
+                  indicatorColor: AppTheme.primaryColor,
+                  iconColorSelected: AppTheme.primaryColor,
+                  iconColor: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
+                    : const Color(0xFF94A3B8),
+                  categoryIcons: const CategoryIcons(),
+                ),
+                bottomActionBarConfig: BottomActionBarConfig(
+                  showBackspaceButton: false,
+                  showSearchViewButton: false,
+                  enabled: true,
+                  backgroundColor: isDarkMode 
+                    ? AppTheme.darkBackground 
+                    : Colors.white,
+                  buttonColor: Colors.transparent,
+                  buttonIconColor: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
+                    : const Color(0xFF64748B),
+                ),
+                emojiViewConfig: EmojiViewConfig(
+                  columns: 8,
+                  emojiSizeMax: 28,
+                  verticalSpacing: 0,
+                  horizontalSpacing: 0,
+                  gridPadding: EdgeInsets.zero,
+                  backgroundColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : const Color(0xFFF8FAFC),
+                  buttonMode: ButtonMode.MATERIAL,
+                  recentsLimit: 28,
+                ),
+                searchViewConfig: SearchViewConfig(
+                  backgroundColor: isDarkMode 
+                    ? AppTheme.darkSurface 
+                    : const Color(0xFFF8FAFC),
+                  buttonIconColor: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
+                    : const Color(0xFF64748B),
+                ),
               ),
             ),
-            
-            const SizedBox(width: 8),
-            
-            // Send button or Voice button
-            _textController.text.trim().isNotEmpty
-                ? Container(
-                    decoration: const BoxDecoration(
-                      color: AppTheme.primaryColor, // Tetap biru
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                      ),
-                      onPressed: _sendTextMessage,
-                    ),
-                  )
-                : Container(
-                    decoration: const BoxDecoration(
-                      color: AppTheme.primaryColor, // Tetap biru
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.mic,
-                        color: Colors.white,
-                      ),
-                      onPressed: _startVoiceRecording,
-                    ),
-                  ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
+          ),
+      ],
+    );
   }
+}
 
-
-// Update _AttachmentOption class untuk support dark mode:
 class _AttachmentOption extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool isDarkMode; // TAMBAHKAN INI
+  final bool isDarkMode;
 
   const _AttachmentOption({
     required this.icon,
     required this.label,
     required this.onTap,
-    required this.isDarkMode, // TAMBAHKAN INI
+    required this.isDarkMode,
   });
 
   @override
@@ -802,12 +699,12 @@ class _AttachmentOption extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withOpacity(0.1), // Tetap sama
+              color: AppTheme.primaryColor.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               icon,
-              color: AppTheme.primaryColor, // Tetap biru
+              color: AppTheme.primaryColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -817,7 +714,7 @@ class _AttachmentOption extends StatelessWidget {
               fontSize: 12,
               color: isDarkMode 
                 ? AppTheme.darkTextSecondary 
-                : AppTheme.textSecondary, // UPDATE INI
+                : AppTheme.textSecondary,
             ),
           ),
         ],

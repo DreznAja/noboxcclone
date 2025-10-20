@@ -647,19 +647,19 @@ return PopScope(
         ),
       ),
       floatingActionButton: Container(
-        margin: const EdgeInsets.only(bottom: 20, right: 10),
-        child: SizedBox(
-          width: 60,
-          height: 60,
-          child: FloatingActionButton(
-            onPressed: _onFloatingActionButtonPressed,
-            backgroundColor: AppTheme.primaryColor,
-            foregroundColor: Colors.white,
-            elevation: 6,
-            child: const Icon(Icons.add, size: 30),
-          ),
-        ),
-      ),
+  margin: const EdgeInsets.only(bottom: 20, right: 10),
+  child: SizedBox(
+    width: 60,
+    height: 60,
+    child: FloatingActionButton(
+      onPressed: _onFloatingActionButtonPressed,
+      backgroundColor: AppTheme.primaryColor,
+      foregroundColor: Colors.white, // Icon selalu putih karena background biru
+      elevation: 6,
+      child: const Icon(Icons.add, size: 30),
+    ),
+  ),
+),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     ),
   );
@@ -812,7 +812,9 @@ Widget _buildNormalAppBar() {
     );
   }
 
-  Widget _buildSearchAppBar() {
+ Widget _buildSearchAppBar() {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
     return Container(
       color: AppTheme.primaryColor,
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
@@ -820,7 +822,10 @@ Widget _buildNormalAppBar() {
         height: 60,
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white, 
+            borderRadius: BorderRadius.circular(12)
+          ),
           child: TextField(
             controller: _searchController,
             focusNode: _searchFocusNode,
@@ -828,9 +833,15 @@ Widget _buildNormalAppBar() {
             textAlignVertical: TextAlignVertical.center,
             decoration: InputDecoration(
               hintText: 'Search conversations...',
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 16, fontFamily: 'Poppins'),
+              hintStyle: TextStyle(
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey, 
+                fontSize: 16, 
+                fontFamily: 'Poppins'
+              ),
               border: InputBorder.none,
               isDense: true,
+              filled: true, // TAMBAHKAN INI - FORCE FILL
+              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN INI
               prefixIcon: IconButton(
                 onPressed: () {
                   setState(() {
@@ -839,13 +850,27 @@ Widget _buildNormalAppBar() {
                   });
                   _applyFilters();
                 },
-                icon: const Icon(Icons.arrow_back_ios_new, color: AppTheme.primaryColor, size: 24),
+                icon: Icon(
+                  Icons.arrow_back_ios_new, 
+                  color: isDarkMode ? Colors.white : AppTheme.primaryColor, 
+                  size: 24
+                ),
               ),
               suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(onPressed: () { _searchController.clear(); _applyFilters(); }, icon: const Icon(Icons.clear, color: Colors.grey))
+                  ? IconButton(
+                      onPressed: () { _searchController.clear(); _applyFilters(); }, 
+                      icon: Icon(
+                        Icons.clear, 
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey
+                      )
+                    )
                   : null,
             ),
-            style: const TextStyle(fontSize: 16, fontFamily: 'Poppins', color: Colors.black),
+            style: TextStyle(
+              fontSize: 16, 
+              fontFamily: 'Poppins', 
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black
+            ),
             onChanged: _handleSearch,
           ),
         ),

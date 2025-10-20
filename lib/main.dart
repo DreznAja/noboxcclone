@@ -24,6 +24,8 @@ import 'presentation/screens/chat/chat_screen.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/models/chat_models.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
