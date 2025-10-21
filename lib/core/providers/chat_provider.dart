@@ -1457,13 +1457,22 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       }
       
       if (SignalRService.isConnected && validatedReplyId != null) {
+        // Build Room data - only include IdGroup for group chats
+        // CRITICAL: IdLink and IdRoom must be integers, not strings
+        final roomData = <String, Object>{
+          'IdLink': int.tryParse(linkId) ?? linkId,
+          'IdAccount': int.tryParse(accountId) ?? 1,
+          'IdRoom': int.tryParse(activeRoom.id) ?? activeRoom.id,
+        };
+        
+        // Add IdGroup only for group chats
+        final grpId = activeRoom.grpId;
+        if (activeRoom.isGroup && grpId != null) {
+          roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
+        }
+        
         final signalRData = {
-          'Room': {
-            'IdLink': linkId,
-            'IdGroup': activeRoom.grpId,
-            'IdAccount': int.tryParse(accountId) ?? 1,
-            'IdRoom': activeRoom.id,
-          },
+          'Room': roomData,
           'Msg': {
             'Type': '1', // Send as text message with location content
             'Msg': locationText,
@@ -1553,13 +1562,22 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         // Send ONLY via SignalR for reply messages
         if (SignalRService.isConnected && validatedReplyId != null) {
           try {
+            // Build Room data - only include IdGroup for group chats
+            // CRITICAL: IdLink and IdRoom must be integers, not strings
+            final roomData = <String, Object>{
+              'IdLink': int.tryParse(linkId) ?? linkId,
+              'IdAccount': int.tryParse(accountId) ?? 1,
+              'IdRoom': int.tryParse(activeRoom.id) ?? activeRoom.id,
+            };
+            
+            // Add IdGroup only for group chats
+            final grpId = activeRoom.grpId;
+            if (activeRoom.isGroup && grpId != null) {
+              roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
+            }
+            
             final signalRData = {
-              'Room': {
-                'IdLink': linkId,
-                'IdGroup': activeRoom.grpId,
-                'IdAccount': int.tryParse(accountId) ?? 1,
-                'IdRoom': activeRoom.id,
-              },
+              'Room': roomData,
               'Msg': {
                 'Type': '1',
                 'Msg': text.trim(),
@@ -1623,13 +1641,22 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         // Also send via SignalR for real-time updates (without ReplyId)
         try {
           if (SignalRService.isConnected) {
+            // Build Room data - only include IdGroup for group chats
+            // CRITICAL: IdLink and IdRoom must be integers, not strings
+            final roomData = <String, Object>{
+              'IdLink': int.tryParse(linkId) ?? linkId,
+              'IdAccount': int.tryParse(accountId) ?? 1,
+              'IdRoom': int.tryParse(activeRoom.id) ?? activeRoom.id,
+            };
+            
+            // Add IdGroup only for group chats
+            final grpId = activeRoom.grpId;
+            if (activeRoom.isGroup && grpId != null) {
+              roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
+            }
+            
             final signalRData = {
-              'Room': {
-                'IdLink': linkId,
-                'IdGroup': activeRoom.grpId,
-                'IdAccount': int.tryParse(accountId) ?? 1,
-                'IdRoom': activeRoom.id,
-              },
+              'Room': roomData,
               'Msg': {
                 'Type': '1',
                 'Msg': text.trim(),
@@ -1780,13 +1807,22 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
               fileMap['Caption'] = caption!.trim();
             }
 
+            // Build Room data - only include IdGroup for group chats
+            // CRITICAL: IdLink and IdRoom must be integers, not strings
+            final roomData = <String, Object>{
+              'IdLink': int.tryParse(linkId) ?? linkId,
+              'IdAccount': int.tryParse(accountId) ?? 1,
+              'IdRoom': int.tryParse(activeRoom.id) ?? activeRoom.id,
+            };
+            
+            // Add IdGroup only for group chats
+            final grpId = activeRoom.grpId;
+            if (activeRoom.isGroup && grpId != null) {
+              roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
+            }
+            
             final signalRData = {
-              'Room': {
-                'IdLink': linkId,
-                'IdGroup': activeRoom.grpId,
-                'IdAccount': int.tryParse(accountId) ?? 1,
-                'IdRoom': activeRoom.id,
-              },
+              'Room': roomData,
               'Msg': {
                 'Type': type,
                 'Msg': caption?.trim(), // Include caption in SignalR message
@@ -1849,13 +1885,22 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
           fileMap['Caption'] = caption!.trim();
         }
 
+        // Build Room data - only include IdGroup for group chats
+        // CRITICAL: IdLink and IdRoom must be integers, not strings
+        final roomData = <String, Object>{
+          'IdLink': int.tryParse(linkId) ?? linkId,
+          'IdAccount': int.tryParse(accountId) ?? 1,
+          'IdRoom': int.tryParse(activeRoom.id) ?? activeRoom.id,
+        };
+        
+        // Add IdGroup only for group chats
+        final grpId = activeRoom.grpId;
+        if (activeRoom.isGroup && grpId != null) {
+          roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
+        }
+        
         final signalRData = {
-          'Room': {
-            'IdLink': linkId,
-            'IdGroup': activeRoom.grpId,
-            'IdAccount': int.tryParse(accountId) ?? 1,
-            'IdRoom': activeRoom.id,
-          },
+          'Room': roomData,
           'Msg': {
             'Type': type,
             'Msg': caption?.trim(),

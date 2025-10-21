@@ -86,7 +86,7 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     );
   }
 
-  Future<void> loadContactDetail(String contactId) async {
+ Future<void> loadContactDetail(String contactId) async {
     state = state.copyWith(isLoading: true, error: null);
 
     print('Loading contact detail for ID: $contactId');
@@ -103,31 +103,26 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
         );
 
         // Load additional data in parallel
-        // Load additional data but don't fail if they error
         try {
-          // Load data sequentially to avoid overwhelming the API
           await loadConversationHistory(contactId);
           await loadContactNotesFromRoom(contactId);
           await loadContactFunnel(contactId);
           await loadAvailableFunnels();
-          await _loadCampaign(contactId);
-          await _loadDeal(contactId);
-          await _loadFormTemplate(contactId);
-          await _loadFormResult(contactId);
+          await loadContactCampaign(contactId);
+          await loadContactDeal(contactId);
+          await loadContactFormTemplate(contactId);
+          await loadContactFormResult(contactId);
         } catch (additionalDataError) {
           print('Some additional data failed to load: $additionalDataError');
-          // Don't set error state for additional data failures
         }
       } else {
         print('Contact not found for ID: $contactId');
-        // Don't set error state - just log it
         state = state.copyWith(
           isLoading: false,
         );
       }
     } catch (e) {
       print('Exception loading contact detail for ID $contactId: $e');
-      // Don't set error state - just log it
       state = state.copyWith(
         isLoading: false,
       );
@@ -301,7 +296,7 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
       return false;
     }
   }
-  Future<void> _loadCampaign(String contactId) async {
+   Future<void> loadContactCampaign(String contactId) async {
     if (!mounted) return;
     
     try {
@@ -314,7 +309,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  Future<void> _loadDeal(String contactId) async {
+  // ✅ Ubah dari _loadDeal menjadi loadContactDeal (public)
+  Future<void> loadContactDeal(String contactId) async {
     if (!mounted) return;
     
     try {
@@ -327,7 +323,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  Future<void> _loadFormTemplate(String contactId) async {
+  // ✅ Ubah dari _loadFormTemplate menjadi loadContactFormTemplate (public)
+  Future<void> loadContactFormTemplate(String contactId) async {
     if (!mounted) return;
     
     try {
@@ -340,7 +337,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  Future<void> _loadFormResult(String contactId) async {
+  // ✅ Ubah dari _loadFormResult menjadi loadContactFormResult (public)
+  Future<void> loadContactFormResult(String contactId) async {
     if (!mounted) return;
     
     try {

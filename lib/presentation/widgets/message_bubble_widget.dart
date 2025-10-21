@@ -17,11 +17,13 @@ import '../../core/app_config.dart';
 import '../../core/utils/message_detection_utils.dart';
 import '../../core/utils/message_utils.dart';
 import '../screens/media/image_viewer_screen.dart';
+import '../screens/media/image_gallery_viewer_screen.dart';
 import '../screens/media/video_player_screen.dart';
 import 'forward_dialog.dart';
 
 class MessageBubbleWidget extends ConsumerWidget {
   final ChatMessage message;
+  final List<ChatMessage>? allMessages; // All messages untuk gallery
   final bool showSenderInfo;
   final bool isSelected;
   final VoidCallback? onLongPress;
@@ -34,6 +36,7 @@ class MessageBubbleWidget extends ConsumerWidget {
   const MessageBubbleWidget({
     super.key,
     required this.message,
+    this.allMessages,
     this.showSenderInfo = true,
     this.isSelected = false,
     this.onLongPress,
@@ -587,14 +590,82 @@ Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode) {
         borderRadius: BorderRadius.circular(8),
         child: GestureDetector(
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => ImageViewerScreen(
-                  imageUrl: imageUrl,
-                  caption: hasCaption ? caption : null,
+            // Jika ada allMessages, buka gallery viewer dengan swipe
+            if (allMessages != null && allMessages!.isNotEmpty) {
+              // Filter hanya image messages (type == 3)
+              final imageMessages = allMessages!.where((m) => m.type == 3).toList();
+              
+              print('🖼️ Found ${imageMessages.length} image messages in chat');
+              
+              if (imageMessages.length > 1) {
+                // Convert to ImageGalleryItem dan find current index
+                final galleryItems = <ImageGalleryItem>[];
+                
+                for (final m in imageMessages) {
+                  String? imgUrl = _extractImageUrl(m);
+                  
+                  if (imgUrl != null && imgUrl.isNotEmpty) {
+                    galleryItems.add(ImageGalleryItem(
+                      imageUrl: imgUrl,
+                      caption: m.message?.trim(),
+                      timestamp: m.timestamp,
+                    ));
+                  }
+                }
+                
+                print('📸 Gallery items found: ${galleryItems.length}');
+                
+                // Validasi gallery items tidak kosong
+                if (galleryItems.isEmpty) {
+                  print('⚠️ No valid gallery items found, opening single image viewer');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => ImageViewerScreen(
+                        imageUrl: imageUrl,
+                        caption: hasCaption ? caption : null,
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                
+                // Find current image index
+                final currentIndex = galleryItems.indexWhere((item) => item.imageUrl == imageUrl);
+                
+                print('🎯 Current image index: $currentIndex, total: ${galleryItems.length}');
+                
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => ImageGalleryViewerScreen(
+                      images: galleryItems,
+                      initialIndex: currentIndex >= 0 ? currentIndex : 0,
+                    ),
+                  ),
+                );
+              } else {
+                // Hanya satu gambar, buka viewer biasa
+                print('📷 Only one image, opening single viewer');
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => ImageViewerScreen(
+                      imageUrl: imageUrl,
+                      caption: hasCaption ? caption : null,
+                    ),
+                  ),
+                );
+              }
+            } else {
+              // Fallback ke viewer biasa jika tidak ada allMessages
+              print('⚠️ No allMessages provided, opening single viewer');
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ImageViewerScreen(
+                    imageUrl: imageUrl,
+                    caption: hasCaption ? caption : null,
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           },
           child: Hero(
             tag: imageUrl,
@@ -1284,6 +1355,49 @@ Future<String?> _generateThumbnail(String videoUrl) async {
     } catch (e) {
       print('Failed to open maps: $e');
     }
+  }
+
+  // Helper untuk extract image URL dari message lain
+  String? _extractImageUrl(ChatMessage msg) {
+    if (msg.file != null) {
+      try {
+        final fileData = msg.file!;
+        
+        if (fileData.startsWith('[') || fileData.startsWith('{')) {
+          final dynamic parsed = jsonDecode(fileData);
+          if (parsed is List && parsed.isNotEmpty) {
+            final fileInfo = parsed[0];
+            if (fileInfo is Map<String, dynamic>) {
+              final filename = fileInfo['Filename'] ?? fileInfo['filename'];
+              if (filename != null) {
+                if (filename.toString().startsWith('http://') || filename.toString().startsWith('https://')) {
+                  return filename.toString();
+                }
+                return '${AppConfig.baseUrl}upload/$filename';
+              }
+            }
+          } else if (parsed is Map<String, dynamic>) {
+            final filename = parsed['Filename'] ?? parsed['filename'];
+            if (filename != null) {
+              if (filename.toString().startsWith('http://') || filename.toString().startsWith('https://')) {
+                return filename.toString();
+              }
+              return '${AppConfig.baseUrl}upload/$filename';
+            }
+          }
+        }
+        
+        if (fileData.startsWith('http://') || fileData.startsWith('https://')) {
+          return fileData;
+        }
+        
+        return '${AppConfig.baseUrl}upload/$fileData';
+      } catch (e) {
+        print('❌ Error extracting image URL from message ${msg.id}: $e');
+        print('   File data: ${msg.file}');
+      }
+    }
+    return null;
   }
 
   String? _getFileUrl() {

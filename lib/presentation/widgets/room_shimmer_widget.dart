@@ -16,15 +16,15 @@ class RoomShimmerWidget extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       separatorBuilder: (context, index) => const Divider(
         height: 1,
-        indent: 72,
-        endIndent: 16,
+        indent: 68,
+        endIndent: 12,
       ),
       itemBuilder: (context, index) {
         return Shimmer.fromColors(
           baseColor: Colors.grey[300]!,
           highlightColor: Colors.grey[100]!,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

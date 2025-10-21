@@ -648,6 +648,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                     
                                     return MessageBubbleWidget(
                                       message: message,
+                                      allMessages: chatState.messages, // Pass all messages untuk gallery
                                       showSenderInfo: showSenderInfo,
                                       isSelected: _selectedMessage?.id == message.id,
                                       onLongPress: () => _onMessageLongPress(message),
@@ -956,7 +957,7 @@ PreferredSizeWidget _buildNormalAppBar() {
 if (!widget.isArchived)
   PopupMenuButton<String>(
     icon: const Icon(Icons.more_vert, color: Colors.white),
-    color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE INI
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
     ),
@@ -979,53 +980,77 @@ if (!widget.isArchived)
           break;
       }
     },
-    itemBuilder: (BuildContext context) => [
-      PopupMenuItem(
-        value: 'add_agent',
-        child: Row(
-          children: [
-            const Icon(Icons.person_add_outlined, size: 20, color: Colors.blue),
-            const SizedBox(width: 12),
-            Text(
-              'Add Human Agent',
-              style: TextStyle(
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.blue, // UPDATE INI
-              ),
+    itemBuilder: (BuildContext context) {
+      // Jika conversation sudah resolved (status == 3), hanya tampilkan Help
+      if (widget.room.status == 3) {
+        return [
+          PopupMenuItem(
+            value: 'help',
+            child: Row(
+              children: [
+                const Icon(Icons.help_outline, size: 20, color: Colors.red),
+                const SizedBox(width: 12),
+                Text(
+                  'Help',
+                  style: TextStyle(
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.red,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-      PopupMenuItem(
-        value: 'resolve',
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
-            const SizedBox(width: 12),
-            Text(
-              'Mark as Resolved',
-              style: TextStyle(
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.green, // UPDATE INI
+          ),
+        ];
+      }
+      
+      // Jika belum resolved, tampilkan semua menu
+      return [
+        PopupMenuItem(
+          value: 'add_agent',
+          child: Row(
+            children: [
+              const Icon(Icons.person_add_outlined, size: 20, color: Colors.blue),
+              const SizedBox(width: 12),
+              Text(
+                'Add Human Agent',
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.blue,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-      PopupMenuItem(
-        value: 'help',
-        child: Row(
-          children: [
-            const Icon(Icons.help_outline, size: 20, color: Colors.red),
-            const SizedBox(width: 12),
-            Text(
-              'Help',
-              style: TextStyle(
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.red, // UPDATE INI
+        PopupMenuItem(
+          value: 'resolve',
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
+              const SizedBox(width: 12),
+              Text(
+                'Mark as Resolved',
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.green,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    ],
+        PopupMenuItem(
+          value: 'help',
+          child: Row(
+            children: [
+              const Icon(Icons.help_outline, size: 20, color: Colors.red),
+              const SizedBox(width: 12),
+              Text(
+                'Help',
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.red,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ];
+    },
   ),
     ],
   );

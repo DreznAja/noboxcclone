@@ -123,7 +123,7 @@ class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
               baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
               highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -249,8 +249,9 @@ Widget build(BuildContext context, WidgetRef ref) {
     color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : null,
     child: Column(
       children: [
-        // Top separator line - HAPUS margin untuk full width
+        // Top separator line dengan margin
         Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
           height: 0.5,
           color: isDarkMode 
             ? Colors.white.withOpacity(0.1)
@@ -261,7 +262,7 @@ Widget build(BuildContext context, WidgetRef ref) {
           onTap: onTap,
           onLongPress: onLongPress,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             color: isSelectedForAction ? AppTheme.primaryColor.withOpacity(0.1) : null,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,8 +413,9 @@ Widget build(BuildContext context, WidgetRef ref) {
           ),
         ),
         
-        // Bottom separator line - HAPUS margin untuk full width
+        // Bottom separator line dengan margin
         Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
           height: 0.5,
           color: isDarkMode 
             ? Colors.white.withOpacity(0.1)

@@ -647,7 +647,7 @@ return PopScope(
         ),
       ),
       floatingActionButton: Container(
-  margin: const EdgeInsets.only(bottom: 20, right: 10),
+  margin: const EdgeInsets.only(bottom: 20, right: 4),
   child: SizedBox(
     width: 60,
     height: 60,
