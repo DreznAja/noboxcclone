@@ -84,7 +84,7 @@ class StorageService {
   // Settings management
   static Future<void> saveSetting(String key, dynamic value) async {
     if (value is String) {
-      await instance.setString(key, value);
+      await instance.setString(key, value);  
     } else if (value is int) {
       await instance.setInt(key, value);
     } else if (value is bool) {

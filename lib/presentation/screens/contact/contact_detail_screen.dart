@@ -596,23 +596,145 @@ return Scaffold(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Name',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
+                // Name
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Name',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        contact.name,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF007AFF),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  contact.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF007AFF),
-                    fontWeight: FontWeight.w500,
+                // Country - only show if exists
+                if (contact.country != null && contact.country!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Country',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          contact.country!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                ],
+                // State - only show if exists
+                if (contact.state != null && contact.state!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'State',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          contact.state!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                // City - only show if exists
+                if (contact.city != null && contact.city!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'City',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          contact.city!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                // Address - only show if exists
+                if (contact.address != null && contact.address!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Address',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          contact.address!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

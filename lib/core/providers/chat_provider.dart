@@ -2090,14 +2090,58 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     final existingIndex = messages.indexWhere((m) => m.id == message.id);
     if (existingIndex == -1) {
       // Check for optimistic message to replace
-      final optimisticIndex = messages.indexWhere((m) => 
-          m.id.startsWith('temp_') && 
-          m.message == message.message &&
-          m.timestamp.difference(message.timestamp).abs().inMinutes < 5);
+      // FIXED: For media messages, match by file field instead of message field
+      // because caption might be in file JSON, not in message field
+      final optimisticIndex = messages.indexWhere((m) {
+        if (!m.id.startsWith('temp_')) return false;
+        if (m.timestamp.difference(message.timestamp).abs().inMinutes >= 5) return false;
+        
+        // For media messages (image, video, audio, document, sticker), match by file
+        if (message.type != 1 && m.type == message.type) {
+          // Try to match by filename in file/files field
+          try {
+            String? incomingFilename;
+            String? optimisticFilename;
+            
+            // Extract filename from incoming message
+            if (message.file != null && message.file!.isNotEmpty) {
+              final parsed = jsonDecode(message.file!);
+              if (parsed is List && parsed.isNotEmpty && parsed[0] is Map) {
+                incomingFilename = parsed[0]['Filename'] ?? parsed[0]['filename'];
+              } else if (parsed is Map) {
+                incomingFilename = parsed['Filename'] ?? parsed['filename'];
+              }
+            }
+            
+            // Extract filename from optimistic message
+            if (m.file != null && m.file!.isNotEmpty) {
+              final parsed = jsonDecode(m.file!);
+              if (parsed is List && parsed.isNotEmpty && parsed[0] is Map) {
+                optimisticFilename = parsed[0]['Filename'] ?? parsed[0]['filename'];
+              } else if (parsed is Map) {
+                optimisticFilename = parsed['Filename'] ?? parsed['filename'];
+              }
+            }
+            
+            if (incomingFilename != null && optimisticFilename != null) {
+              final matches = incomingFilename == optimisticFilename;
+              if (matches) {
+                print('✅ Found matching media message by filename: $incomingFilename');
+              }
+              return matches;
+            }
+          } catch (e) {
+            print('⚠️ Error matching media message: $e');
+          }
+        }
+        
+        // For text messages, match by message content
+        return m.message == message.message;
+      });
       
       if (optimisticIndex != -1) {
         messages[optimisticIndex] = message;
-        print('🔄 Replaced optimistic message');
+        print('🔄 Replaced optimistic message with server message');
       } else {
         messages.add(message);
         print('➕ Added new message');
