@@ -257,6 +257,9 @@ class PushNotificationService {
     return null;
   }
 
+  // Store notification messages per room for grouping
+  static final Map<String, List<Map<String, String>>> _notificationMessages = {};
+
   // Show notification for new chat messages
   static Future<void> showChatNotification({
     required String roomId,
@@ -265,7 +268,37 @@ class PushNotificationService {
     required String message,
   }) async {
     try {
-      const androidDetails = AndroidNotificationDetails(
+      // Add message to the list for this room
+      if (!_notificationMessages.containsKey(roomId)) {
+        _notificationMessages[roomId] = [];
+      }
+      _notificationMessages[roomId]!.add({
+        'sender': senderName,
+        'message': message,
+        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+      });
+
+      // Keep only last 10 messages per room
+      if (_notificationMessages[roomId]!.length > 10) {
+        _notificationMessages[roomId]!.removeAt(0);
+      }
+
+      // Build messaging style with all messages
+      final messages = _notificationMessages[roomId]!;
+      final messagingStyle = MessagingStyleInformation(
+        Person(name: 'Me', key: 'me'),
+        conversationTitle: senderName,
+        groupConversation: false,
+        messages: messages.map((msg) {
+          return Message(
+            msg['message']!,
+            DateTime.fromMillisecondsSinceEpoch(int.parse(msg['timestamp']!)),
+            Person(name: msg['sender']!, key: msg['sender']!),
+          );
+        }).toList(),
+      );
+
+      final androidDetails = AndroidNotificationDetails(
         'chat_notifications',
         'Chat Notifications',
         channelDescription: 'Notifications for new chat messages',
@@ -274,9 +307,11 @@ class PushNotificationService {
         showWhen: true,
         enableVibration: true,
         enableLights: true,
-        color: Color(0xFF3B82F6),
+        color: const Color(0xFF3B82F6),
         icon: '@drawable/nobox2',
-        styleInformation: BigTextStyleInformation(''),
+        styleInformation: messagingStyle,
+        groupKey: 'chat_$roomId', // Group by room/contact
+        setAsGroupSummary: false,
       );
 
       const iosDetails = DarwinNotificationDetails(
@@ -285,7 +320,7 @@ class PushNotificationService {
         presentSound: true,
       );
 
-      const details = NotificationDetails(
+      final details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
@@ -296,14 +331,14 @@ class PushNotificationService {
       });
 
       await _localNotifications.show(
-        roomId.hashCode, // Use room ID hash as notification ID
+        roomId.hashCode, // Use room ID hash as notification ID - same ID updates existing
         senderName,
         message,
         details,
         payload: payload,
       );
 
-      print('📱 Chat notification shown for room: $roomId');
+      print('📱 Chat notification shown for room: $roomId (${messages.length} messages)');
     } catch (e) {
       print('❌ Error showing chat notification: $e');
     }
@@ -312,11 +347,17 @@ class PushNotificationService {
   // Cancel notifications for a specific room
   static Future<void> cancelNotificationsForRoom(String roomId) async {
     await _localNotifications.cancel(roomId.hashCode);
+    // Clear message history for this room
+    _notificationMessages.remove(roomId);
+    print('📱 Notifications cleared for room: $roomId');
   }
 
   // Cancel all notifications
   static Future<void> cancelAllNotifications() async {
     await _localNotifications.cancelAll();
+    // Clear all message history
+    _notificationMessages.clear();
+    print('📱 All notifications cleared');
   }
 
   // Subscribe to topic (for broadcast notifications)
