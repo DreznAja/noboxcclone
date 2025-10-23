@@ -5,6 +5,7 @@ import 'package:nobox_chat/core/models/location_models.dart';
 import 'package:nobox_chat/core/providers/contact_detail_provider.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:nobox_chat/core/services/address_service.dart';
+import 'package:nobox_chat/core/services/contact_detail_service.dart';
 import 'package:nobox_chat/core/theme/app_theme.dart';
 
 class EditContactScreen extends ConsumerStatefulWidget {
@@ -22,20 +23,23 @@ class EditContactScreen extends ConsumerStatefulWidget {
 class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   final _formKey = GlobalKey<FormState>();
   final AddressService _addressService = AddressService();
+  final ContactDetailService _contactService = ContactDetailService();
   
   late TextEditingController _nameController;
-  late TextEditingController _categoryController;
   late TextEditingController _addressController;
   
+  List<String> _categories = [];
   List<Country> _countries = [];
   List<StateRegion> _states = [];
   List<City> _cities = [];
   
+  String? _selectedCategory;
   String? _selectedCountryId;
   String? _selectedStateId;
   String? _selectedCityId;
   
   bool _isSaving = false;
+  bool _isLoadingCategories = false;
   bool _isLoadingCountries = false;
   bool _isLoadingStates = false;
   bool _isLoadingCities = false;
@@ -44,18 +48,26 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.contact.name);
-    _categoryController = TextEditingController(text: '');
     _addressController = TextEditingController(text: widget.contact.address ?? '');
     
-    // Load data asynchronously tanpa await
     _loadInitialData();
   }
   
   Future<void> _loadInitialData() async {
-    // Load countries dengan chunking
-    await _loadCountriesWithChunking();
+    // Load categories and countries in parallel
+    await Future.wait([
+      _loadCategories(),
+      _loadCountries(),
+    ]);
     
-    // Load data lainnya secara parallel jika ada
+    // Set category if exists
+    if (widget.contact.category != null && _categories.contains(widget.contact.category)) {
+      setState(() {
+        _selectedCategory = widget.contact.category;
+      });
+    }
+    
+    // Load location data if contact has country
     if (widget.contact.country != null && widget.contact.country!.isNotEmpty) {
       final matchingCountry = _countries.where(
         (c) => c.name.toLowerCase() == widget.contact.country!.toLowerCase()
@@ -66,7 +78,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
           _selectedCountryId = matchingCountry.id;
         });
         
-        await _loadStatesWithChunking(matchingCountry.id, clearSelection: false);
+        await _loadStates(matchingCountry.id, clearSelection: false);
         
         if (widget.contact.state != null && widget.contact.state!.isNotEmpty) {
           final matchingState = _states.where(
@@ -78,7 +90,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
               _selectedStateId = matchingState.id;
             });
             
-            await _loadCitiesWithChunking(matchingState.id, clearSelection: false);
+            await _loadCities(matchingState.id, clearSelection: false);
             
             if (widget.contact.city != null && widget.contact.city!.isNotEmpty) {
               final matchingCity = _cities.where(
@@ -100,46 +112,37 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _categoryController.dispose();
     _addressController.dispose();
     super.dispose();
   }
-
-  // Load countries dengan chunking untuk menampilkan data secara bertahap
-  Future<void> _loadCountriesWithChunking() async {
+  
+  Future<void> _loadCategories() async {
     setState(() {
-      _isLoadingCountries = true;
-      _countries = [];
+      _isLoadingCategories = true;
     });
 
-    try {
-      final countries = await _addressService.getCountries();
-      
-      // Chunking: tampilkan data per batch
-      const chunkSize = 50;
-      for (var i = 0; i < countries.length; i += chunkSize) {
-        final end = (i + chunkSize < countries.length) ? i + chunkSize : countries.length;
-        final chunk = countries.sublist(i, end);
-        
-        if (mounted) {
-          setState(() {
-            _countries.addAll(chunk);
-          });
-        }
-        
-        // Beri waktu untuk UI update
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingCountries = false;
-        });
-      }
-    }
+    final categories = await _contactService.getContactCategories();
+    
+    setState(() {
+      _categories = categories;
+      _isLoadingCategories = false;
+    });
   }
 
-  Future<void> _loadStatesWithChunking(String countryId, {bool clearSelection = true}) async {
+  Future<void> _loadCountries() async {
+    setState(() {
+      _isLoadingCountries = true;
+    });
+
+    final countries = await _addressService.getCountries();
+    
+    setState(() {
+      _countries = countries;
+      _isLoadingCountries = false;
+    });
+  }
+
+  Future<void> _loadStates(String countryId, {bool clearSelection = true}) async {
     setState(() {
       _isLoadingStates = true;
       _states = [];
@@ -150,32 +153,15 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
       }
     });
 
-    try {
-      final states = await _addressService.getStates(countryId);
-      
-      const chunkSize = 30;
-      for (var i = 0; i < states.length; i += chunkSize) {
-        final end = (i + chunkSize < states.length) ? i + chunkSize : states.length;
-        final chunk = states.sublist(i, end);
-        
-        if (mounted) {
-          setState(() {
-            _states.addAll(chunk);
-          });
-        }
-        
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingStates = false;
-        });
-      }
-    }
+    final states = await _addressService.getStates(countryId);
+    
+    setState(() {
+      _states = states;
+      _isLoadingStates = false;
+    });
   }
 
-  Future<void> _loadCitiesWithChunking(String stateId, {bool clearSelection = true}) async {
+  Future<void> _loadCities(String stateId, {bool clearSelection = true}) async {
     setState(() {
       _isLoadingCities = true;
       _cities = [];
@@ -184,29 +170,12 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
       }
     });
 
-    try {
-      final cities = await _addressService.getCities(stateId);
-      
-      const chunkSize = 30;
-      for (var i = 0; i < cities.length; i += chunkSize) {
-        final end = (i + chunkSize < cities.length) ? i + chunkSize : cities.length;
-        final chunk = cities.sublist(i, end);
-        
-        if (mounted) {
-          setState(() {
-            _cities.addAll(chunk);
-          });
-        }
-        
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingCities = false;
-        });
-      }
-    }
+    final cities = await _addressService.getCities(stateId);
+    
+    setState(() {
+      _cities = cities;
+      _isLoadingCities = false;
+    });
   }
 
   Future<void> _saveContact() async {
@@ -258,7 +227,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
       final success = await ref.read(contactDetailProvider.notifier).updateContact(
         contactId: widget.contact.id,
         name: _nameController.text.trim(),
-        category: _categoryController.text.trim(),
+        category: _selectedCategory,
         address: _addressController.text.trim(),
         state: selectedState.isNotEmpty ? selectedState : null,
         country: selectedCountry.isNotEmpty ? selectedCountry : null,
@@ -439,12 +408,26 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _categoryController,
+                
+                // Category Dropdown
+                _buildDropdownField(
                   label: 'Category',
-                  icon: Icons.label_outline,
+                  icon: Icons.category,
                   isDarkMode: isDarkMode,
-                  hint: 'e.g., Family, Work, Friend',
+                  value: _selectedCategory,
+                  items: _categories,
+                  itemBuilder: (category) => DropdownMenuItem<String>(
+                    value: category,
+                    child: Text(category),
+                  ),
+                  onChanged: _isLoadingCategories ? null : (value) {
+                    setState(() {
+                      _selectedCategory = value;
+                    });
+                  },
+                  isLoading: _isLoadingCategories,
+                  hint: 'Select a category',
+                  itemCount: _categories.length,
                 ),
               ],
             ),
@@ -481,7 +464,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                       _selectedCountryId = value;
                     });
                     if (value != null) {
-                      _loadStatesWithChunking(value);
+                      _loadStates(value);
                     }
                   },
                   isLoading: _isLoadingCountries,
@@ -504,7 +487,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                       _selectedStateId = value;
                     });
                     if (value != null) {
-                      _loadCitiesWithChunking(value);
+                      _loadCities(value);
                     }
                   },
                   isLoading: _isLoadingStates,

@@ -3,6 +3,7 @@ class ContactDetail {
   final String name;
   final String? phone;
   final String? email;
+  final String? category;
   final String? address;
   final String? city;
   final String? state;
@@ -24,6 +25,7 @@ class ContactDetail {
     required this.name,
     this.phone,
     this.email,
+    this.category,
     this.address,
     this.city,
     this.state,
@@ -105,6 +107,7 @@ class ContactDetail {
       name: json['Name'] ?? json['GrpName'] ?? json['Grp'] ?? '',
       phone: json['Phone'],
       email: json['Email'],
+      category: json['Category'],
       address: json['Address'],
       city: json['City'],
       state: json['State'],

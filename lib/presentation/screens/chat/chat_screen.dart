@@ -622,39 +622,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                   addAutomaticKeepAlives: true,
                                   addRepaintBoundaries: true,
                                   itemCount: chatState.messages.length + (chatState.isLoadingMore ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    // Show shimmer when loading more
-                                    if (index == 0 && chatState.isLoadingMore) {
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-                                        child: Column(
-                                          children: [
-                                            _buildShimmerMessageBubble(isFromAgent: true, isDarkMode: isDarkMode), // UPDATE INI
-                                            const SizedBox(height: 8),
-                                            _buildShimmerMessageBubble(isFromAgent: false, isDarkMode: isDarkMode), // UPDATE INI
-                                            const SizedBox(height: 8),
-                                            _buildShimmerMessageBubble(isFromAgent: true, isDarkMode: isDarkMode), // UPDATE INI
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                    
-                                    final messageIndex = chatState.isLoadingMore ? index - 1 : index;
-                                    final message = chatState.messages[messageIndex];
-                                    final previousMessage = messageIndex > 0 ? chatState.messages[messageIndex - 1] : null;
-                                    final showSenderInfo = previousMessage == null || 
-                                        previousMessage.agentId != message.agentId ||
-                                        message.timestamp.difference(previousMessage.timestamp).inMinutes > 5;
-                                    
-                                    return MessageBubbleWidget(
-                                      message: message,
-                                      allMessages: chatState.messages, // Pass all messages untuk gallery
-                                      showSenderInfo: showSenderInfo,
-                                      isSelected: _selectedMessage?.id == message.id,
-                                      onLongPress: () => _onMessageLongPress(message),
-                                      onTap: _isSelectionMode ? () => _exitSelectionMode() : null,
-                                    );
-                                  },
+                                 itemBuilder: (context, index) {
+  // Show shimmer when loading more
+  if (index == 0 && chatState.isLoadingMore) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+      child: Column(
+        children: [
+          _buildShimmerMessageBubble(isFromAgent: true, isDarkMode: isDarkMode),
+          const SizedBox(height: 8),
+          _buildShimmerMessageBubble(isFromAgent: false, isDarkMode: isDarkMode),
+          const SizedBox(height: 8),
+          _buildShimmerMessageBubble(isFromAgent: true, isDarkMode: isDarkMode),
+        ],
+      ),
+    );
+  }
+  
+  final messageIndex = chatState.isLoadingMore ? index - 1 : index;
+  final message = chatState.messages[messageIndex];
+  final previousMessage = messageIndex > 0 ? chatState.messages[messageIndex - 1] : null;
+  final showSenderInfo = previousMessage == null || 
+      previousMessage.agentId != message.agentId ||
+      message.timestamp.difference(previousMessage.timestamp).inMinutes > 5;
+  
+  return MessageBubbleWidget(
+    message: message,
+    allMessages: chatState.messages,
+    showSenderInfo: showSenderInfo,
+    isSelected: _selectedMessage?.id == message.id,
+    onLongPress: () => _onMessageLongPress(message),
+    onTap: _isSelectionMode ? () => _exitSelectionMode() : null,
+    // TAMBAHKAN INI - Pass onReply callback
+    onReply: (!widget.isArchived && !widget.isReadOnly && widget.room.status != 3)
+        ? () {
+            print('🔄 Swipe to reply triggered for message: ${message.id}');
+            setState(() {
+              _replyingTo = message;
+            });
+          }
+        : null,
+  );
+},
                                 ),
                               ),
                             ),

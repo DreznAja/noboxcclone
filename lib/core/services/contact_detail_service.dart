@@ -655,6 +655,48 @@ class ContactDetailService {
     }
   }
 
+  Future<List<String>> getContactCategories() async {
+    try {
+      print('Fetching contact categories...');
+      
+      final requestData = {
+        'Take': 1000,
+        'Skip': 0,
+        'IncludeColumns': ['Category'],
+        'ColumnSelection': 1,
+      };
+
+      final response = await _dio.post(
+        'Services/Nobox/Contact/List',
+        data: requestData,
+      );
+
+      print('Categories response: ${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data['IsError'] != true) {
+        final List<dynamic> entities = response.data['Entities'] ?? [];
+        
+        // Extract unique categories
+        final categories = <String>{};
+        for (var entity in entities) {
+          final category = entity['Category'];
+          if (category != null && category.toString().isNotEmpty) {
+            categories.add(category.toString());
+          }
+        }
+        
+        final sortedCategories = categories.toList()..sort();
+        print('Found ${sortedCategories.length} unique categories');
+        return sortedCategories;
+      }
+
+      return [];
+    } catch (e) {
+      print('Error fetching categories: $e');
+      return [];
+    }
+  }
+
   Future<bool> updateContact({
     required String contactId,
     String? name,
