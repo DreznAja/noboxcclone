@@ -342,6 +342,18 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
       // Hide loading indicator
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
+      if (location == null) {
+        // Show error if location is null
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to get current location'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      
       // Send location using the chat provider
       final chatNotifier = ref.read(chatProvider.notifier);
       await chatNotifier.sendLocationMessage(

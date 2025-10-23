@@ -22,6 +22,7 @@ import '../chat/chat_screen.dart';
 import '../../../core/models/chat_models.dart';
 import '../../../core/services/account_service.dart';
 import 'conversation_history_screen.dart';
+import 'edit_contact_screen.dart';
 
 class ContactDetailScreen extends ConsumerStatefulWidget {
   final String contactId;
@@ -577,13 +578,20 @@ return Scaffold(
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Edit contact feature coming soon'),
-                        backgroundColor: AppTheme.primaryColor,
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditContactScreen(
+                          contact: contact,
+                        ),
                       ),
                     );
+                    
+                    // If contact was updated, reload the detail
+                    if (result == true) {
+                      ref.read(contactDetailProvider.notifier).loadContactDetail(widget.contactId);
+                    }
                   },
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),

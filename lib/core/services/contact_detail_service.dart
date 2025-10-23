@@ -654,4 +654,62 @@ class ContactDetailService {
       return false;
     }
   }
+
+  Future<bool> updateContact({
+    required String contactId,
+    String? name,
+    String? category,
+    String? address,
+    String? city,
+    String? state,
+    String? country,
+  }) async {
+    try {
+      print('Updating contact: $contactId');
+      
+      final Map<String, dynamic> entity = {};
+      
+      if (name != null && name.isNotEmpty) entity['Name'] = name;
+      if (category != null && category.isNotEmpty) entity['Category'] = category;
+      if (address != null) entity['Address'] = address;
+      if (city != null) entity['City'] = city;
+      if (state != null) entity['State'] = state;
+      if (country != null) entity['Country'] = country;
+      
+      final requestData = {
+        'EntityId': contactId,
+        'Entity': entity,
+      };
+
+      print('Update contact request: $requestData');
+
+      final response = await _dio.post(
+        'Services/Nobox/Contact/Update',
+        data: requestData,
+      );
+
+      print('Update contact response: ${response.statusCode} - ${response.data}');
+
+      if (response.statusCode == 200 && response.data['IsError'] != true) {
+        print('Successfully updated contact');
+        return true;
+      }
+
+      print('Update Contact API Error: ${response.data}');
+      return false;
+    } catch (e) {
+      print('Error updating contact: $e');
+      
+      if (e.toString().contains('DioException')) {
+        try {
+          final dioError = e as DioException;
+          print('❌ Error type: ${dioError.type}');
+          print('❌ Error message: ${dioError.message}');
+          print('❌ Error response: ${dioError.response?.data}');
+        } catch (_) {}
+      }
+      
+      return false;
+    }
+  }
 }

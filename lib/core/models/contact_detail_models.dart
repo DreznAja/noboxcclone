@@ -41,10 +41,54 @@ class ContactDetail {
     this.agents,
   });
 
+  // ✅ COPYWITH METHOD - INI YANG KURANG!
+  ContactDetail copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    String? email,
+    String? address,
+    String? city,
+    String? state,
+    String? country,
+    String? zipCode,
+    String? image,
+    bool? isBlocked,
+    String? linkId,
+    int? channelId,
+    String? channelName,
+    bool? isGroup,
+    String? description,
+    String? groupId,
+    String? externalId,
+    List<GroupAgent>? agents,
+  }) {
+    return ContactDetail(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      state: state ?? this.state,
+      country: country ?? this.country,
+      zipCode: zipCode ?? this.zipCode,
+      image: image ?? this.image,
+      isBlocked: isBlocked ?? this.isBlocked,
+      linkId: linkId ?? this.linkId,
+      channelId: channelId ?? this.channelId,
+      channelName: channelName ?? this.channelName,
+      isGroup: isGroup ?? this.isGroup,
+      description: description ?? this.description,
+      groupId: groupId ?? this.groupId,
+      externalId: externalId ?? this.externalId,
+      agents: agents ?? this.agents,
+    );
+  }
+
   factory ContactDetail.fromJson(Map<String, dynamic> json) {
     print('Parsing contact detail JSON: $json');
     
-    // Parse agents from SelectAgents or RoomAgents
     List<GroupAgent>? agents;
     if (json['SelectAgents'] != null && json['SelectAgents'] is List) {
       agents = (json['SelectAgents'] as List)
@@ -251,13 +295,10 @@ class ContactFunnel {
   });
 
   factory ContactFunnel.fromJson(Map<String, dynamic> json) {
-    // Debug: Print the raw JSON to see what fields are available
     print('ContactFunnel JSON: $json');
     
-    // Try multiple possible field names for the display name
     String displayName = '';
     
-    // Check all possible name fields in order of preference
     final nameFields = [
       'Name', 'name', 'DisplayName', 'Nm', 'Title', 'title', 
       'FunnelName', 'Label', 'label'
@@ -271,13 +312,11 @@ class ContactFunnel {
       }
     }
     
-    // If still empty, use ID as fallback
     if (displayName.isEmpty) {
       displayName = 'Funnel ID: ${json['Id']?.toString() ?? json['id']?.toString() ?? 'Unknown'}';
       print('Using fallback name: $displayName');
     }
     
-    // Try multiple possible description fields
     String? description;
     final descFields = ['Description', 'description', 'Desc', 'desc'];
     for (final field in descFields) {

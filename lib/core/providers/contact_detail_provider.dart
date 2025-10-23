@@ -35,6 +35,7 @@ class ContactDetailState {
     this.error,
   });
 
+  // ✅ COPYWITH YANG BENER - PAKAI CLEAR FLAGS
   ContactDetailState copyWith({
     ContactDetail? contact,
     List<ConversationHistory>? conversationHistory,
@@ -50,22 +51,30 @@ class ContactDetailState {
     bool? isLoadingNotes,
     bool? isLoadingFunnels,
     String? error,
+    // Clear flags untuk nullable fields
+    bool clearContact = false,
+    bool clearCampaign = false,
+    bool clearDeal = false,
+    bool clearFormTemplate = false,
+    bool clearFormResult = false,
+    bool clearFunnel = false,
+    bool clearError = false,
   }) {
     return ContactDetailState(
-      contact: contact ?? this.contact,
+      contact: clearContact ? null : (contact ?? this.contact),
       conversationHistory: conversationHistory ?? this.conversationHistory,
       notes: notes ?? this.notes,
-      campaign: campaign ?? this.campaign,
-      deal: deal ?? this.deal,
-      formTemplate: formTemplate ?? this.formTemplate,
-      formResult: formResult ?? this.formResult,
-      funnel: funnel ?? this.funnel,
+      campaign: clearCampaign ? null : (campaign ?? this.campaign),
+      deal: clearDeal ? null : (deal ?? this.deal),
+      formTemplate: clearFormTemplate ? null : (formTemplate ?? this.formTemplate),
+      formResult: clearFormResult ? null : (formResult ?? this.formResult),
+      funnel: clearFunnel ? null : (funnel ?? this.funnel),
       availableFunnels: availableFunnels ?? this.availableFunnels,
       isLoading: isLoading ?? this.isLoading,
       isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
       isLoadingNotes: isLoadingNotes ?? this.isLoadingNotes,
       isLoadingFunnels: isLoadingFunnels ?? this.isLoadingFunnels,
-      error: error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -77,22 +86,20 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
   
   bool get mounted => !state.isLoading || state.contact != null;
 
-  // Method to directly set contact without API call (for groups)
   void setContact(ContactDetail contact) {
     state = state.copyWith(
       contact: contact,
       isLoading: false,
-      error: null,
+      clearError: true,
     );
   }
 
- Future<void> loadContactDetail(String contactId) async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> loadContactDetail(String contactId) async {
+    state = state.copyWith(isLoading: true, clearError: true);
 
     print('Loading contact detail for ID: $contactId');
 
     try {
-      // Load contact detail
       final contact = await _service.getContactDetail(contactId);
       
       if (contact != null) {
@@ -102,16 +109,17 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
           isLoading: false,
         );
 
-        // Load additional data in parallel
         try {
-          await loadConversationHistory(contactId);
-          await loadContactNotesFromRoom(contactId);
-          await loadContactFunnel(contactId);
-          await loadAvailableFunnels();
-          await loadContactCampaign(contactId);
-          await loadContactDeal(contactId);
-          await loadContactFormTemplate(contactId);
-          await loadContactFormResult(contactId);
+          await Future.wait([
+            loadConversationHistory(contactId),
+            loadContactNotesFromRoom(contactId),
+            loadContactFunnel(contactId),
+            loadAvailableFunnels(),
+            loadContactCampaign(contactId),
+            loadContactDeal(contactId),
+            loadContactFormTemplate(contactId),
+            loadContactFormResult(contactId),
+          ]);
         } catch (additionalDataError) {
           print('Some additional data failed to load: $additionalDataError');
         }
@@ -156,13 +164,10 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     state = state.copyWith(isLoadingNotes: true);
 
     try {
-      // FIXED: Find the room ID for this contact first
       String roomIdToUse = contactId;
       
-      // Try to find the actual room ID from conversation history
       final history = await _service.getConversationHistory(contactId);
       if (history.isNotEmpty) {
-        // Use the most recent conversation room ID
         roomIdToUse = history.first.id;
         print('🗒️ Using room ID for notes: $roomIdToUse (from conversation history)');
       } else {
@@ -186,10 +191,10 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  // Keep the old method for backward compatibility
   Future<void> loadContactNotes(String contactId) async {
     await loadContactNotesFromRoom(contactId);
   }
+
   Future<void> loadContactFunnel(String contactId) async {
     if (!mounted) return;
     state = state.copyWith(isLoadingFunnels: true);
@@ -226,7 +231,7 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
       print('Failed to load available funnels: $e');
       if (mounted) {
         state = state.copyWith(
-          availableFunnels: <ContactFunnel>[], // Provide empty list instead of null
+          availableFunnels: <ContactFunnel>[],
         );
       }
     }
@@ -236,7 +241,6 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     try {
       final funnelId = await _service.createFunnel(funnelName);
       if (funnelId != null) {
-        // Reload available funnels to include the newly created funnel
         await loadAvailableFunnels();
         return true;
       } else {
@@ -251,10 +255,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
 
   Future<bool> assignFunnel(String roomId, String funnelId) async {
     try {
-      // assignFunnelToContact now expects roomId instead of contactId
       final success = await _service.assignFunnelToContact(roomId, funnelId);
       if (success) {
-        // Update state directly with the assigned funnel from availableFunnels
         final assignedFunnel = state.availableFunnels.firstWhere(
           (f) => f.id == funnelId,
           orElse: () => ContactFunnel(id: funnelId, name: 'Unknown Funnel'),
@@ -278,12 +280,10 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
 
   Future<bool> removeFunnel(String roomId) async {
     try {
-      // To remove funnel, just assign null (0) as funnelId
       final success = await _service.assignFunnelToContact(roomId, '0');
       if (success) {
-        // Update state directly to null (funnel removed)
         if (mounted) {
-          state = state.copyWith(funnel: null);
+          state = state.copyWith(clearFunnel: true);
           print('✅ Funnel removed from state');
         }
         return true;
@@ -296,7 +296,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
       return false;
     }
   }
-   Future<void> loadContactCampaign(String contactId) async {
+
+  Future<void> loadContactCampaign(String contactId) async {
     if (!mounted) return;
     
     try {
@@ -309,7 +310,6 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  // ✅ Ubah dari _loadDeal menjadi loadContactDeal (public)
   Future<void> loadContactDeal(String contactId) async {
     if (!mounted) return;
     
@@ -323,7 +323,6 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  // ✅ Ubah dari _loadFormTemplate menjadi loadContactFormTemplate (public)
   Future<void> loadContactFormTemplate(String contactId) async {
     if (!mounted) return;
     
@@ -337,7 +336,6 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  // ✅ Ubah dari _loadFormResult menjadi loadContactFormResult (public)
   Future<void> loadContactFormResult(String contactId) async {
     if (!mounted) return;
     
@@ -353,11 +351,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
 
   Future<void> addNote(String roomId, String content) async {
     try {
-      // FIXED: addContactNote now expects roomId, not contactId
-      // Backend Chatnotes table only has RoomId field
       final success = await _service.addContactNote(roomId, content);
       if (success) {
-        // Reload notes to get the updated list
         await loadContactNotes(roomId);
       } else {
         state = state.copyWith(error: 'Failed to add note');
@@ -371,7 +366,6 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     try {
       final success = await _service.updateContactNote(noteId, content);
       if (success) {
-        // Reload notes to get the updated list
         await loadContactNotes(contactId);
       } else {
         state = state.copyWith(error: 'Failed to update note');
@@ -385,7 +379,6 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     try {
       final success = await _service.deleteContactNote(noteId);
       if (success) {
-        // Reload notes to get the updated list
         await loadContactNotes(contactId);
       } else {
         state = state.copyWith(error: 'Failed to delete note');
@@ -429,8 +422,45 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
+Future<bool> updateContact({
+  required String contactId,
+  String? name,
+  String? category,
+  String? address,
+  String? city,
+  String? state,
+  String? country,
+}) async {
+  try {
+    print('Updating contact: $contactId');
+    final success = await _service.updateContact(
+      contactId: contactId,
+      name: name,
+      category: category,
+      address: address,
+      city: city,
+      state: state,
+      country: country,
+    );
+    
+    if (success) {
+      print('Contact updated successfully, reloading contact detail...');
+      await loadContactDetail(contactId);
+      return true;
+    } else {
+      // ✅ FIX: Ganti jadi gini
+      this.state = this.state.copyWith(error: 'Failed to update contact');
+      return false;
+    }
+  } catch (e) {
+    // ✅ FIX: Ganti jadi gini
+    this.state = this.state.copyWith(error: 'Failed to update contact: $e');
+    return false;
+  }
+}
+
   void clearError() {
-    state = state.copyWith(error: null);
+    state = state.copyWith(clearError: true);
   }
 }
 

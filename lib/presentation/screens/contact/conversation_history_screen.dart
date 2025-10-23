@@ -495,7 +495,7 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
         break;
       case 3:
         label = 'Resolved';
-        color = const Color(0xFF3B82F6);
+        color = const Color(0xFF10B981);
         break;
       case 4:
         label = 'Archived';
