@@ -56,6 +56,7 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   final GlobalKey _funnelKey = GlobalKey();
   bool _isUpdatingNeedReply = false;
   bool _isUpdatingMuteBot = false;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -82,6 +83,148 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
       _loadNeedReplyStatus();
     });
   }
+
+  // Tambahkan method refresh
+Future<void> _handleRefresh() async {
+  if (_isRefreshing) return;
+  
+  setState(() {
+    _isRefreshing = true;
+  });
+
+  try {
+    // Reload data secara parallel
+    await Future.wait([
+      if (!widget.isGroup)
+        ref.read(contactDetailProvider.notifier).loadContactDetail(widget.contactId),
+      ref.read(tagProvider.notifier).loadAvailableTags(),
+      _loadRoomTagsForContact(),
+    ]);
+    
+    _loadNeedReplyStatus();
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isRefreshing = false;
+      });
+    }
+  }
+}
+
+// Widget skeleton loader
+Widget _buildSkeletonLoader() {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  return SingleChildScrollView(
+    child: Column(
+      children: [
+        // Header Skeleton
+        Container(
+          color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _buildShimmer(
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildShimmer(
+                      child: Container(
+                        height: 18,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildShimmer(
+                      child: Container(
+                        height: 14,
+                        width: 150,
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        
+        // Sections Skeleton (3-4 sections)
+        ...List.generate(4, (index) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Container(
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildShimmer(
+                  child: Container(
+                    height: 16,
+                    width: 120,
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildShimmer(
+                  child: Container(
+                    height: 40,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )),
+      ],
+    ),
+  );
+}
+
+// Shimmer animation widget
+Widget _buildShimmer({required Widget child}) {
+  return TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0.3, end: 1.0),
+    duration: const Duration(milliseconds: 1000),
+    curve: Curves.easeInOut,
+    builder: (context, value, child) {
+      return Opacity(
+        opacity: value,
+        child: child,
+      );
+    },
+    onEnd: () {
+      // Loop animation
+      if (mounted) {
+        setState(() {});
+      }
+    },
+    child: child,
+  );
+}
+
 
   Future<void> _loadRoomTagsForContact() async {
     try {
@@ -237,52 +380,61 @@ return Scaffold(
         //   ),
         // ],
       ),
-      body: contactState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : contactState.contact == null
-              ? Center(
+body: RefreshIndicator(
+  onRefresh: _handleRefresh,
+  color: AppTheme.primaryColor,
+  backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+  child: contactState.isLoading
+      ? _buildSkeletonLoader()
+      : contactState.contact == null
+          ? SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height - 200,
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.person_off,
                         size: 64,
-                        color: AppTheme.textSecondary,
+                        color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         'Contact details not available',
                         style: TextStyle(
                           fontSize: 18,
-                          color: AppTheme.textSecondary,
+                          color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Contact ID: ${widget.contactId}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: AppTheme.textSecondary,
+                          color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
-                        onPressed: () {
-                          ref.read(contactDetailProvider.notifier).loadContactDetail(widget.contactId);
-                        },
+                        onPressed: _handleRefresh,
                         icon: const Icon(Icons.refresh),
                         label: const Text('Retry'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                          foregroundColor: Colors.white, // Selalu putih untuk kontras
                         ),
                       ),
                     ],
                   ),
-                )
-              : SingleChildScrollView(
-                  child: Column(
-                    children: [
+                ),
+              ),
+            )
+          : SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
                       // Contact Header with Avatar and Phone Number (only for individual)
                       if (!widget.isGroup) ...[
                         _buildContactHeader(contactState.contact!),
@@ -350,7 +502,8 @@ return Scaffold(
                     ],
                   ),
                 ),
-    );
+    ),
+);
   }
 
   Widget _buildGroupNameHeader() {
@@ -1226,7 +1379,7 @@ Widget _buildMessageTagsSection(tag_models.TagState tagState) {
               ? const Center(
                   child: Padding(
                     padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(),
+                    child: CircularProgressIndicator(color: AppTheme.primaryColor),
                   ),
                 )
               : tagState.roomTags.isNotEmpty
@@ -1342,7 +1495,7 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
           if (state.isLoadingNotes)
             const Padding(
               padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(color: AppTheme.primaryColor)),
             )
           else if (state.notes.isNotEmpty)
             ...state.notes.map((note) => _buildNoteItem(note))
