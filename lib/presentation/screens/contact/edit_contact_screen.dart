@@ -27,6 +27,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   
   late TextEditingController _nameController;
   late TextEditingController _addressController;
+  late TextEditingController _postalController;
   
   List<String> _categories = [];
   List<Country> _countries = [];
@@ -49,6 +50,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.contact.name);
     _addressController = TextEditingController(text: widget.contact.address ?? '');
+    _postalController = TextEditingController(text: widget.contact.zipCode ?? '');
     
     _loadInitialData();
   }
@@ -113,6 +115,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   void dispose() {
     _nameController.dispose();
     _addressController.dispose();
+    _postalController.dispose();
     super.dispose();
   }
   
@@ -229,6 +232,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
         name: _nameController.text.trim(),
         category: _selectedCategory,
         address: _addressController.text.trim(),
+        zipCode: _postalController.text.trim().isNotEmpty ? _postalController.text.trim() : null,
         state: selectedState.isNotEmpty ? selectedState : null,
         country: selectedCountry.isNotEmpty ? selectedCountry : null,
         city: selectedCity.isNotEmpty ? selectedCity : null,
@@ -447,6 +451,14 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                   isDarkMode: isDarkMode,
                   maxLines: 3,
                   hint: 'Enter full address',
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  controller: _postalController,
+                  label: 'Postal Code',
+                  icon: Icons.markunread_mailbox_outlined,
+                  isDarkMode: isDarkMode,
+                  hint: 'Enter postal code',
                 ),
                 const SizedBox(height: 16),
                 _buildDropdownField(

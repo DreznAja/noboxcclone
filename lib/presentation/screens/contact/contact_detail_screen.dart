@@ -743,6 +743,36 @@ return Scaffold(
                     ],
                   ),
                 ],
+                // Postal Code - only show if exists
+                if (contact.zipCode != null && contact.zipCode!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Postal Code',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          contact.zipCode!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

@@ -344,10 +344,8 @@ Widget build(BuildContext context, WidgetRef ref) {
                                 style: TextStyle(
                                   color: room.needReply
                                       ? Colors.red
-                                      : room.unreadCount > 0
-                                          ? (isDarkMode ? Colors.white : Colors.black)
-                                          : (isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
-                                  fontWeight: room.needReply || room.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                                      : (isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                                  fontWeight: FontWeight.normal,
                                   fontSize: 14,
                                 ),
                                 maxLines: 1,

@@ -41,7 +41,7 @@ class ContactDetailService {
       print('Fetching contact detail for ID: $contactId');
       
       final requestData = {
-        'IncludeColumns': ['Id', 'Name', 'Phone', 'Email', 'Address', 'City', 'State', 'Country', 'ZipCode', 'Photo', 'IsBlock'],
+        'IncludeColumns': ['Id', 'Name', 'Phone', 'Email', 'Category', 'Address', 'City', 'State', 'Country', 'Postal', 'Photo', 'IsBlock'],
         'ColumnSelection': 1,
         'EqualityFilter': {'Id': contactId},
         'Take': 1,
@@ -702,6 +702,7 @@ class ContactDetailService {
     String? name,
     String? category,
     String? address,
+    String? zipCode,
     String? city,
     String? state,
     String? country,
@@ -714,6 +715,7 @@ class ContactDetailService {
       if (name != null && name.isNotEmpty) entity['Name'] = name;
       if (category != null && category.isNotEmpty) entity['Category'] = category;
       if (address != null) entity['Address'] = address;
+      if (zipCode != null) entity['Postal'] = zipCode;
       if (city != null) entity['City'] = city;
       if (state != null) entity['State'] = state;
       if (country != null) entity['Country'] = country;

@@ -94,6 +94,7 @@ flutter:
     - assets/nobox2.png
     - assets/nobox.png
     - assets/wa.png
+    - assets/wa_white.png
   #   - assets/icons/
   
   # fonts:

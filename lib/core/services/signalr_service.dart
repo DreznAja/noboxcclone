@@ -348,18 +348,8 @@ class SignalRService {
 
   static void _startHeartbeat() {
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (timer) {
-      if (_connection?.state == HubConnectionState.Connected) {
-        // Use a simple method that definitely exists
-        try {
-          _connection!.invoke('GetConnectionId');
-        } catch (e) {
-          // Ignore heartbeat errors - they're not critical
-        }
-      } else {
-        timer.cancel();
-      }
-    });
+    // Heartbeat disabled - SignalR has built-in automatic reconnect
+    // The GetConnectionId method doesn't exist on server, causing errors
   }
 
   static Future<void> _subscribeUser() async {

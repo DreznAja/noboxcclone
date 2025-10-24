@@ -1161,7 +1161,7 @@ void _openContactDetailSlidePanel() {
         ),
         child: ClipOval(
           child: Image.asset(
-            'assets/wa.png',
+            'assets/wa_white.png',
             width: 16,
             height: 16,
             fit: BoxFit.cover,
