@@ -42,6 +42,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   // Real-time update management
   StreamSubscription<String>? _connectionSubscription;
   StreamSubscription<void>? _sessionExpiredSubscription;
+  
+  // Track which room we're joined to from home screen (for SignalR activation workaround)
+  String? _homeScreenJoinedRoomId;
 
   @override
   void initState() {
@@ -166,25 +169,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       print('⚠️ Failed to refresh account mappings: $e');
     }
 
+    // CRITICAL FIX: Instantiate ChatProvider FIRST to ensure listeners are ready
+    print('🎧 Ensuring ChatProvider is instantiated before SignalR subscription...');
+    ref.read(chatProvider.notifier);
+    print('✅ ChatProvider instantiated, listeners should be active');
+
     // Ensure SignalR is connected FIRST before loading rooms
     await _ensureSignalRConnection();
 
     // Force re-subscribe to ensure listeners are active
     // This fixes the bug where realtime only works after entering chat screen
-    await _forceResubscribe();
+    await _forceResubscribeOnly();
 
     // Then load rooms
-    ref.read(chatProvider.notifier).loadRooms();
+    await ref.read(chatProvider.notifier).loadRooms();
     ref.read(chatProvider.notifier).loadArchivedRooms();
+    
+    // CRITICAL: After loading rooms, activate SignalR by joining first room briefly
+    await _activateSignalRConnection();
   }
 
-  Future<void> _forceResubscribe() async {
+  Future<void> _forceResubscribeOnly() async {
     try {
       print('🔄 Force re-subscribing to SignalR to activate listeners...');
       await SignalRService.forceResubscribe();
-      print('✅ SignalR re-subscription complete - realtime updates now active');
+      
+      // Wait a bit for subscription to fully propagate on server
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      print('✅ SignalR re-subscription complete');
+      
     } catch (e) {
       print('⚠️ Failed to force re-subscribe: $e');
+    }
+  }
+
+  Future<void> _activateSignalRConnection() async {
+    try {
+      final chatState = ref.read(chatProvider);
+      
+      // CRITICAL WORKAROUND: Stay joined to first room to keep SignalR connection "alive"
+      // This fixes server-side behavior where events only sent to clients inside rooms
+      // We'll leave this room when user actually opens a chat
+      if (chatState.rooms.isNotEmpty) {
+        final firstRoomId = chatState.rooms.first.id;
+        print('🔧 WORKAROUND: Staying joined to first room to keep SignalR active: $firstRoomId');
+        
+        await SignalRService.joinConversation(firstRoomId, null);
+        _homeScreenJoinedRoomId = firstRoomId; // Track which room we joined
+        
+        print('✅ SignalR connection activated - staying in room ${chatState.rooms.first.name}');
+        print('✅ Realtime should now work on home screen!');
+      } else {
+        print('⚠️ No rooms available to activate SignalR connection');
+      }
+      
+    } catch (e) {
+      print('⚠️ Failed to activate SignalR connection: $e');
     }
   }
 
@@ -372,6 +413,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   void _navigateToChat(room) async {
+    // Leave home screen's joined room if exists (workaround cleanup)
+    if (_homeScreenJoinedRoomId != null) {
+      try {
+        print('👋 Leaving home screen joined room: $_homeScreenJoinedRoomId');
+        await SignalRService.leaveConversation(_homeScreenJoinedRoomId!);
+        _homeScreenJoinedRoomId = null;
+      } catch (e) {
+        print('⚠️ Failed to leave home screen room: $e');
+      }
+    }
+    
     // Fetch complete room data before navigating, like notification does
     try {
       print('🔍 Fetching complete room data for roomId: ${room.id}');
@@ -405,6 +457,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         // Refresh data when returning from chat screen
         print('🔄 Returned from chat, refreshing data');
         _handleRefresh();
+        
+        // Re-activate SignalR connection by joining first room again
+        _activateSignalRConnection();
       });
     } catch (e) {
       print('❌ Error fetching complete room data: $e');
@@ -419,6 +474,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       ).then((_) {
         print('🔄 Returned from chat, refreshing data');
         _handleRefresh();
+        
+        // Re-activate SignalR connection by joining first room again
+        _activateSignalRConnection();
       });
     }
   }
