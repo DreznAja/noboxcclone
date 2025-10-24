@@ -287,7 +287,7 @@ Widget build(BuildContext context, WidgetRef ref) {
                                   child: Text(
                                     room.name,
                                     style: TextStyle(
-                                      fontWeight: room.unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
+                                      fontWeight: FontWeight.w500,
                                       fontSize: 16,
                                       color: isDarkMode ? Colors.white : Colors.black,
                                     ),
