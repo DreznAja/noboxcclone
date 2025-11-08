@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -50,6 +51,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _isFirstBuild = true; // Flag untuk build pertama
   bool _showContactDetail = false;
   StreamSubscription<void>? _sessionExpiredSubscription;
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -900,7 +909,10 @@ PreferredSizeWidget _buildNormalAppBar() {
         CircleAvatar(
           radius: 18,
           backgroundImage: _isValidImageUrl(widget.room.contactImage ?? widget.room.linkImage)
-              ? NetworkImage(widget.room.contactImage ?? widget.room.linkImage!)
+              ? CachedNetworkImageProvider(
+                  widget.room.contactImage ?? widget.room.linkImage!,
+                  headers: _getAuthHeaders(),
+                )
               : null,
           backgroundColor: Colors.white.withOpacity(0.2),
           child: !_isValidImageUrl(widget.room.contactImage ?? widget.room.linkImage)
@@ -1274,6 +1286,8 @@ void _openContactDetailSlidePanel() {
       context: context,
       builder: (context) => AddAgentDialog(
         roomId: widget.room.id,
+        linkId: widget.room.ctId,
+        channelId: widget.room.channelId,
         onAgentAdded: (agent) {
           // Optional: Reload messages or update UI if needed
           print('✅ Agent ${agent.displayName} added to conversation');

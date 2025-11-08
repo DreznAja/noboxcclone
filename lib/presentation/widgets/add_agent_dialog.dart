@@ -1,28 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/models/agent_models.dart';
+import '../../core/providers/theme_provider.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 
-class AddAgentDialog extends StatefulWidget {
+class AddAgentDialog extends ConsumerStatefulWidget {
   final String roomId;
+  final String? linkId;
+  final int channelId;
   final Function(HumanAgent)? onAgentAdded;
 
   const AddAgentDialog({
     super.key,
     required this.roomId,
+    this.linkId,
+    required this.channelId,
     this.onAgentAdded,
   });
 
   @override
-  State<AddAgentDialog> createState() => _AddAgentDialogState();
+  ConsumerState<AddAgentDialog> createState() => _AddAgentDialogState();
 }
 
-class _AddAgentDialogState extends State<AddAgentDialog> {
+class _AddAgentDialogState extends ConsumerState<AddAgentDialog> {
   List<HumanAgent> _agents = [];
   List<HumanAgent> _filteredAgents = [];
   bool _isLoading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -88,9 +104,17 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
       ),
     );
 
+    // Get current user ID for HandId
+    final userData = StorageService.getUserData();
+    final currentUserId = userData?['UserId']?.toString();
+
     final request = AddAgentRequest(
       roomId: widget.roomId,
       userId: agent.userId.toString(),
+      linkId: widget.linkId,
+      displayName: agent.displayName,
+      handId: currentUserId,
+      channelId: widget.channelId.toString(),
     );
 
     final response = await ApiService.addAgentToConversation(request);
@@ -108,11 +132,18 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
           widget.onAgentAdded!(agent);
         }
 
-        // Show success message
+        // Check if agent already exists
+        final isAlreadyExists = response.message == 'AGENT_ALREADY_EXISTS';
+        
+        // Show appropriate message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${agent.displayName} has been added to the conversation'),
-            backgroundColor: AppTheme.successColor,
+            content: Text(
+              isAlreadyExists 
+                ? '${agent.displayName} is already in this conversation'
+                : '${agent.displayName} has been added to the conversation'
+            ),
+            backgroundColor: isAlreadyExists ? Colors.orange : AppTheme.successColor,
           ),
         );
       } else {
@@ -129,7 +160,10 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
     return Dialog(
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -142,9 +176,9 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
             // Header
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: AppTheme.primaryColor,
-                borderRadius: BorderRadius.only(
+              decoration: BoxDecoration(
+                color: isDarkMode ? AppTheme.darkSurface : AppTheme.primaryColor,
+                borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
                 ),
@@ -177,20 +211,49 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
               child: TextField(
                 controller: _searchController,
                 onChanged: _filterAgents,
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Search agents...',
-                  prefixIcon: const Icon(Icons.search),
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear),
+                          icon: Icon(
+                            Icons.clear,
+                            color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             _filterAgents('');
                           },
                         )
                       : null,
+                  filled: true,
+                  fillColor: isDarkMode ? AppTheme.darkBackground : Colors.grey[50],
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isDarkMode ? AppTheme.darkTextSecondary.withOpacity(0.3) : Colors.grey[300]!,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isDarkMode ? AppTheme.darkTextSecondary.withOpacity(0.3) : Colors.grey[300]!,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppTheme.primaryColor,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -216,7 +279,9 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                                     ? Icons.people_outline
                                     : Icons.search_off,
                                 size: 64,
-                                color: Colors.grey[400],
+                                color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : Colors.grey[400],
                               ),
                               const SizedBox(height: 16),
                               Text(
@@ -225,7 +290,9 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                                     : 'No agents found',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.grey[600],
+                                  color: isDarkMode 
+                                      ? AppTheme.darkTextSecondary 
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
@@ -236,7 +303,7 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                           itemCount: _filteredAgents.length,
                           itemBuilder: (context, index) {
                             final agent = _filteredAgents[index];
-                            return _buildAgentItem(agent);
+                            return _buildAgentItem(agent, isDarkMode);
                           },
                         ),
             ),
@@ -245,22 +312,26 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: isDarkMode ? AppTheme.darkBackground : Colors.grey[100],
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16),
                 ),
               ),
               child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                children: [ 
+                  Icon(
+                    Icons.info_outline, 
+                    size: 16, 
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey[600],
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '${_filteredAgents.length} agent${_filteredAgents.length != 1 ? 's' : ''} available',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey[600],
                       ),
                     ),
                   ),
@@ -273,14 +344,16 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
     );
   }
 
-  Widget _buildAgentItem(HumanAgent agent) {
+  Widget _buildAgentItem(HumanAgent agent, bool isDarkMode) {
     return InkWell(
       onTap: () => _addAgent(agent),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!),
+            bottom: BorderSide(
+              color: isDarkMode ? AppTheme.darkTextSecondary.withOpacity(0.2) : Colors.grey[200]!,
+            ),
           ),
         ),
         child: Row(
@@ -289,7 +362,10 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
             CircleAvatar(
               radius: 24,
               backgroundImage: agent.userImage != null && agent.userImage!.isNotEmpty
-                  ? NetworkImage(agent.userImage!)
+                  ? CachedNetworkImageProvider(
+                      agent.userImage!,
+                      headers: _getAuthHeaders(),
+                    )
                   : null,
               backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
               child: agent.userImage == null || agent.userImage!.isEmpty
@@ -314,10 +390,10 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                 children: [
                   Text(
                     agent.displayName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -327,7 +403,7 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                       Icon(
                         Icons.email_outlined,
                         size: 14,
-                        color: Colors.grey[600],
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey[600],
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -335,7 +411,7 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                           agent.email,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey[600],
+                            color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey[600],
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),

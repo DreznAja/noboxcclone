@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 
 class ImageViewerScreen extends StatelessWidget {
@@ -12,6 +13,14 @@ class ImageViewerScreen extends StatelessWidget {
     required this.imageUrl,
     this.caption,
   });
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +50,7 @@ class ImageViewerScreen extends StatelessWidget {
             child: PhotoView.customChild(
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
-                httpHeaders: const {
-                  'User-Agent': 'NoboxChat/1.0',
-                },
+                httpHeaders: _getAuthHeaders(),
                 placeholder: (context, url) => const Center(
                   child: CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),

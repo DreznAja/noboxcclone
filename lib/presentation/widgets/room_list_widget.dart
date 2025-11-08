@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -7,6 +8,7 @@ import '../../core/models/chat_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/app_config.dart';
 import '../../core/services/account_service.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/providers/chat_provider.dart';
 import 'room_shimmer_widget.dart';
 
@@ -48,6 +50,14 @@ class RoomListWidget extends ConsumerStatefulWidget {
 }
 
 class _RoomListWidgetState extends ConsumerState<RoomListWidget> {
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = ref.watch(themeProvider).isDarkMode;
@@ -238,6 +248,14 @@ class _RoomListItem extends ConsumerWidget {
     required this.onTap,
     required this.onLongPress,
   });
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
 // REPLACE bagian separator dan InkWell di _RoomListItem dengan ini:
 
@@ -458,7 +476,10 @@ Widget build(BuildContext context, WidgetRef ref) {
           CircleAvatar(
             radius: 22,
             backgroundImage: _isValidImageUrl(room.contactImage ?? room.linkImage)
-                ? NetworkImage(room.contactImage ?? room.linkImage!)
+                ? CachedNetworkImageProvider(
+                    room.contactImage ?? room.linkImage!,
+                    headers: _getAuthHeaders(),
+                  )
                 : null,
             backgroundColor: isDarkMode ? AppTheme.darkSurface : AppTheme.neutralLight,
             child: !_isValidImageUrl(room.contactImage ?? room.linkImage)

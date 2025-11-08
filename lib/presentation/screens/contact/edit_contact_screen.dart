@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nobox_chat/core/models/contact_detail_models.dart';
 import 'package:nobox_chat/core/models/location_models.dart';
 import 'package:nobox_chat/core/providers/contact_detail_provider.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:nobox_chat/core/services/address_service.dart';
 import 'package:nobox_chat/core/services/contact_detail_service.dart';
+import 'package:nobox_chat/core/services/storage_service.dart';
 import 'package:nobox_chat/core/theme/app_theme.dart';
 
 class EditContactScreen extends ConsumerStatefulWidget {
@@ -270,6 +272,14 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
     );
   }
 
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = ref.watch(themeProvider).isDarkMode;
@@ -352,31 +362,35 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
               ),
               child: Column(
                 children: [
-                  // Avatar
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          AppTheme.primaryColor.withOpacity(0.8),
-                          AppTheme.secondaryColor.withOpacity(0.8),
-                        ],
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        widget.contact.name.isNotEmpty 
-                          ? widget.contact.name[0].toUpperCase()
-                          : '?',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+                  // Avatar with authentication
+                  Builder(
+                    builder: (context) {
+                      final hasImage = widget.contact.image != null && widget.contact.image!.isNotEmpty;
+                      final headers = _getAuthHeaders();
+                      
+                      return CircleAvatar(
+                        radius: 40,
+                        backgroundColor: AppTheme.primaryColor,
+                        backgroundImage: hasImage
+                          ? CachedNetworkImageProvider(
+                              widget.contact.image!,
+                              headers: headers,
+                            )
+                          : null,
+                        child: !hasImage
+                          ? Text(
+                              widget.contact.name.isNotEmpty 
+                                ? widget.contact.name[0].toUpperCase()
+                                : '?',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -758,7 +772,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                 ),
                 child: Text(
                   '$itemCount',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.primaryColor,

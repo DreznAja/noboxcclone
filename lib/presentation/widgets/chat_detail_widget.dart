@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/models/chat_models.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import 'message_bubble_widget.dart';
 import 'chat_input_widget.dart';
@@ -25,6 +27,14 @@ class ChatDetailWidget extends ConsumerStatefulWidget {
 class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
   final ScrollController _scrollController = ScrollController();
   ChatMessage? _replyingTo;
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -86,7 +96,10 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
               CircleAvatar(
                 radius: 20,
                 backgroundImage: widget.room.contactImage != null || widget.room.linkImage != null
-                    ? NetworkImage(widget.room.contactImage ?? widget.room.linkImage!)
+                    ? CachedNetworkImageProvider(
+                        widget.room.contactImage ?? widget.room.linkImage!,
+                        headers: _getAuthHeaders(),
+                      )
                     : null,
                 backgroundColor: AppTheme.neutralLight,
                 child: widget.room.contactImage == null && widget.room.linkImage == null

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/models/chat_models.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/account_service.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/utils/message_utils.dart';
 
 class ForwardDialog extends ConsumerStatefulWidget {
@@ -25,6 +27,14 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
   List<Room> _filteredRooms = [];
   Set<String> _selectedRoomIds = {};
   bool _isForwarding = false;
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -521,6 +531,14 @@ class _ForwardRoomItem extends StatelessWidget {
     required this.onTap,
   });
 
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -560,7 +578,10 @@ class _ForwardRoomItem extends StatelessWidget {
             CircleAvatar(
               radius: 20,
               backgroundImage: _isValidImageUrl(room.contactImage ?? room.linkImage)
-                  ? NetworkImage(room.contactImage ?? room.linkImage!)
+                  ? CachedNetworkImageProvider(
+                      room.contactImage ?? room.linkImage!,
+                      headers: _getAuthHeaders(),
+                    )
                   : null,
               backgroundColor: AppTheme.neutralLight,
               child: !_isValidImageUrl(room.contactImage ?? room.linkImage)

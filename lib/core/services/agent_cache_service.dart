@@ -117,7 +117,11 @@ class AgentCacheService {
   /// Get agent name synchronously (from cache only, no API call)
   String? getAgentNameSync(String? agentId) {
     if (agentId == null || agentId.isEmpty) return null;
-    return _agentCache[agentId];
+    final name = _agentCache[agentId];
+    print('🔍 [Agent Cache] Looking up agentId: $agentId → name: $name');
+    print('   Cache size: ${_agentCache.length}');
+    print('   Cache keys: ${_agentCache.keys.toList()}');
+    return name;
   }
 
   /// Initialize cache on app start

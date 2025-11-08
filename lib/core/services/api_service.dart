@@ -15,12 +15,14 @@ class ApiResponse<T> {
   final T? data;
   final String? error;
   final int statusCode;
+  final String? message;
 
   ApiResponse({
     required this.isError,
     this.data,
     this.error,
     this.statusCode = 200,
+    this.message,
   });
 }
 
@@ -1074,6 +1076,7 @@ onError: (error, handler) async {
   ) async {
     try {
       print('👥 [Add Agent] Adding agent ${request.userId} to room ${request.roomId}...');
+      print('📤 [Add Agent] Request data: ${request.toJson()}');
       
       final response = await dio.post(
         'Services/Chat/Chatrooms/AddAgentToConversation',
@@ -1097,11 +1100,53 @@ onError: (error, handler) async {
           );
         }
         
-        // Success - check if RoomId exists (valid response)
-        if (response.data['RoomId'] != null && response.data['UserId'] != null) {
+        // Success - check if Data exists
+        if (response.data['Data'] != null) {
           try {
-            final addAgentResponse = AddAgentResponse.fromJson(response.data);
-            print('✅ [Add Agent] Agent added successfully');
+            final data = response.data['Data'];
+            
+            // Case 1: Agent already exists (IsExist: true)
+            if (data['IsExist'] == true) {
+              print('ℹ️ [Add Agent] Agent already exists in this conversation');
+              
+              final addAgentResponse = AddAgentResponse(
+                roomId: '', // Not provided when already exists
+                userId: '',
+              );
+              
+              return ApiResponse(
+                isError: false,
+                data: addAgentResponse,
+                statusCode: response.statusCode!,
+                message: 'AGENT_ALREADY_EXISTS', // Flag for special message
+              );
+            }
+            
+            // Case 2: Agent added successfully (IsExist: false, has idAgentRoom)
+            if (data['idAgentRoom'] != null) {
+              final objRoom = data['objRoom'];
+              
+              final addAgentResponse = AddAgentResponse(
+                roomId: objRoom['Id']?.toString() ?? '',
+                userId: '', // Not provided in response, but success is confirmed
+              );
+              
+              print('✅ [Add Agent] Agent added successfully');
+              print('   idAgentRoom: ${data['idAgentRoom']}');
+              
+              return ApiResponse(
+                isError: false,
+                data: addAgentResponse,
+                statusCode: response.statusCode!,
+              );
+            }
+            
+            // Unknown success case
+            print('⚠️ [Add Agent] Unexpected response structure, but no error');
+            final addAgentResponse = AddAgentResponse(
+              roomId: '',
+              userId: '',
+            );
             
             return ApiResponse(
               isError: false,
@@ -1117,7 +1162,7 @@ onError: (error, handler) async {
             );
           }
         } else {
-          // No RoomId means something went wrong
+          // No valid data means something went wrong
           print('❌ [Add Agent] Invalid response structure');
           return ApiResponse(
             isError: true,

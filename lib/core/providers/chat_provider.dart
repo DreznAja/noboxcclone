@@ -1457,6 +1457,14 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       }
       
       if (SignalRService.isConnected && validatedReplyId != null) {
+        // Get the message being replied to
+        ChatMessage? replyMessageData;
+        try {
+          replyMessageData = state.messages.firstWhere((m) => m.id == validatedReplyId);
+        } catch (e) {
+          print('⚠️ Reply message not found for location: $validatedReplyId');
+        }
+        
         // Build Room data - only include IdGroup for group chats
         // CRITICAL: IdLink and IdRoom must be integers, not strings
         final roomData = <String, Object>{
@@ -1471,18 +1479,28 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
           roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
         }
         
-        final signalRData = {
-          'Room': roomData,
-          'Msg': {
-            'Type': '1', // Send as text message with location content
-            'Msg': locationText,
-            'File': '',
-            'Files': '',
-            'ReplyId': validatedReplyId,
-          },
+        final msgData = <String, dynamic>{
+          'Type': '1', // Send as text message with location content
+          'Msg': locationText,
+          'File': '',
+          'Files': '',
+          'ReplyId': validatedReplyId,
         };
         
-        print('Sending location reply via SignalR: ${jsonEncode(signalRData)}');
+        // Add complete reply info if message found
+        if (replyMessageData != null) {
+          msgData['ReplyFrom'] = replyMessageData.from;
+          msgData['ReplyType'] = replyMessageData.type.toString();
+          msgData['ReplyMsg'] = replyMessageData.message ?? '';
+          msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file;
+        }
+        
+        final signalRData = {
+          'Room': roomData,
+          'Msg': msgData,
+        };
+        
+        print('Sending location reply via SignalR with complete reply data: ${jsonEncode(signalRData)}');
         await SignalRService.sendMessage(signalRData);
         _updateOptimisticMessage(tempId, 2); // Mark as sent
         print('✅ Location reply sent successfully via SignalR');
@@ -1576,18 +1594,36 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
               roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
             }
             
-            final signalRData = {
-              'Room': roomData,
-              'Msg': {
-                'Type': '1',
-                'Msg': text.trim(),
-                'File': '',
-                'Files': '',
-                'ReplyId': validatedReplyId,
-              },
+            // Get the message being replied to
+            ChatMessage? replyMessageData;
+            try {
+              replyMessageData = state.messages.firstWhere((m) => m.id == validatedReplyId);
+            } catch (e) {
+              print('⚠️ Reply message not found: $validatedReplyId');
+            }
+            
+            final msgData = <String, dynamic>{
+              'Type': '1',
+              'Msg': text.trim(),
+              'File': '',
+              'Files': '',
+              'ReplyId': validatedReplyId,
             };
             
-            print('Sending reply message via SignalR only: ${jsonEncode(signalRData)}');
+            // Add complete reply info like web does
+            if (replyMessageData != null) {
+              msgData['ReplyFrom'] = replyMessageData.from;
+              msgData['ReplyType'] = replyMessageData.type.toString();
+              msgData['ReplyMsg'] = replyMessageData.message ?? '';
+              msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file;
+            }
+            
+            final signalRData = {
+              'Room': roomData,
+              'Msg': msgData,
+            };
+            
+            print('Sending reply message via SignalR with complete reply data: ${jsonEncode(signalRData)}');
             await SignalRService.sendMessage(signalRData);
             _updateOptimisticMessage(tempId, 2); // Mark as sent
             print('✅ Reply message sent successfully via SignalR');
@@ -1876,6 +1912,14 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       }
       
       if (SignalRService.isConnected && validatedReplyId != null) {
+        // Get the message being replied to
+        ChatMessage? replyMessageData;
+        try {
+          replyMessageData = state.messages.firstWhere((m) => m.id == validatedReplyId);
+        } catch (e) {
+          print('⚠️ Reply message not found for media: $validatedReplyId');
+        }
+        
         // Build file map with caption for SignalR reply
         final fileMap = {
           'Filename': uploadedFile.filename,
@@ -1899,18 +1943,28 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
           roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
         }
         
-        final signalRData = {
-          'Room': roomData,
-          'Msg': {
-            'Type': type,
-            'Msg': caption?.trim(),
-            'File': uploadedFile.filename,
-            'Files': jsonEncode([fileMap]),
-            'ReplyId': validatedReplyId,
-          },
+        final msgData = <String, dynamic>{
+          'Type': type,
+          'Msg': caption?.trim(),
+          'File': uploadedFile.filename,
+          'Files': jsonEncode([fileMap]),
+          'ReplyId': validatedReplyId,
         };
         
-        print('Sending media reply via SignalR: ${jsonEncode(signalRData)}');
+        // Add complete reply info if message found
+        if (replyMessageData != null) {
+          msgData['ReplyFrom'] = replyMessageData.from;
+          msgData['ReplyType'] = replyMessageData.type.toString();
+          msgData['ReplyMsg'] = replyMessageData.message ?? '';
+          msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file;
+        }
+        
+        final signalRData = {
+          'Room': roomData,
+          'Msg': msgData,
+        };
+        
+        print('Sending media reply via SignalR with complete reply data: ${jsonEncode(signalRData)}');
         await SignalRService.sendMessage(signalRData);
         print('✅ Media reply sent successfully via SignalR');
         if (tempId != null && tempId.isNotEmpty) {

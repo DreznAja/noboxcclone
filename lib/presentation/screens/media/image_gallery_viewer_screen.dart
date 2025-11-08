@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/services/storage_service.dart';
 
 class ImageGalleryItem {
   final String imageUrl;
@@ -32,6 +33,14 @@ class ImageGalleryViewerScreen extends StatefulWidget {
 class _ImageGalleryViewerScreenState extends State<ImageGalleryViewerScreen> {
   late PageController _pageController;
   late int _currentIndex;
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -126,9 +135,7 @@ class _ImageGalleryViewerScreenState extends State<ImageGalleryViewerScreen> {
                 return PhotoViewGalleryPageOptions(
                   imageProvider: CachedNetworkImageProvider(
                     item.imageUrl,
-                    headers: const {
-                      'User-Agent': 'NoboxChat/1.0',
-                    },
+                    headers: _getAuthHeaders(),
                   ),
                   minScale: PhotoViewComputedScale.contained * 0.8,
                   maxScale: PhotoViewComputedScale.covered * 2.5,

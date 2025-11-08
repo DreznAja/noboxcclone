@@ -181,6 +181,7 @@ class MessageDetectionUtils {
       
       final msg = json['msg'] as String?;
       final user = json['user'];
+      final userHandle = json['userHandle']?.toString();
       final userId = json['userId']?.toString();
       final byUserId = json['byUserId']?.toString();
       final agentId = json['agentId']?.toString();
@@ -203,8 +204,27 @@ class MessageDetectionUtils {
       } else if (msg == 'Site.Inbox.HasAssignBySystem') {
         return 'Conversation assigned by system';
       } else if (msg.contains('HasAsign') || msg.contains('HasAssign')) {
-        final targetAgentName = _resolveAgentName(agentCache, userId ?? agentId) ?? user ?? 'Agent';
-        final byAgentName = _resolveAgentName(agentCache, byUserId);
+        print('🔍 [Assign Message Debug]');
+        print('   userId: $userId');
+        print('   byUserId: $byUserId');
+        print('   userHandle: $userHandle');
+        print('   agentId: $agentId');
+        print('   user: $user');
+        
+        // Support both formats:
+        // Format 1 (new): userId (target agent), byUserId (assigner)
+        // Format 2 (legacy): userHandle (target agent), user (assigner)
+        final targetAgentId = userId ?? userHandle ?? agentId;
+        final assignerAgentId = byUserId ?? user?.toString();
+        
+        print('   targetAgentId: $targetAgentId');
+        print('   assignerAgentId: $assignerAgentId');
+        
+        final targetAgentName = _resolveAgentName(agentCache, targetAgentId) ?? targetAgentId ?? 'Agent';
+        final byAgentName = _resolveAgentName(agentCache, assignerAgentId);
+        
+        print('   targetAgentName resolved: $targetAgentName');
+        print('   byAgentName resolved: $byAgentName');
         
         if (byAgentName != null) {
           return '$targetAgentName has been assigned to this conversation by $byAgentName';

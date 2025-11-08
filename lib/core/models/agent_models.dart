@@ -34,19 +34,57 @@ class AddAgentRequest {
   final String roomId;
   final String userId;
   final int isHanded;
+  final String? linkId;
+  final String? displayName;
+  final String? handId;
+  final String? channelId;
 
   AddAgentRequest({
     required this.roomId,
     required this.userId,
     this.isHanded = 0,
+    this.linkId,
+    this.displayName,
+    this.handId,
+    this.channelId,
   });
 
   Map<String, dynamic> toJson() {
-    return {
+    final data = <String, dynamic>{
       'RoomId': roomId,
       'UserId': userId,
       'isHanded': isHanded,
     };
+    
+    // Add Msg object (Type 6 for agent assignment)
+    data['Msg'] = {
+      'Type': 6,
+      'RoomId': roomId,
+      'Msg': '{"msg":"Site.Inbox.HasAsignBy","userId":"$userId","byUserId":"${handId ?? "0"}"}',
+    };
+    
+    // Add RoomAgent object with complete details
+    final roomAgent = <String, dynamic>{
+      'UserId': userId,
+      'RoomId': roomId,
+    };
+    
+    if (displayName != null) {
+      roomAgent['DisplayName'] = displayName;
+    }
+    if (handId != null) {
+      roomAgent['HandId'] = handId;
+    }
+    if (channelId != null) {
+      roomAgent['ChId'] = channelId;
+    }
+    if (linkId != null && linkId!.isNotEmpty) {
+      roomAgent['CtId'] = linkId;
+    }
+    
+    data['RoomAgent'] = roomAgent;
+    
+    return data;
   }
 }
 

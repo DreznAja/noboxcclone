@@ -145,12 +145,78 @@ class PushNotificationService {
 
   static Future<void> _saveTokenToStorage(String token) async {
     await StorageService.saveSetting('fcm_token', token);
-    // TODO: Send token to backend server for user registration
     print('💾 FCM Token saved to storage');
+    
+    // Send token to backend
+    await _sendTokenToBackend(token);
+  }
+  
+  static Future<void> _sendTokenToBackend(String token) async {
+    try {
+      final userData = StorageService.getUserData();
+      final userId = userData?['UserId'];
+      
+      if (userId == null) {
+        print('⚠️ User ID not found, cannot send FCM token');
+        return;
+      }
+      
+      print('📤 Sending FCM token to backend (Notify/Subs)...');
+      
+      // Try to send token to backend
+      // Note: Backend endpoint Notify/Subs currently only supports web push format
+      // Backend needs to update to support mobile FCM tokens
+      final response = await ApiService.dio.post(
+        'Notify/Subs',
+        data: {
+          'Endpoint': token,  // FCM token
+          'Auth': '',  // Not needed for mobile FCM
+          'P256DH': '',  // Not needed for mobile FCM
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        print('✅ FCM Token registered successfully');
+      }
+    } catch (e) {
+      // Handle errors gracefully - don't block app functionality
+      print('⚠️ FCM token registration failed (expected - backend needs update)');
+      print('   Error: ${e.toString().split('\n').first}');
+      print('');
+      print('📌 BACKEND ACTION REQUIRED:');
+      print('   1. Update Notify/Subs endpoint to accept mobile FCM tokens');
+      print('   2. Detect platform and store token accordingly');
+      print('   3. Use FCM Admin SDK to send notifications to mobile');
+      print('');
+      print('💡 TOKEN READY FOR MANUAL TESTING:');
+      print('   Use Firebase Console to test notifications when app is closed');
+    }
+  }
+  
+  // Public method to manually trigger token sync
+  static Future<void> syncTokenWithBackend() async {
+    final token = getFCMToken();
+    if (token != null) {
+      await _sendTokenToBackend(token);
+    } else {
+      print('⚠️ No FCM token available to sync');
+    }
   }
 
   static String? getFCMToken() {
     return StorageService.getSetting<String>('fcm_token');
+  }
+  
+  // Debug helper - print full token for testing
+  static Future<void> printTokenForTesting() async {
+    final token = await _firebaseMessaging.getToken();
+    print('═══════════════════════════════════════════════');
+    print('🔑 FCM TOKEN FOR TESTING:');
+    print(token);
+    print('═══════════════════════════════════════════════');
+    print('📋 Copy this token and test via Firebase Console');
+    print('📌 Important: Backend must send BOTH "notification" AND "data" payloads!');
+    print('═══════════════════════════════════════════════');
   }
 
   static void _onNotificationResponse(NotificationResponse response) {

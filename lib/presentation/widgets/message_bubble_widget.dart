@@ -14,6 +14,7 @@ import 'audio_player_widget.dart';
 import '../../core/models/chat_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/app_config.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/utils/message_detection_utils.dart';
 import '../../core/utils/message_utils.dart';
 import '../screens/media/image_viewer_screen.dart';
@@ -60,6 +61,14 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
   late Animation<double> _resetAnimation;
   bool _hasTriggeredHaptic = false;
   bool _isDragging = false;
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -838,9 +847,7 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  httpHeaders: const {
-                    'User-Agent': 'NoboxChat/1.0',
-                  },
+                  httpHeaders: _getAuthHeaders(),
                   placeholder: (context, url) => Container(
                     width: maxWidth,
                     height: 200,
@@ -1312,9 +1319,7 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
                 width: 120,
                 height: 120,
                 fit: BoxFit.contain,
-                httpHeaders: const {
-                  'User-Agent': 'NoboxChat/1.0',
-                },
+                httpHeaders: _getAuthHeaders(),
                 errorWidget: (context, url, error) => Container(
                   width: 120,
                   height: 120,

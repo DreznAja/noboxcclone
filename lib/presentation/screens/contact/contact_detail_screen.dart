@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nobox_chat/core/models/tag_models.dart' as tag_models;
 import 'package:nobox_chat/core/models/tag_models.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
@@ -10,6 +11,7 @@ import '../../../core/providers/contact_detail_provider.dart';
 import '../../../core/providers/chat_provider.dart';
 import '../../../core/providers/tag_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/storage_service.dart';
 import '../../widgets/add_funnel_dialog.dart';
 import '../../widgets/add_tag_dialog.dart';
 import '../../widgets/edit_note_dialog.dart';
@@ -518,7 +520,10 @@ body: RefreshIndicator(
           CircleAvatar(
             radius: 24,
             backgroundImage: _isValidImageUrl(widget.contactImage)
-                ? NetworkImage(widget.contactImage!)
+                ? CachedNetworkImageProvider(
+                    widget.contactImage!,
+                    headers: _getAuthHeaders(),
+                  )
                 : null,
             backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
             child: !_isValidImageUrl(widget.contactImage)
@@ -577,7 +582,10 @@ body: RefreshIndicator(
           CircleAvatar(
             radius: 24,
             backgroundImage: _isValidImageUrl(contact.image)
-                ? NetworkImage(contact.image!)
+                ? CachedNetworkImageProvider(
+                    contact.image!,
+                    headers: _getAuthHeaders(),
+                  )
                 : null,
             backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
             child: !_isValidImageUrl(contact.image)
@@ -1041,7 +1049,10 @@ body: RefreshIndicator(
                         CircleAvatar(
                           radius: 16,
                           backgroundImage: agent.userImage != null && agent.userImage!.isNotEmpty
-                              ? NetworkImage(agent.userImage!)
+                              ? CachedNetworkImageProvider(
+                                  agent.userImage!,
+                                  headers: _getAuthHeaders(),
+                                )
                               : null,
                           backgroundColor: Colors.grey.shade300,
                           child: agent.userImage == null || agent.userImage!.isEmpty
@@ -1779,6 +1790,14 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
     if (url == null || url.isEmpty) return false;
     if (url.startsWith('file:///')) return false;
     return url.startsWith('http://') || url.startsWith('https://');
+  }
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
   }
 
   // Action methods

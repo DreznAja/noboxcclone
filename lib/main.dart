@@ -89,6 +89,11 @@ class _NoboxChatAppState extends ConsumerState<NoboxChatApp> {
         _navigateToRoom(roomId, roomName);
       },
     );
+    
+    // Print token for testing (remove in production)
+    Future.delayed(const Duration(seconds: 2), () {
+      PushNotificationService.printTokenForTesting();
+    });
   }
 
   Future<void> _navigateToRoom(String roomId, String roomName) async {

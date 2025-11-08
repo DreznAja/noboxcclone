@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart'; // TAMBAHKAN INI
 import '../../../core/models/chat_models.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/account_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../chat/chat_screen.dart';
 
@@ -28,6 +30,14 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
   List<Room> _historyRooms = [];
   bool _isLoading = true;
   String? _error;
+
+  Map<String, String> _getAuthHeaders() {
+    final token = StorageService.getToken();
+    return {
+      'Authorization': 'Bearer $token',
+      'User-Agent': 'NoboxChat/1.0',
+    };
+  }
 
   @override
   void initState() {
@@ -248,7 +258,10 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
                   CircleAvatar(
                     radius: 22,
                     backgroundImage: _isValidImageUrl(room.contactImage ?? room.linkImage)
-                        ? NetworkImage(room.contactImage ?? room.linkImage!)
+                        ? CachedNetworkImageProvider(
+                            room.contactImage ?? room.linkImage!,
+                            headers: _getAuthHeaders(),
+                          )
                         : null,
                     backgroundColor: isDarkMode 
                       ? Colors.grey.shade800 
