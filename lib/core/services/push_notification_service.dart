@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../models/chat_models.dart';
 import 'storage_service.dart';
 import 'api_service.dart';
@@ -260,13 +263,18 @@ class PushNotificationService {
 
     // Show local notification when app is in foreground
     if (roomId != null) {
-      // Try to get actual contact name from room detail
+      // Try to get actual contact info from room detail
       String actualSenderName = senderName;
+      String? profileImage;
       try {
-        final roomDetail = await _getRoomDetailForNotification(roomId);
-        if (roomDetail != null) {
-          actualSenderName = roomDetail;
-          print('✅ Got actual contact name: $actualSenderName');
+        final roomInfo = await _getRoomDetailForNotification(roomId);
+        if (roomInfo != null) {
+          final contactName = roomInfo['name'];
+          if (contactName != null) {
+            actualSenderName = contactName;
+          }
+          profileImage = roomInfo['image'];
+          print('✅ Got contact info: $actualSenderName (image: ${profileImage != null ? "yes" : "no"})');
         }
       } catch (e) {
         print('⚠️ Could not fetch room detail, using fallback name: $senderName');
@@ -277,6 +285,7 @@ class PushNotificationService {
         roomName: roomName,
         senderName: actualSenderName,
         message: messageText,
+        profileImageUrl: profileImage,
       );
     }
   }
@@ -293,8 +302,8 @@ class PushNotificationService {
     }
   }
 
-  // Helper function to get actual contact name from room detail
-  static Future<String?> _getRoomDetailForNotification(String roomId) async {
+  // Helper function to get actual contact name and profile image from room detail
+  static Future<Map<String, String?>?> _getRoomDetailForNotification(String roomId) async {
     try {
       final response = await ApiService.dio.post(
         'Services/Chat/Chatrooms/DetailRoom',
@@ -315,7 +324,13 @@ class PushNotificationService {
                            roomData['Grp'] ?? 
                            roomData['Name'];
         
-        return contactName;
+        // Get profile image
+        final profileImage = roomData['CtImg'] ?? roomData['LinkImg'];
+        
+        return {
+          'name': contactName,
+          'image': profileImage,
+        };
       }
     } catch (e) {
       print('❌ Error fetching room detail for notification: $e');
@@ -326,12 +341,30 @@ class PushNotificationService {
   // Store notification messages per room for grouping
   static final Map<String, List<Map<String, String>>> _notificationMessages = {};
 
+  // Helper function to download image and save to temp directory
+  static Future<String?> _downloadAndSaveImage(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final tempDir = await getTemporaryDirectory();
+        final fileName = url.hashCode.toString();
+        final file = File('${tempDir.path}/$fileName.jpg');
+        await file.writeAsBytes(response.bodyBytes);
+        return file.path;
+      }
+    } catch (e) {
+      print('⚠️ Failed to download profile image: $e');
+    }
+    return null;
+  }
+
   // Show notification for new chat messages
   static Future<void> showChatNotification({
     required String roomId,
     required String roomName,
     required String senderName,
     required String message,
+    String? profileImageUrl,
   }) async {
     try {
       // Add message to the list for this room
@@ -349,10 +382,32 @@ class PushNotificationService {
         _notificationMessages[roomId]!.removeAt(0);
       }
 
+      // Download and load profile image if available
+      AndroidBitmap<Object>? largeIcon;
+      if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+        try {
+          String? imagePath;
+          if (profileImageUrl.startsWith('http://') || profileImageUrl.startsWith('https://')) {
+            // Download image from URL
+            imagePath = await _downloadAndSaveImage(profileImageUrl);
+          } else {
+            // Use local file path
+            imagePath = profileImageUrl;
+          }
+          
+          if (imagePath != null) {
+            largeIcon = FilePathAndroidBitmap(imagePath);
+            print('✅ Profile image loaded: $imagePath');
+          }
+        } catch (e) {
+          print('⚠️ Failed to load profile image: $e');
+        }
+      }
+
       // Build messaging style with all messages
       final messages = _notificationMessages[roomId]!;
       final messagingStyle = MessagingStyleInformation(
-        Person(name: 'Me', key: 'me'),
+        const Person(name: 'Me', key: 'me'),
         conversationTitle: senderName,
         groupConversation: false,
         messages: messages.map((msg) {
@@ -375,8 +430,9 @@ class PushNotificationService {
         enableLights: true,
         color: const Color(0xFF3B82F6),
         icon: '@drawable/nobox2',
+        largeIcon: largeIcon,
         styleInformation: messagingStyle,
-        groupKey: 'chat_$roomId', // Group by room/contact
+        groupKey: 'chat_$roomId',
         setAsGroupSummary: false,
       );
 
@@ -397,7 +453,7 @@ class PushNotificationService {
       });
 
       await _localNotifications.show(
-        roomId.hashCode, // Use room ID hash as notification ID - same ID updates existing
+        roomId.hashCode,
         senderName,
         message,
         details,
@@ -487,12 +543,13 @@ class PushNotificationService {
     
     print('✅ User NOT in this room - showing SignalR notification');
 
-    // Show notification
+    // Show notification with profile image
     await showChatNotification(
       roomId: room.id,
       roomName: room.name,
       senderName: room.name,
       message: _getNotificationMessage(message),
+      profileImageUrl: room.contactImage ?? room.linkImage,
     );
   }
 

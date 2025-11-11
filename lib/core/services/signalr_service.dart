@@ -268,20 +268,25 @@ class SignalRService {
     
     print('✅ User NOT in room ${message.roomId} (current: $currentRoomId) - showing notification');
     
-    // Get actual contact name from room detail
+    // Get actual contact name and profile image from room detail
     String senderName = 'Customer';
     String roomName = 'New Message';
+    String? profileImage;
     
     try {
-      // Fetch room detail to get actual contact name
-      final contactName = await _getRoomNameForNotification(message.roomId);
-      if (contactName != null && contactName.isNotEmpty) {
-        senderName = contactName;
-        roomName = contactName;
-        print('✅ Got actual contact name for notification: $contactName');
+      // Fetch room detail to get actual contact info
+      final roomInfo = await _getRoomInfoForNotification(message.roomId);
+      if (roomInfo != null) {
+        final contactName = roomInfo['name'];
+        if (contactName != null && contactName.isNotEmpty) {
+          senderName = contactName;
+          roomName = contactName;
+        }
+        profileImage = roomInfo['image'];
+        print('✅ Got contact info for notification: $contactName (image: ${profileImage != null ? "yes" : "no"})');
       }
     } catch (e) {
-      print('⚠️ Could not fetch contact name, using fallback: $e');
+      print('⚠️ Could not fetch contact info, using fallback: $e');
     }
     
     // Show notification for customer messages
@@ -290,6 +295,7 @@ class SignalRService {
       roomName: roomName,
       senderName: senderName,
       message: _getNotificationText(message),
+      profileImageUrl: profileImage,
     );
   }
   
@@ -316,8 +322,8 @@ class SignalRService {
     }
   }
 
-  // Helper function to get actual contact name from room detail
-  static Future<String?> _getRoomNameForNotification(String roomId) async {
+  // Helper function to get actual contact name and profile image from room detail
+  static Future<Map<String, String?>?> _getRoomInfoForNotification(String roomId) async {
     try {
       final response = await ApiService.dio.post(
         'Services/Chat/Chatrooms/DetailRoom',
@@ -338,10 +344,16 @@ class SignalRService {
                            roomData['Grp'] ?? 
                            roomData['Name'];
         
-        return contactName;
+        // Get profile image
+        final profileImage = roomData['CtImg'] ?? roomData['LinkImg'];
+        
+        return {
+          'name': contactName,
+          'image': profileImage,
+        };
       }
     } catch (e) {
-      print('❌ Error fetching room name for notification: $e');
+      print('❌ Error fetching room info for notification: $e');
     }
     return null;
   }
