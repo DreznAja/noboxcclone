@@ -143,7 +143,20 @@ Future<Map<String, dynamic>?> getContactDetailWithRelations(String contactId) as
         final List<dynamic> entities = response.data['Entities'] ?? [];
         if (entities.isNotEmpty) {
           final contactData = entities.first;
-          return ContactDetail.fromJson(contactData);
+          ContactDetail contact = ContactDetail.fromJson(contactData);
+          
+          // Try to load agents from DetailRoom API
+          try {
+            final agents = await getContactAgents(contactId);
+            if (agents != null && agents.isNotEmpty) {
+              contact = contact.copyWith(agents: agents);
+              print('✅ Loaded ${agents.length} agents for contact');
+            }
+          } catch (agentError) {
+            print('⚠️ Could not load agents: $agentError');
+          }
+          
+          return contact;
         } else {
           print('No contact found with ID: $contactId');
           return null;
@@ -158,6 +171,33 @@ Future<Map<String, dynamic>?> getContactDetailWithRelations(String contactId) as
         return null;
       }
       print('Error fetching contact detail for ID $contactId: $e');
+      return null;
+    }
+  }
+
+  Future<List<GroupAgent>?> getContactAgents(String contactId) async {
+    try {
+      print('📋 Fetching agents for contact: $contactId');
+      
+      final data = await getContactDetailWithRelations(contactId);
+      
+      if (data != null) {
+        // Check for RoomAgents or SelectAgents
+        if (data['RoomAgents'] != null && data['RoomAgents'] is List) {
+          final List<dynamic> agentsData = data['RoomAgents'] as List;
+          print('✅ Found ${agentsData.length} RoomAgents');
+          return agentsData.map((agent) => GroupAgent.fromJson(agent)).toList();
+        } else if (data['SelectAgents'] != null && data['SelectAgents'] is List) {
+          final List<dynamic> agentsData = data['SelectAgents'] as List;
+          print('✅ Found ${agentsData.length} SelectAgents');
+          return agentsData.map((agent) => GroupAgent.fromJson(agent)).toList();
+        }
+      }
+      
+      print('⚠️ No agents data available');
+      return null;
+    } catch (e) {
+      print('❌ Error fetching contact agents: $e');
       return null;
     }
   }
@@ -811,6 +851,66 @@ Future<ContactFormResult?> getContactFormResult(String contactId) async {
       return false;
     } catch (e) {
       print('Error updating contact: $e');
+      
+      if (e.toString().contains('DioException')) {
+        try {
+          final dioError = e as DioException;
+          print('❌ Error type: ${dioError.type}');
+          print('❌ Error message: ${dioError.message}');
+          print('❌ Error response: ${dioError.response?.data}');
+        } catch (_) {}
+      }
+      
+      return false;
+    }
+  }
+
+  Future<bool> removeAgentFromConversation({
+    required String chatroomAgentId, // ID from chatroomagents table
+    required String roomId,
+    required int currentUserId,
+  }) async {
+    try {
+      print('🗑️ [Remove Agent] Removing chatroomagent ID $chatroomAgentId from room $roomId');
+      
+      final requestData = {
+        'Delete': {
+          'EntityId': chatroomAgentId,
+        },
+        'Msg': {
+          'Type': 6,
+          'RoomId': roomId,
+          'Msg': '{"msg":"Site.Inbox.AgentOutBy","user":$currentUserId,"userHandle":"$currentUserId"}',
+        },
+      };
+
+      print('🗑️ [Remove Agent] Request data: $requestData');
+      print('🗑️ [Remove Agent] Endpoint: Services/Chat/Chatrooms/RemoveAgentFromConversation');
+
+      final response = await _dio.post(
+        'Services/Chat/Chatrooms/RemoveAgentFromConversation',
+        data: requestData,
+      );
+
+      print('🗑️ [Remove Agent] Response: ${response.statusCode} - ${response.data}');
+
+      if (response.statusCode == 200) {
+        final isError = response.data['IsError'];
+        final hasError = isError == true;
+        
+        if (!hasError) {
+          print('✅ [Remove Agent] Successfully removed agent from conversation');
+          return true;
+        } else {
+          print('❌ [Remove Agent] Error: ${response.data['ErrorMsg'] ?? response.data['Error']}');
+          return false;
+        }
+      }
+
+      print('❌ [Remove Agent] API Error: ${response.data}');
+      return false;
+    } catch (e) {
+      print('❌ [Remove Agent] Exception: $e');
       
       if (e.toString().contains('DioException')) {
         try {

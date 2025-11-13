@@ -340,6 +340,7 @@ class ContactFunnel {
 }
 
 class GroupAgent {
+  final String id; // ID from chatroomagents table
   final String userId;
   final String displayName;
   final String email;
@@ -347,6 +348,7 @@ class GroupAgent {
   final DateTime? lastLogin;
 
   GroupAgent({
+    required this.id,
     required this.userId,
     required this.displayName,
     required this.email,
@@ -356,7 +358,8 @@ class GroupAgent {
 
   factory GroupAgent.fromJson(Map<String, dynamic> json) {
     return GroupAgent(
-      userId: json['UserId']?.toString() ?? json['Id']?.toString() ?? '',
+      id: json['Id']?.toString() ?? '', // This is the chatroomagents record ID
+      userId: json['UserId']?.toString() ?? '',
       displayName: json['DisplayName'] ?? json['Username'] ?? '',
       email: json['Email'] ?? json['UserEmail'] ?? json['Username'] ?? '',
       userImage: json['UserImage'],

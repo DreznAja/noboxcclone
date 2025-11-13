@@ -461,6 +461,34 @@ Future<bool> updateContact({
   }
 }
 
+  Future<bool> removeAgentFromConversation({
+    required String chatroomAgentId,
+    required String roomId,
+    required int currentUserId,
+    required String contactId,
+  }) async {
+    try {
+      print('Removing chatroomagent ID $chatroomAgentId from conversation');
+      final success = await _service.removeAgentFromConversation(
+        chatroomAgentId: chatroomAgentId,
+        roomId: roomId,
+        currentUserId: currentUserId,
+      );
+      
+      if (success) {
+        print('Agent removed successfully, reloading contact detail...');
+        await loadContactDetail(contactId);
+        return true;
+      } else {
+        this.state = this.state.copyWith(error: 'Failed to remove agent from conversation');
+        return false;
+      }
+    } catch (e) {
+      this.state = this.state.copyWith(error: 'Failed to remove agent: $e');
+      return false;
+    }
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
   }

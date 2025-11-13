@@ -500,6 +500,11 @@ body: RefreshIndicator(
                       // Form Result Section
                       _buildFormResultSection(contactState.formResult),
                       
+                      const SizedBox(height: 8),
+                      
+                      // Assigned Agents Section
+                      _buildAssignedAgentsSection(contactState.contact),
+                      
                       const SizedBox(height: 32),
                     ],
                   ),
@@ -1616,51 +1621,63 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
         ),
         const SizedBox(height: 8),
         
-        // Campaign Name
+        // Campaign Name and Status
         if (campaign != null) ...[
-          Text(
-            'Name',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            campaign.name,
-            style: TextStyle(
-              fontSize: 15,
-              color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
-              fontWeight: FontWeight.w500,
-            ),
+          // Campaign Name
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Name',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  campaign.name,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           
           // Campaign Status
-          Text(
-            'Status',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getCampaignStatusColor(campaign.status).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _getCampaignStatusText(campaign.status),
-              style: TextStyle(
-                fontSize: 13,
-                color: _getCampaignStatusColor(campaign.status),
-                fontWeight: FontWeight.w600,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Status',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _getCampaignStatusColor(campaign.status).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _getCampaignStatusText(campaign.status),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _getCampaignStatusColor(campaign.status),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ] else ...[
           Text(
@@ -1731,65 +1748,89 @@ String _getCampaignStatusText(int status) {
         ),
         const SizedBox(height: 8),
         
-        // Deal Name
+        // Deal Name, Pipeline, Stage
         if (deal != null) ...[
-          Text(
-            'Name',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            deal.name,
-            style: TextStyle(
-              fontSize: 15,
-              color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
-              fontWeight: FontWeight.w500,
-            ),
+          // Deal Name
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Name',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  deal.name,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
           
           // Pipeline
           if (deal.pipeline != null) ...[
             const SizedBox(height: 12),
-            Text(
-              'Pipeline',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              deal.pipeline!,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Pipeline',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    deal.pipeline!,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
           
           // Stage
           if (deal.stage != null) ...[
             const SizedBox(height: 12),
-            Text(
-              'Stage',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              deal.stage!,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Stage',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    deal.stage!,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ] else ...[
@@ -1902,22 +1943,29 @@ Widget _buildFormResultSection(ContactFormResult? formResult) {
         
         // Form Result Data
         if (formResult != null) ...[
-          Text(
-            'Sender Name',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            formResult.senderName,
-            style: TextStyle(
-              fontSize: 15,
-              color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Sender Name',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  formResult.senderName,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
         ] else ...[
           Text(
@@ -1929,6 +1977,98 @@ Widget _buildFormResultSection(ContactFormResult? formResult) {
             ),
           ),
         ],
+      ],
+    ),
+  );
+}
+
+// 🎨 Assigned Agents Section
+Widget _buildAssignedAgentsSection(ContactDetail? contact) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  // Don't show section if no contact or no agents
+  if (contact == null || contact.agents == null || contact.agents!.isEmpty) {
+    return const SizedBox.shrink();
+  }
+
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Text(
+          'Assigned Agents',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // List of agents
+        ...contact.agents!.map((agent) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              // Agent Avatar
+              CircleAvatar(
+                radius: 20,
+                backgroundImage: agent.userImage != null && agent.userImage!.isNotEmpty
+                    ? CachedNetworkImageProvider(
+                        agent.userImage!,
+                        headers: _getAuthHeaders(),
+                      )
+                    : null,
+                backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                child: agent.userImage == null || agent.userImage!.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: 20,
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              
+              // Agent Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      agent.displayName,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      agent.email,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Remove button
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                onPressed: () => _removeAgentFromConversation(agent),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Remove agent',
+              ),
+            ],
+          ),
+        )).toList(),
       ],
     ),
   );
@@ -2847,6 +2987,135 @@ void _showFunnelDropdown() {
         backgroundColor: AppTheme.primaryColor,
       ),
     );
+  }
+
+  void _removeAgentFromConversation(GroupAgent agent) async {
+    if (_currentRoomId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Room ID not found. Cannot remove agent.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.person_remove,
+                color: Colors.red.shade700,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Remove Agent',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to remove "${agent.displayName}" from this conversation?',
+          style: TextStyle(
+            fontSize: 14,
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Remove',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Get current user ID from storage
+    final userData = StorageService.getUserData();
+    final currentUserId = userData?['UserId'] as int?;
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User ID not found. Please login again.'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    // Remove agent
+    final success = await ref.read(contactDetailProvider.notifier).removeAgentFromConversation(
+      chatroomAgentId: agent.id, // Use chatroomagents ID, not UserId
+      roomId: _currentRoomId!,
+      currentUserId: currentUserId,
+      contactId: widget.contactId,
+    );
+
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Agent "${agent.displayName}" removed from conversation'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove agent "${agent.displayName}"'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
   }
 
   void _showCampaignDialog() {
