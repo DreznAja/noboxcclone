@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/models/chat_models.dart';
+import '../../core/models/tag_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/app_config.dart';
 import '../../core/services/account_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/providers/chat_provider.dart';
+import '../../core/providers/tag_provider.dart';
 import 'room_shimmer_widget.dart';
 
 // Update RoomListWidget untuk dark mode shimmer
@@ -395,8 +397,8 @@ Widget build(BuildContext context, WidgetRef ref) {
                       const SizedBox(height: 3),
                       
                       // Tags and Funnel row
-                      if (room.tags.isNotEmpty || room.funnel != null) ...[
-                        _buildTagsAndFunnelRow(room, isDarkMode),
+                      if (room.messageTags.isNotEmpty || room.tags.isNotEmpty || room.tagIds.isNotEmpty || room.funnel != null) ...[
+                        _buildTagsAndFunnelRow(room, isDarkMode, ref),
                         const SizedBox(height: 3),
                       ],
                       
@@ -494,13 +496,62 @@ Widget build(BuildContext context, WidgetRef ref) {
     }
   }
 
-  Widget _buildTagsAndFunnelRow(Room room, bool isDarkMode) {
+  Widget _buildTagsAndFunnelRow(Room room, bool isDarkMode, WidgetRef ref) {
+    // Use messageTags if available, otherwise lookup from available tags
+    final hasMessageTags = room.messageTags.isNotEmpty;
+    final hasTags = room.tags.isNotEmpty;
+    final hasTagIds = room.tagIds.isNotEmpty;
+    
+    // Get tag names to display
+    String tagNamesText = '';
+    bool hasAnyTags = false;
+    
+    // Check if messageTags have placeholder names (starts with "Tag ")
+    bool hasPlaceholderNames = hasMessageTags && 
+        room.messageTags.any((tag) => tag.name.startsWith('Tag '));
+    
+    // Prioritize lookup from available tags if we have placeholder names or tagIds without messageTags
+    if (hasPlaceholderNames || (hasTagIds && !hasMessageTags)) {
+      // Lookup tag names from available tags
+      final availableTags = ref.watch(tagProvider).availableTags;
+      final tagNames = <String>[];
+      
+      // Use tagIds from either room.tagIds or extract from messageTags
+      final tagIdsToLookup = room.tagIds.isNotEmpty 
+          ? room.tagIds 
+          : room.messageTags.map((t) => t.id).toList();
+      
+      for (final tagId in tagIdsToLookup) {
+        try {
+          final matchingTag = availableTags.firstWhere(
+            (tag) => tag.id == tagId,
+          );
+          tagNames.add(matchingTag.name);
+        } catch (e) {
+          // Tag not found in available tags, skip it
+        }
+      }
+      
+      if (tagNames.isNotEmpty) {
+        tagNamesText = tagNames.join(', ');
+        hasAnyTags = true;
+      }
+    } else if (hasMessageTags) {
+      // Use messageTags with real names (not placeholders)
+      tagNamesText = room.messageTags.map((tag) => tag.name).join(', ');
+      hasAnyTags = true;
+    } else if (hasTags) {
+      // Fallback: use tags field
+      tagNamesText = room.tags.join(', ');
+      hasAnyTags = true;
+    }
+    
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
       child: Row(
         children: [
           // Tags
-          if (room.tags.isNotEmpty) ...[
+          if (hasAnyTags) ...[
             Icon(
               Icons.local_offer,
               size: 12,
@@ -509,7 +560,7 @@ Widget build(BuildContext context, WidgetRef ref) {
             const SizedBox(width: 4),
             Flexible(
               child: Text(
-                room.tags.join(', '),
+                tagNamesText,
                 style: TextStyle(
                   fontSize: 11,
                   color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
@@ -521,7 +572,7 @@ Widget build(BuildContext context, WidgetRef ref) {
           ],
           
           // Spacing between tags and funnel
-          if (room.tags.isNotEmpty && room.funnel != null) ...[
+          if (hasAnyTags && room.funnel != null) ...[
             const SizedBox(width: 8),
             Container(
               width: 1,

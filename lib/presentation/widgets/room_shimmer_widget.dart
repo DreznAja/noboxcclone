@@ -76,7 +76,7 @@ class RoomShimmerWidget extends StatelessWidget {
                       Container(
                         width: 80,
                         height: 12,
-                        decoration: BoxDecoration(
+                        decoration: BoxDecoration(               
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(4),
                         ),

@@ -1338,7 +1338,7 @@ void _openContactDetailSlidePanel() {
       
       // Try 1: External Application (recommended)
       try {
-        launched = await launchUrl(
+        launched = await launchUrl( 
           url,
           mode: LaunchMode.externalApplication,
         );

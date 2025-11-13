@@ -9,6 +9,7 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/chat_provider.dart';
+import '../../../core/providers/tag_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/filter_models.dart';
 import '../../../core/models/chat_models.dart';
@@ -181,6 +182,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // Then load rooms
     await ref.read(chatProvider.notifier).loadRooms();
     ref.read(chatProvider.notifier).loadArchivedRooms();
+    
+    // Load available tags for tag name lookup
+    ref.read(tagProvider.notifier).loadAvailableTags();
     
     // CRITICAL: Join ALL rooms to ensure realtime works for all conversations
     // Server only sends events to clients who have joined rooms

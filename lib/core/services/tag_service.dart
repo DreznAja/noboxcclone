@@ -154,8 +154,7 @@ class TagService {
           print('🏷️ Room TagsIds: $tagsIds');
           print('🏷️ Room Tags: $tagsNames');
           
-          if (tagsIds != null && tagsNames != null && tagsNames.isNotEmpty) {
-            
+          if (tagsIds != null) {
             List<String> idList = [];
             
             // Handle TagsIds as either array or comma-separated string
@@ -163,21 +162,38 @@ class TagService {
               idList = tagsIds.map((id) => id.toString().trim()).where((id) => id.isNotEmpty).toList();
             } else if (tagsIds is String && tagsIds.isNotEmpty) {
               idList = tagsIds.split(',').map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
+            } else if (tagsIds is int) {
+              idList = [tagsIds.toString()];
             }
-            
-            final nameList = tagsNames.split(',').where((name) => name.trim().isNotEmpty).toList();
             
             print('🏷️ Parsed tag IDs: $idList');
-            print('🏷️ Parsed tag names: $nameList');
             
-            for (int i = 0; i < idList.length && i < nameList.length; i++) {
-              roomTags.add(MessageTag(
-                id: idList[i].trim(),
-                name: nameList[i].trim(),
-              ));
+            // If Tags field exists, use it
+            if (tagsNames != null && tagsNames.isNotEmpty) {
+              final nameList = tagsNames.split(',').where((name) => name.trim().isNotEmpty).toList();
+              print('🏷️ Parsed tag names: $nameList');
+              
+              for (int i = 0; i < idList.length && i < nameList.length; i++) {
+                roomTags.add(MessageTag(
+                  id: idList[i].trim(),
+                  name: nameList[i].trim(),
+                ));
+              }
+            } else {
+              // Tags field empty - lookup from available tags
+              print('🏷️ Tags field empty, looking up from available tags...');
+              final availableTags = await getAvailableTags();
+              
+              for (final tagId in idList) {
+                final matchingTag = availableTags.firstWhere(
+                  (tag) => tag.id == tagId,
+                  orElse: () => MessageTag(id: tagId, name: 'Tag $tagId'),
+                );
+                roomTags.add(matchingTag);
+              }
             }
             
-            print('🏷️ Created ${roomTags.length} tags from TagsIds/Tags fields');
+            print('🏷️ Created ${roomTags.length} tags from TagsIds field');
           }
         }
         
@@ -196,21 +212,15 @@ class TagService {
     try {
       print('🏷️ Updating room tags for room $roomId with tag IDs: $tagIds');
       
-      // Convert string IDs to integers (backend expects List<Int64>)
-      final intTagIds = tagIds.map((id) {
-        final parsed = int.tryParse(id);
-        if (parsed == null) {
-          print('⚠️ Warning: Could not parse tag ID: $id');
-        }
-        return parsed;
-      }).where((id) => id != null).cast<int>().toList();
+      // Convert tag IDs to comma-separated string (backend expects string format)
+      final tagsIdsString = tagIds.join(',');
       
-      print('🏷️ Converted tag IDs to integers: $intTagIds');
+      print('🏷️ Converted tag IDs to comma-separated string: $tagsIdsString');
       
       final requestData = {
-        'EntityId': int.tryParse(roomId) ?? roomId, // Try to convert roomId to int too
+        'EntityId': roomId,
         'Entity': {
-          'TagsIds': intTagIds, // Send as array of integers
+          'TagsIds': tagsIdsString, // Send as comma-separated string
         },
       };
 

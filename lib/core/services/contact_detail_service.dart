@@ -36,6 +36,87 @@ class ContactDetailService {
     ));
   }
 
+  Future<String?> _getRoomIdFromContactId(String contactId) async {
+  try {
+    print('🔍 Finding Room ID for Contact ID: $contactId');
+    
+    final requestData = {
+      'EqualityFilter': {'CtRealId': contactId},
+      'Take': 1,
+      'Skip': 0,
+      'IncludeColumns': ['Id'],
+      'ColumnSelection': 1,
+    };
+
+    final response = await _dio.post(
+      'Services/Chat/Chatrooms/List',
+      data: requestData,
+    );
+
+    if (response.statusCode == 200 && response.data['IsError'] != true) {
+      final List<dynamic> entities = response.data['Entities'] ?? [];
+      if (entities.isNotEmpty) {
+        final roomId = entities.first['Id']?.toString();
+        print('✅ Found Room ID: $roomId for Contact ID: $contactId');
+        return roomId;
+      }
+    }
+    
+    print('⚠️ No Room found for Contact ID: $contactId');
+    return null;
+  } catch (e) {
+    print('❌ Error finding Room ID: $e');
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> getContactDetailWithRelations(String contactId) async {
+  try {
+    print('📋 Fetching contact detail with relations for Contact ID: $contactId');
+    
+    // STEP 1: Convert Contact ID ke Room ID dulu
+    final roomId = await _getRoomIdFromContactId(contactId);
+    
+    if (roomId == null) {
+      print('⚠️ Cannot fetch relations: No Room ID found');
+      return null;
+    }
+    
+    // STEP 2: Gunakan Room ID untuk get DetailRoom
+    final requestData = {
+      'EntityId': roomId, // ✅ SEKARANG PAKAI ROOM ID
+    };
+
+    print('📋 DetailRoom request data: $requestData');
+
+    final response = await _dio.post(
+      'Services/Chat/Chatrooms/DetailRoom',
+      data: requestData,
+    );
+
+    print('📋 DetailRoom response: ${response.statusCode}');
+
+    if (response.statusCode == 200 && response.data['IsError'] != true) {
+      final data = response.data['Data'];
+      
+      if (data != null) {
+        print('✅ Found room data with relations');
+        print('  - Campaign: ${data['Campaign'] != null ? "✓" : "✗"}');
+        print('  - Deal: ${data['Deal'] != null ? "✓" : "✗"}');
+        print('  - FormR: ${data['FormR'] != null ? "✓" : "✗"}');
+        
+        return data;
+      }
+    }
+
+    print('⚠️ No data returned from DetailRoom');
+    return null;
+  } catch (e) {
+    print('❌ Error fetching contact detail with relations: $e');
+    return null;
+  }
+}
+
   Future<ContactDetail?> getContactDetail(String contactId) async {
     try {
       print('Fetching contact detail for ID: $contactId');
@@ -161,113 +242,100 @@ class ContactDetailService {
     }
   }
 
-  Future<ContactCampaign?> getContactCampaign(String contactId) async {
-    try {
-      final requestData = {
-        'EqualityFilter': {'CtId': contactId},
-        'Take': 1,
-        'Skip': 0,
-      };
-
-      final response = await _dio.post(
-        'Services/Nobox/Campaign/List',
-        data: requestData,
-      );
-
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        final List<dynamic> entities = response.data['Entities'] ?? [];
-        if (entities.isNotEmpty) {
-          return ContactCampaign.fromJson(entities.first);
-        }
-      }
-
-      return null;
-    } catch (e) {
-      print('Error fetching contact campaign: $e');
-      return null;
+ Future<ContactCampaign?> getContactCampaign(String contactId) async {
+  try {
+    print('📋 Fetching campaign for contact: $contactId');
+    
+    final data = await getContactDetailWithRelations(contactId);
+    
+    if (data != null && data['Campaign'] != null) {
+      final campaignData = data['Campaign'];
+      print('✅ Campaign found: ${campaignData['Name']}');
+      return ContactCampaign.fromJson(campaignData);
     }
+    
+    print('⚠️ No campaign data available');
+    return null;
+  } catch (e) {
+    print('❌ Error fetching contact campaign: $e');
+    return null;
   }
+}
 
-  Future<ContactDeal?> getContactDeal(String contactId) async {
-    try {
-      final requestData = {
-        'EqualityFilter': {'CtId': contactId},
-        'Take': 1,
-        'Skip': 0,
-      };
-
-      final response = await _dio.post(
-        'Services/Nobox/Deals/List',
-        data: requestData,
-      );
-
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        final List<dynamic> entities = response.data['Entities'] ?? [];
-        if (entities.isNotEmpty) {
-          return ContactDeal.fromJson(entities.first);
-        }
-      }
-
-      return null;
-    } catch (e) {
-      print('Error fetching contact deal: $e');
-      return null;
+// 🔧 FIXED: Update method untuk Deal
+Future<ContactDeal?> getContactDeal(String contactId) async {
+  try {
+    print('📋 Fetching deal for contact: $contactId');
+    
+    final data = await getContactDetailWithRelations(contactId);
+    
+    if (data != null && data['Deal'] != null) {
+      final dealData = data['Deal'];
+      print('✅ Deal found: ${dealData['Name']}');
+      return ContactDeal.fromJson(dealData);
     }
+    
+    print('⚠️ No deal data available');
+    return null;
+  } catch (e) {
+    print('❌ Error fetching contact deal: $e');
+    return null;
   }
+}
 
-  Future<ContactFormTemplate?> getContactFormTemplate(String contactId) async {
-    try {
-      final requestData = {
-        'EqualityFilter': {'CtId': contactId},
-        'Take': 1,
-        'Skip': 0,
-      };
-
-      final response = await _dio.post(
-        'Services/NoBoxCRM/Form/List',
-        data: requestData,
-      );
-
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        final List<dynamic> entities = response.data['Entities'] ?? [];
-        if (entities.isNotEmpty) {
-          return ContactFormTemplate.fromJson(entities.first);
-        }
+// 🔧 FIXED: Update method untuk FormTemplate
+Future<ContactFormTemplate?> getContactFormTemplate(String contactId) async {
+  try {
+    print('📋 Fetching form template for contact: $contactId');
+    
+    final data = await getContactDetailWithRelations(contactId);
+    
+    if (data != null && data['FormR'] != null) {
+      final formRData = data['FormR'];
+      
+      // FormR berisi FormId, gunakan itu untuk get template detail
+      if (formRData['FormId'] != null) {
+        final formId = formRData['FormId'].toString();
+        print('✅ FormTemplate found with FormId: $formId');
+        
+        // Buat ContactFormTemplate dari FormR data
+        return ContactFormTemplate(
+          id: formId,
+          name: 'Form #$formId',
+          description: null,
+        );
       }
-
-      return null;
-    } catch (e) {
-      print('Error fetching contact form template: $e');
-      return null;
     }
+    
+    print('⚠️ No form template data available');
+    return null;
+  } catch (e) {
+    print('❌ Error fetching contact form template: $e');
+    return null;
   }
+}
 
-  Future<ContactFormResult?> getContactFormResult(String contactId) async {
-    try {
-      final requestData = {
-        'EqualityFilter': {'CtId': contactId},
-        'Take': 1,
-        'Skip': 0,
-      };
-
-      final response = await _dio.post(
-        'Services/NoBoxCRM/Formresults/List',
-        data: requestData,
-      );
-
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        final List<dynamic> entities = response.data['Entities'] ?? [];
-        if (entities.isNotEmpty) {
-          return ContactFormResult.fromJson(entities.first);
-        }
-      }
-
-      return null;
-    } catch (e) {
-      print('Error fetching contact form result: $e');
-      return null;
+// 🔧 FIXED: Update method untuk FormResult
+Future<ContactFormResult?> getContactFormResult(String contactId) async {
+  try {
+    print('📋 Fetching form result for contact: $contactId');
+    
+    final data = await getContactDetailWithRelations(contactId);
+    
+    if (data != null && data['FormR'] != null) {
+      final formRData = data['FormR'];
+      print('✅ FormResult found: ${formRData['SenderNm']}');
+      return ContactFormResult.fromJson(formRData);
     }
+    
+    print('⚠️ No form result data available');
+    return null;
+  } catch (e) {
+    print('❌ Error fetching contact form result: $e');
+    return null;
   }
+}
+
 
   Future<ContactFunnel?> getContactFunnel(String contactId) async {
     try {

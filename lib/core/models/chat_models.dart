@@ -1,21 +1,5 @@
 import 'dart:convert';
-
-class MessageTag {
-  final String id;
-  final String name;
-
-  MessageTag({
-    required this.id,
-    required this.name,
-  });
-
-  factory MessageTag.fromJson(Map<String, dynamic> json) {
-    return MessageTag(
-      id: json['Id']?.toString() ?? '',
-      name: json['Nm']?.toString() ?? json['Name']?.toString() ?? '',
-    );
-  }
-}
+import 'tag_models.dart';
 
 class Room {
   final String id;
@@ -91,16 +75,6 @@ class Room {
     final botName = json['BotNm'] ?? json['BotName'];
     final contactName = json['CtRealNm'] ?? json['Ct'] ?? json['Grp'];
     
-    // Enhanced debug logging
-    print('📝 Parsing room: ${json['Id']}');
-    print('  🤖 AccNm: ${json['AccNm']} -> accountName: $accountName');
-    print('  🤖 BotNm: ${json['BotNm']} -> botName: $botName');
-    print('  📶 ChAcc: $channelNameRaw, ChId: ${json['ChId']}');
-    print('  👤 Contact: ${json['CtRealNm']} / ${json['Ct']} / ${json['Grp']} -> $contactName');
-    print('  📈 Status: ${json['St']}');
-    print('  🔔 IsMuteBot: ${json['IsMuteBot']} -> ${json['IsMuteBot'] == 1}');
-    print('  📌 IsNeedReply: ${json['IsNeedReply']}, NeedReply: ${json['NeedReply']}');
-    
     return Room(
       id: json['Id']?.toString() ?? '',
       ctId: json['CtId']?.toString(),
@@ -126,11 +100,11 @@ class Room {
       isPinned: json['IsPin'] == 2,
       isBlocked: json['CtIsBlock'] == 1,
       isMuteBot: json['IsMuteBot'] == 1,
-      tags: (json['Tags'] as String?)?.split(',').where((t) => t.isNotEmpty).toList() ?? [],
+      tags: (json['Tags'] as String?)?.split(',').where((t) => t.trim().isNotEmpty).toList() ?? [],
       messageTags: _parseMessageTags(json),
       funnel: json['Fn'] ?? json['FnNm'], // Also check FnNm field
       funnelId: json['FnId']?.toString() ?? json['FunnelId']?.toString(), // Also check FunnelId field
-      tagIds: (json['TagsIds'] as String?)?.split(',').where((t) => t.isNotEmpty).toList() ?? [],
+      tagIds: (json['TagsIds'] as String?)?.split(',').where((t) => t.trim().isNotEmpty).toList() ?? [],
       needReply: json['NeedReply'] == 1 || json['NeedReply'] == true || json['IsNeedReply'] == 1 || json['IsNeedReply'] == true,
       lastUpdatedBy: json['UpBy'] != null ? int.tryParse(json['UpBy'].toString()) : null,
     );
@@ -142,9 +116,7 @@ class Room {
       final tagIds = json['TagsIds'] as String?;
       final tagNames = json['Tags'] as String?;
       
-      print('🏷️ Parsing message tags - TagsIds: $tagIds, Tags: $tagNames');
-      
-      if (tagIds != null && tagNames != null && tagIds.isNotEmpty && tagNames.isNotEmpty) {
+      if (tagIds != null && tagIds.isNotEmpty) {
         // Handle both comma-separated strings and JSON arrays
         List<String> idList = [];
         List<String> nameList = [];
@@ -163,31 +135,32 @@ class Room {
           idList = tagIds.split(',').map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
         }
         
-        try {
-          if (tagNames.startsWith('[') && tagNames.endsWith(']')) {
-            final dynamic parsedNames = jsonDecode(tagNames);
-            if (parsedNames is List) {
-              nameList = parsedNames.map((name) => name.toString().trim()).where((name) => name.isNotEmpty).toList();
+        // Parse tag names if available
+        if (tagNames != null && tagNames.isNotEmpty) {
+          try {
+            if (tagNames.startsWith('[') && tagNames.endsWith(']')) {
+              final dynamic parsedNames = jsonDecode(tagNames);
+              if (parsedNames is List) {
+                nameList = parsedNames.map((name) => name.toString().trim()).where((name) => name.isNotEmpty).toList();
+              }
+            } else {
+              nameList = tagNames.split(',').map((name) => name.trim()).where((name) => name.isNotEmpty).toList();
             }
-          } else {
+          } catch (e) {
             nameList = tagNames.split(',').map((name) => name.trim()).where((name) => name.isNotEmpty).toList();
           }
-        } catch (e) {
-          nameList = tagNames.split(',').map((name) => name.trim()).where((name) => name.isNotEmpty).toList();
         }
         
-        print('🏷️ Parsed ID list: $idList');
-        print('🏷️ Parsed name list: $nameList');
-        
         final List<MessageTag> tags = [];
-        for (int i = 0; i < idList.length && i < nameList.length; i++) {
+        for (int i = 0; i < idList.length; i++) {
+          // Use name if available, otherwise use "Tag {id}" as placeholder
+          final tagName = i < nameList.length ? nameList[i] : 'Tag ${idList[i]}';
           tags.add(MessageTag(
             id: idList[i],
-            name: nameList[i],
+            name: tagName,
           ));
         }
         
-        print('🏷️ Created ${tags.length} message tags');
         return tags;
       }
     } catch (e) {

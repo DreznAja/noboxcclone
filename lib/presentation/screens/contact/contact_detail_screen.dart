@@ -1516,9 +1516,13 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: isDarkMode ? AppTheme.darkBackground : Colors.grey.shade50,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(
+                    color: isDarkMode 
+                      ? Colors.white.withOpacity(0.1) 
+                      : Colors.grey.shade300
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -1580,211 +1584,360 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
   }
 
   Widget _buildCampaignSection(ContactCampaign? campaign) {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
-    return Container(
-      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header dengan tombol open
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Campaign',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    campaign?.name ?? 'Not Set',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: campaign != null ? Colors.black87 : Colors.red,
-                    ),
-                  ),
-                ],
+            Text(
+              'Campaign',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 18),
-              onPressed: campaign != null ? () => _viewCampaign(campaign) : null,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-              onPressed: _showCampaignDialog,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
+            if (campaign != null)
+              IconButton(
+                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+                onPressed: () => _viewCampaign(campaign),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'View campaign',
+              ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildDealSection(ContactDeal? deal) {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
-
-    return Container(
-      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Deal',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    deal?.name ?? 'Not Set',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: deal != null ? Colors.black87 : Colors.red,
-                    ),
-                  ),
-                  if (deal != null && (deal.pipeline != null || deal.stage != null)) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '${deal.pipeline ?? ''} ${deal.stage != null ? '• ${deal.stage}' : ''}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                      ),
-                    ),
-                  ],
-                ],
+        const SizedBox(height: 8),
+        
+        // Campaign Name
+        if (campaign != null) ...[
+          Text(
+            'Name',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            campaign.name,
+            style: TextStyle(
+              fontSize: 15,
+              color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          // Campaign Status
+          Text(
+            'Status',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _getCampaignStatusColor(campaign.status).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              _getCampaignStatusText(campaign.status),
+              style: TextStyle(
+                fontSize: 13,
+                color: _getCampaignStatusColor(campaign.status),
+                fontWeight: FontWeight.w600,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 18),
-              onPressed: deal != null ? () => _viewDeal(deal) : null,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+          ),
+        ] else ...[
+          Text(
+            'Not Set',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.red.shade400,
+              fontStyle: FontStyle.italic,
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-              onPressed: _showDealDialog,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ),
-      ),
-    );
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+// Helper untuk status campaign
+Color _getCampaignStatusColor(int status) {
+  switch (status) {
+    case 1: return Colors.grey;      // Draft
+    case 2: return Colors.orange;    // Process
+    case 3: return Colors.green;     // Completed
+    case 4: return Colors.red;       // Failed
+    default: return Colors.grey;
   }
+}
 
-  Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+String _getCampaignStatusText(int status) {
+  switch (status) {
+    case 1: return 'DRAFT';
+    case 2: return 'PROCESS';
+    case 3: return 'COMPLETED';
+    case 4: return 'FAILED';
+    default: return 'UNKNOWN';
+  }
+}
 
-    return Container(
-      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
+ Widget _buildDealSection(ContactDeal? deal) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header dengan tombol open
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Form Template',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    formTemplate?.name ?? 'Not Set',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: formTemplate != null ? Colors.black87 : Colors.red,
-                    ),
-                  ),
-                ],
+            Text(
+              'Deal',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 18),
-              onPressed: formTemplate != null ? () => _viewFormTemplate(formTemplate) : null,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-              onPressed: _showFormTemplateDialog,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
+            if (deal != null)
+              IconButton(
+                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+                onPressed: () => _viewDeal(deal),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'View deal',
+              ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFormResultSection(ContactFormResult? formResult) {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
-
-    return Container(
-      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Form Result',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Not Set',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.red,
-                    ),
-                  ),
-                ],
+        const SizedBox(height: 8),
+        
+        // Deal Name
+        if (deal != null) ...[
+          Text(
+            'Name',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            deal.name,
+            style: TextStyle(
+              fontSize: 15,
+              color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          
+          // Pipeline
+          if (deal.pipeline != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Pipeline',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 18),
-              onPressed: formResult != null ? () => _viewFormResult(formResult) : null,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+            const SizedBox(height: 4),
+            Text(
+              deal.pipeline!,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+              ),
             ),
           ],
+          
+          // Stage
+          if (deal.stage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Stage',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              deal.stage!,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+              ),
+            ),
+          ],
+        ] else ...[
+          Text(
+            'Not Set',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.red.shade400,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+// 🎨 FIXED: Form Template Section - Mirip Web
+Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header dengan tombol open
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Form Template',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+              ),
+            ),
+            if (formTemplate != null)
+              IconButton(
+                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+                onPressed: () => _viewFormTemplate(formTemplate),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'View form template',
+              ),
+          ],
         ),
-      ),
-    );
-  }
+        const SizedBox(height: 8),
+        
+        // Form Template Name
+        if (formTemplate != null) ...[
+          Text(
+            formTemplate.name,
+            style: TextStyle(
+              fontSize: 15,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ] else ...[
+          Text(
+            'Not Set',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.red.shade400,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+// 🎨 FIXED: Form Result Section - Mirip Web
+Widget _buildFormResultSection(ContactFormResult? formResult) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header dengan tombol open
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Form Result',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+              ),
+            ),
+            if (formResult != null)
+              IconButton(
+                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+                onPressed: () => _viewFormResult(formResult),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'View form result',
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        
+        // Form Result Data
+        if (formResult != null) ...[
+          Text(
+            'Sender Name',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            formResult.senderName,
+            style: TextStyle(
+              fontSize: 15,
+              color: isDarkMode ? const Color(0xFF64B5F6) : const Color(0xFF1976D2),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ] else ...[
+          Text(
+            'Not Set',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.red.shade400,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+// Helper method untuk format tanggal
+String _formatDate(DateTime date) {
+  return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+}
 
   bool _isValidImageUrl(String? url) {
     if (url == null || url.isEmpty) return false;
@@ -2475,7 +2628,7 @@ void _showFunnelDropdown() {
     );
   }
 
-  void _showTagSelectionDialog(TagState tagState) {
+  Future<void> _showTagSelectionDialog(TagState tagState) async {
     // Find the correct room ID for this contact
     final chatState = ref.read(chatProvider);
     String roomIdToUse = widget.contactId;
@@ -2491,18 +2644,32 @@ void _showFunnelDropdown() {
       }
     }
     
+    // Ensure room tags are loaded before opening dialog
+    print('🏷️ Loading room tags before opening dialog...');
+    await ref.read(tagProvider.notifier).loadRoomTags(roomIdToUse);
+    
+    // Get fresh tag state after loading
+    final freshTagState = ref.read(tagProvider);
+    print('🏷️ Opening tag selection dialog with current tags: ${freshTagState.roomTags.map((t) => '${t.id}:${t.name}').toList()}');
+    
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       builder: (dialogContext) => TagSelectionDialog(
         roomId: roomIdToUse,
-        currentTags: tagState.roomTags,
+        currentTags: freshTagState.roomTags,
         onTagsSelected: (tagIds) async {
+          print('🏷️ Selected tag IDs from dialog: $tagIds');
           // Save ScaffoldMessenger before async operation
           final messenger = ScaffoldMessenger.of(context);
           
           try {
             // Update room tags
             await ref.read(tagProvider.notifier).updateRoomTags(roomIdToUse, tagIds);
+            
+            // Refresh room list to get updated tags
+            await ref.read(chatProvider.notifier).loadRooms();
             
             // Use saved messenger instead of context
             if (mounted) {
@@ -2603,6 +2770,9 @@ void _showFunnelDropdown() {
               
               try {
                 await ref.read(tagProvider.notifier).removeTagFromRoom(roomIdToUse, tag.id);
+                
+                // Refresh room list to get updated tags
+                await ref.read(chatProvider.notifier).loadRooms();
                 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
