@@ -431,6 +431,7 @@ Future<bool> updateContact({
   String? city,
   String? state,
   String? country,
+  String? photoBase64,
 }) async {
   try {
     print('Updating contact: $contactId');
@@ -443,6 +444,7 @@ Future<bool> updateContact({
       city: city,
       state: state,
       country: country,
+      photoBase64: photoBase64,
     );
     
     if (success) {

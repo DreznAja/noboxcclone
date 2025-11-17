@@ -1,6 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nobox_chat/core/models/contact_detail_models.dart';
 import 'package:nobox_chat/core/models/location_models.dart';
 import 'package:nobox_chat/core/providers/contact_detail_provider.dart';
@@ -40,6 +43,9 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   String? _selectedCountryId;
   String? _selectedStateId;
   String? _selectedCityId;
+  
+  File? _selectedImageFile;
+  String? _newPhotoBase64;
   
   bool _isSaving = false;
   bool _isLoadingCategories = false;
@@ -238,6 +244,7 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
         state: selectedState.isNotEmpty ? selectedState : null,
         country: selectedCountry.isNotEmpty ? selectedCountry : null,
         city: selectedCity.isNotEmpty ? selectedCity : null,
+        photoBase64: _newPhotoBase64,
       );
 
       if (!mounted) return;
@@ -257,6 +264,157 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
           _isSaving = false;
         });
       }
+    }
+  }
+
+  Future<void> _changeProfilePhoto() async {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+    // Show bottom sheet to choose camera or gallery
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Change Profile Photo',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: Icon(
+                Icons.camera_alt,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+              ),
+              title: Text(
+                'Take Photo',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+                ),
+              ),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.photo_library,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+              ),
+              title: Text(
+                'Choose from Gallery',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+                ),
+              ),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            if (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null)
+              ListTile(
+                leading: const Icon(
+                  Icons.delete,
+                  color: Colors.red,
+                ),
+                title: const Text(
+                  'Remove Photo',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.red,
+                  ),
+                ),
+                onTap: () => Navigator.pop(context, null),
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null && !mounted) return;
+
+    // If user chose to remove photo
+    if (source == null && (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Remove Photo'),
+          content: const Text('Are you sure you want to remove the profile photo?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        setState(() {
+          _selectedImageFile = null;
+          _newPhotoBase64 = '';
+        });
+        _showSnackBar('Profile photo will be removed when you save', isError: false);
+      }
+      return;
+    }
+
+    if (source == null) return;
+
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 200,
+        maxHeight: 200,
+        imageQuality: 50,
+      );
+
+      if (image == null) return;
+
+      // Read image bytes and convert to base64
+      final bytes = await File(image.path).readAsBytes();
+      final base64Image = base64Encode(bytes);
+      
+      // Log size for debugging
+      print('Base64 size: ${base64Image.length} characters');
+
+      setState(() {
+        _selectedImageFile = File(image.path);
+        _newPhotoBase64 = base64Image; // Send raw base64 without data URI prefix
+      });
+
+      _showSnackBar('Profile photo selected. Save to apply changes.', isError: false);
+    } catch (e) {
+      _showSnackBar('Error: ${e.toString()}', isError: true);
     }
   }
 
@@ -362,33 +520,65 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
               ),
               child: Column(
                 children: [
-                  // Avatar with authentication
+                  // Avatar with edit button
                   Builder(
                     builder: (context) {
-                      final hasImage = widget.contact.image != null && widget.contact.image!.isNotEmpty;
+                      final hasImage = _selectedImageFile != null || (widget.contact.image != null && widget.contact.image!.isNotEmpty);
                       final headers = _getAuthHeaders();
                       
-                      return CircleAvatar(
-                        radius: 40,
-                        backgroundColor: AppTheme.primaryColor,
-                        backgroundImage: hasImage
-                          ? CachedNetworkImageProvider(
-                              widget.contact.image!,
-                              headers: headers,
-                            )
-                          : null,
-                        child: !hasImage
-                          ? Text(
-                              widget.contact.name.isNotEmpty 
-                                ? widget.contact.name[0].toUpperCase()
-                                : '?',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                      ImageProvider? backgroundImage;
+                      if (_selectedImageFile != null) {
+                        backgroundImage = FileImage(_selectedImageFile!);
+                      } else if (widget.contact.image != null && widget.contact.image!.isNotEmpty) {
+                        backgroundImage = CachedNetworkImageProvider(
+                          widget.contact.image!,
+                          headers: headers,
+                        );
+                      }
+                      
+                      return Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: AppTheme.primaryColor,
+                            backgroundImage: backgroundImage,
+                            child: !hasImage
+                              ? Text(
+                                  widget.contact.name.isNotEmpty 
+                                    ? widget.contact.name[0].toUpperCase()
+                                    : '?',
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _changeProfilePhoto,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
                               ),
-                            )
-                          : null,
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),

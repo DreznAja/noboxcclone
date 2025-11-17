@@ -1039,7 +1039,7 @@ body: RefreshIndicator(
                 if (contact.agents != null && contact.agents!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Assigned Agents',
+                    'Human Agent',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
@@ -1999,7 +1999,7 @@ Widget _buildAssignedAgentsSection(ContactDetail? contact) {
       children: [
         // Header
         Text(
-          'Assigned Agents',
+          'Human Agent',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -3261,7 +3261,7 @@ void _showFunnelDropdown() {
       _muteAIAgent = newValue;
     });
 
-    try {
+    try {   
       // Update via API
       final success = await ref.read(contactDetailProvider.notifier).updateMuteBot(_currentRoomId!, newValue);
 

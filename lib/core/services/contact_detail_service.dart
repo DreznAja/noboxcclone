@@ -814,6 +814,7 @@ Future<ContactFormResult?> getContactFormResult(String contactId) async {
     String? city,
     String? state,
     String? country,
+    String? photoBase64,
   }) async {
     try {
       print('Updating contact: $contactId');
@@ -827,6 +828,7 @@ Future<ContactFormResult?> getContactFormResult(String contactId) async {
       if (city != null) entity['City'] = city;
       if (state != null) entity['State'] = state;
       if (country != null) entity['Country'] = country;
+      if (photoBase64 != null && photoBase64.isNotEmpty) entity['Photo'] = photoBase64;
       
       final requestData = {
         'EntityId': contactId,

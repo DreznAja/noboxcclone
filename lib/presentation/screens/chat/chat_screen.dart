@@ -50,6 +50,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _hasInitiallyScrolled = false; // Flag untuk memastikan sudah scroll pertama kali
   bool _isFirstBuild = true; // Flag untuk build pertama
   bool _showContactDetail = false;
+  bool _isResolved = false; // Track resolved status for immediate UI update
   StreamSubscription<void>? _sessionExpiredSubscription;
 
   Map<String, String> _getAuthHeaders() {
@@ -752,7 +753,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           
           // Input widgets dengan background sesuai mode
-          if (!widget.isArchived && !widget.isReadOnly && widget.room.status != 3)
+          if (!widget.isArchived && !widget.isReadOnly && !_isResolvedStatus())
             ChatInputWidget(
               onSendText: (text) => _handleSendText(text),
               onSendMedia: (type, data, filename) => _handleSendMedia(type, data, filename),
@@ -817,7 +818,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               ),
             )
-          else if (widget.room.status == 3)
+          else if (_isResolvedStatus())
             Container(
               padding: const EdgeInsets.all(16),
               color: isDarkMode 
@@ -968,8 +969,15 @@ PreferredSizeWidget _buildNormalAppBar() {
       if ((!widget.room.isGroup && (widget.room.ctId != null || widget.room.ctRealId != null)) ||
           (widget.room.isGroup && widget.room.grpId != null))
         IconButton(
-          icon: Icon(LucideIcons.columns, color: Colors.white),
-          onPressed: _openContactDetailSlidePanel,
+          icon: Icon(
+            LucideIcons.columns, 
+            color: (_isResolvedStatus() || widget.isArchived) 
+              ? Colors.white.withOpacity(0.3) 
+              : Colors.white,
+          ),
+          onPressed: (_isResolvedStatus() || widget.isArchived) 
+            ? null 
+            : _openContactDetailSlidePanel,
           tooltip: widget.room.isGroup ? 'Group Info' : 'Contact Info',
         ),
       
@@ -1002,8 +1010,8 @@ if (!widget.isArchived)
       }
     },
     itemBuilder: (BuildContext context) {
-      // Jika conversation sudah resolved (status == 3), hanya tampilkan Help
-      if (widget.room.status == 3) {
+      // Jika conversation sudah resolved, hanya tampilkan Help
+      if (_isResolvedStatus()) {
         return [
           PopupMenuItem(
             value: 'help',
@@ -1253,6 +1261,9 @@ void _openContactDetailSlidePanel() {
   void _handleResolve() async {
     final ok = await ref.read(chatProvider.notifier).markActiveRoomResolved();
     if (ok) {
+      setState(() {
+        _isResolved = true; // Update local state immediately
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Conversation marked as resolved'),
@@ -1269,6 +1280,11 @@ void _openContactDetailSlidePanel() {
         ),
       );
     }
+  }
+
+  // Helper method to check if conversation is resolved
+  bool _isResolvedStatus() {
+    return widget.room.status == 3 || _isResolved;
   }
 
   void _handleArchive() {
