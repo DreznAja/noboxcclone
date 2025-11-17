@@ -323,7 +323,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _applyFilters(searchQuery: query);
   }
 
-  Future<void> _handleLogout() async {
+Future<void> _handleLogout() async {
+  final isDarkMode = ref.read(themeProvider).isDarkMode;
+  
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'Logout',
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: isDarkMode ? Colors.white : Colors.black,
+        ),
+      ),
+      content: Text(
+        'Are you sure you want to logout?',
+        style: TextStyle(
+          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black87,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: isDarkMode ? AppTheme.primaryColor: AppTheme.primaryColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: TextButton.styleFrom(
+            backgroundColor: Colors.red.withOpacity(0.1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              'Logout',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true) {
     await ref.read(authProvider.notifier).logout();
     if (mounted) {
       Navigator.of(context).pushReplacement(
@@ -331,6 +386,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
       );
     }
   }
+}
 
   int _getSelectedIndex() {
     switch (_selectedTab) {

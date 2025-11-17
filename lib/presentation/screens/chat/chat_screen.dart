@@ -903,7 +903,7 @@ PreferredSizeWidget _buildNormalAppBar() {
     elevation: 0,
     titleSpacing: 0, // Mengurangi jarak dari back button ke title
     leading: IconButton(
-      icon: const Icon(Icons.arrow_back, color: Colors.white),
+      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
       onPressed: () => Navigator.of(context).pop(),
     ),
     title: Row(

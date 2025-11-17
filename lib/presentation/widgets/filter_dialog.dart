@@ -99,9 +99,9 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
+        width: MediaQuery.of(context).size.width * 0.95,
         height: MediaQuery.of(context).size.height * 0.8,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: BoxDecoration(
           color: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE
           borderRadius: BorderRadius.circular(16),
@@ -156,30 +156,31 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _filters.reset();
-                    });
-                    print('Filters reset');
-                  },
-                  child: Text(
-                    'Reset',
-                    style: TextStyle(
-                      color: isDarkMode 
-                        ? AppTheme.darkTextPrimary 
-                        : AppTheme.primaryColor, // UPDATE
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(
-                      color: isDarkMode 
-                        ? AppTheme.darkTextPrimary 
-                        : AppTheme.primaryColor, // UPDATE
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
-                ),
+               OutlinedButton.icon(
+  onPressed: () {
+    setState(() {
+      _filters.reset();
+    });
+    print('Filters reset');
+  },
+  icon: const Icon(Icons.refresh, size: 16,color: AppTheme.primaryColor),
+  label: Text(
+    'Reset',
+    style: TextStyle(
+      color: isDarkMode 
+        ? AppTheme.darkTextPrimary 
+        : AppTheme.primaryColor,
+    ),
+  ),
+  style: OutlinedButton.styleFrom(
+    side: BorderSide(
+      color: isDarkMode 
+        ? AppTheme.darkTextPrimary 
+        : AppTheme.primaryColor,
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  ),
+),
                 const SizedBox(width: 12),
               ],
             ),

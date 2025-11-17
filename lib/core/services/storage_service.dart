@@ -14,6 +14,19 @@ class StorageService {
     return _prefs!;
   }
 
+  // Last username management (for UI convenience)
+static Future<void> saveLastUsername(String username) async {
+  await instance.setString('last_logged_username', username);
+}
+
+static String? getLastUsername() {
+  return instance.getString('last_logged_username');
+}
+
+static Future<void> removeLastUsername() async {
+  await instance.remove('last_logged_username');
+}
+
   // Token management
   static Future<void> saveToken(String token) async {
     await instance.setString(AppConfig.tokenKey, token);

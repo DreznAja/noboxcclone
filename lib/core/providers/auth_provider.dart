@@ -83,6 +83,8 @@ void _checkAuthStatus() async {
       
       // Save token
       await StorageService.saveToken(response.data!);
+
+      await StorageService.saveLastUsername(username);
       
       // Save credentials for auto re-login
       if (saveCredentials) {
