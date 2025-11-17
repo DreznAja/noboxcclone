@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -64,20 +65,17 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   }
   
   Future<void> _loadInitialData() async {
-    // Load categories and countries in parallel
     await Future.wait([
       _loadCategories(),
       _loadCountries(),
     ]);
     
-    // Set category if exists
     if (widget.contact.category != null && _categories.contains(widget.contact.category)) {
       setState(() {
         _selectedCategory = widget.contact.category;
       });
     }
     
-    // Load location data if contact has country
     if (widget.contact.country != null && widget.contact.country!.isNotEmpty) {
       final matchingCountry = _countries.where(
         (c) => c.name.toLowerCase() == widget.contact.country!.toLowerCase()
@@ -270,7 +268,6 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
   Future<void> _changeProfilePhoto() async {
     final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
-    // Show bottom sheet to choose camera or gallery
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
@@ -351,7 +348,6 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
 
     if (source == null && !mounted) return;
 
-    // If user chose to remove photo
     if (source == null && (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null)) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -400,16 +396,14 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
 
       if (image == null) return;
 
-      // Read image bytes and convert to base64
       final bytes = await File(image.path).readAsBytes();
       final base64Image = base64Encode(bytes);
       
-      // Log size for debugging
       print('Base64 size: ${base64Image.length} characters');
 
       setState(() {
         _selectedImageFile = File(image.path);
-        _newPhotoBase64 = base64Image; // Send raw base64 without data URI prefix
+        _newPhotoBase64 = base64Image;
       });
 
       _showSnackBar('Profile photo selected. Save to apply changes.', isError: false);
@@ -520,7 +514,6 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
               ),
               child: Column(
                 children: [
-                  // Avatar with edit button
                   Builder(
                     builder: (context) {
                       final hasImage = _selectedImageFile != null || (widget.contact.image != null && widget.contact.image!.isNotEmpty);
@@ -617,17 +610,15 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                 ),
                 const SizedBox(height: 16),
                 
-                // Category Dropdown
-                _buildDropdownField(
+                // Category Dropdown with Search
+                _buildSearchableDropdownField<String>(
                   label: 'Category',
                   icon: Icons.category,
                   isDarkMode: isDarkMode,
                   value: _selectedCategory,
                   items: _categories,
-                  itemBuilder: (category) => DropdownMenuItem<String>(
-                    value: category,
-                    child: Text(category),
-                  ),
+                  itemLabel: (category) => category,
+                  itemValue: (category) => category,
                   onChanged: _isLoadingCategories ? null : (value) {
                     setState(() {
                       _selectedCategory = value;
@@ -665,62 +656,66 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                   hint: 'Enter postal code',
                 ),
                 const SizedBox(height: 16),
-                _buildDropdownField(
+                
+                // Country Dropdown with Search
+                _buildSearchableDropdownField<Country>(
                   label: 'Country',
                   icon: Icons.public,
                   isDarkMode: isDarkMode,
                   value: _selectedCountryId,
                   items: _countries,
-                  itemBuilder: (country) => DropdownMenuItem<String>(
-                    value: country.id,
-                    child: Text(country.name),
-                  ),
+                  itemLabel: (country) => country.name,
+                  itemValue: (country) => country.id,
                   onChanged: _isLoadingCountries ? null : (value) {
                     setState(() {
                       _selectedCountryId = value;
                     });
                     if (value != null) {
-                      _loadStates(value);
+                      final country = _countries.firstWhere((c) => c.id == value);
+                      _loadStates(country.id);
                     }
                   },
                   isLoading: _isLoadingCountries,
                   hint: 'Select a country',
                   itemCount: _countries.length,
                 ),
+                
                 const SizedBox(height: 16),
-                _buildDropdownField(
+                
+                // State Dropdown with Search
+                _buildSearchableDropdownField<StateRegion>(
                   label: 'State / Province',
                   icon: Icons.map_outlined,
                   isDarkMode: isDarkMode,
                   value: _selectedStateId,
                   items: _states,
-                  itemBuilder: (state) => DropdownMenuItem<String>(
-                    value: state.id,
-                    child: Text(state.name),
-                  ),
+                  itemLabel: (state) => state.name,
+                  itemValue: (state) => state.id,
                   onChanged: _selectedCountryId == null || _isLoadingStates ? null : (value) {
                     setState(() {
                       _selectedStateId = value;
                     });
                     if (value != null) {
-                      _loadCities(value);
+                      final state = _states.firstWhere((s) => s.id == value);
+                      _loadCities(state.id);
                     }
                   },
                   isLoading: _isLoadingStates,
                   hint: _selectedCountryId == null ? 'Select country first' : 'Select a state',
                   itemCount: _states.length,
                 ),
+                
                 const SizedBox(height: 16),
-                _buildDropdownField(
+                
+                // City Dropdown with Search
+                _buildSearchableDropdownField<City>(
                   label: 'City',
                   icon: Icons.location_city_outlined,
                   isDarkMode: isDarkMode,
                   value: _selectedCityId,
                   items: _cities,
-                  itemBuilder: (city) => DropdownMenuItem<String>(
-                    value: city.id,
-                    child: Text(city.name),
-                  ),
+                  itemLabel: (city) => city.name,
+                  itemValue: (city) => city.id,
                   onChanged: _selectedStateId == null || _isLoadingCities ? null : (value) {
                     setState(() {
                       _selectedCityId = value;
@@ -926,13 +921,14 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
     );
   }
 
-  Widget _buildDropdownField<T>({
+  Widget _buildSearchableDropdownField<T>({
     required String label,
     required IconData icon,
     required bool isDarkMode,
     required String? value,
     required List<T> items,
-    required DropdownMenuItem<String> Function(T) itemBuilder,
+    required String Function(T) itemLabel,
+    required String Function(T) itemValue,
     required void Function(String?)? onChanged,
     required bool isLoading,
     required String hint,
@@ -973,92 +969,203 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          decoration: InputDecoration(
-            prefixIcon: isLoading 
-              ? Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppTheme.primaryColor,
+        DropdownSearch<T>(
+          items: items,
+          itemAsString: itemLabel,
+          selectedItem: value != null 
+            ? items.where((item) => itemValue(item) == value).firstOrNull
+            : null,
+          onChanged: (T? selectedItem) {
+            if (selectedItem != null) {
+              onChanged?.call(itemValue(selectedItem));
+            } else {
+              onChanged?.call(null);
+            }
+          },
+          enabled: onChanged != null && !isLoading,
+          dropdownDecoratorProps: DropDownDecoratorProps(
+            dropdownSearchDecoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(
+                color: isDarkMode 
+                  ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                  : Colors.grey.shade400,
+                fontSize: 14,
+              ),
+              prefixIcon: isLoading 
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppTheme.primaryColor,
+                        ),
                       ),
                     ),
+                  )
+                : Icon(
+                    icon,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextSecondary.withOpacity(0.7)
+                      : Colors.grey.shade500,
+                    size: 20,
                   ),
-                )
-              : Icon(
-                  icon,
+              filled: true,
+              fillColor: isDarkMode 
+                ? AppTheme.darkBackground.withOpacity(0.5)
+                : Colors.grey.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
                   color: isDarkMode 
-                    ? AppTheme.darkTextSecondary.withOpacity(0.7)
+                    ? Colors.white.withOpacity(0.1) 
+                    : Colors.grey.shade200,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: isDarkMode 
+                    ? Colors.white.withOpacity(0.1) 
+                    : Colors.grey.shade200,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: AppTheme.primaryColor,
+                  width: 2,
+                ),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: isDarkMode 
+                    ? Colors.white.withOpacity(0.05) 
+                    : Colors.grey.shade100,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+          ),
+          popupProps: PopupProps.menu(
+            showSearchBox: true,
+            searchFieldProps: TextFieldProps(
+              decoration: InputDecoration(
+                hintText: 'Search...',
+                hintStyle: TextStyle(
+                  color: isDarkMode 
+                    ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                    : Colors.grey.shade400,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
                     : Colors.grey.shade500,
                   size: 20,
                 ),
-            filled: true,
-            fillColor: isDarkMode 
-              ? AppTheme.darkBackground.withOpacity(0.5)
-              : Colors.grey.shade50,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: isDarkMode 
-                  ? Colors.white.withOpacity(0.1) 
-                  : Colors.grey.shade200,
+                filled: true,
+                fillColor: isDarkMode 
+                  ? AppTheme.darkBackground.withOpacity(0.5)
+                  : Colors.grey.shade50,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDarkMode 
+                      ? Colors.white.withOpacity(0.1) 
+                      : Colors.grey.shade200,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDarkMode 
+                      ? Colors.white.withOpacity(0.1) 
+                      : Colors.grey.shade200,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: AppTheme.primaryColor,
+                    width: 2,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              style: TextStyle(
+                fontSize: 15,
+                color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
               ),
             ),
-            enabledBorder: OutlineInputBorder(
+            menuProps: MenuProps(
+              backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+              elevation: 8,
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: isDarkMode 
-                  ? Colors.white.withOpacity(0.1) 
-                  : Colors.grey.shade200,
+            ),
+            itemBuilder: (context, item, isSelected) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected 
+                    ? AppTheme.primaryColor.withOpacity(0.1)
+                    : Colors.transparent,
+                ),
+                child: Text(
+                  itemLabel(item),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              );
+            },
+            emptyBuilder: (context, searchEntry) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.search_off,
+                      size: 48,
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                        : Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No results found',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDarkMode 
+                          ? AppTheme.darkTextSecondary 
+                          : AppTheme.textSecondary, 
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppTheme.primaryColor,
-                width: 2,
-              ),
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: isDarkMode 
-                  ? Colors.white.withOpacity(0.05) 
-                  : Colors.grey.shade100,
-              ),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
+            searchDelay: const Duration(milliseconds: 300),
+          ),
+          dropdownButtonProps: DropdownButtonProps(
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
             ),
           ),
-          hint: Text(
-            hint,
-            style: TextStyle(
-              color: isDarkMode 
-                ? AppTheme.darkTextSecondary.withOpacity(0.5)
-                : Colors.grey.shade400,
-              fontSize: 14,
-            ),
-          ),
-          dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-          style: TextStyle(
-            fontSize: 15,
-            color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-          ),
-          icon: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-          ),
-          items: items.map(itemBuilder).toList(),
-          onChanged: onChanged,
-          isExpanded: true,
-          menuMaxHeight: 300,
         ),
       ],
     );

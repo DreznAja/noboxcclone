@@ -657,6 +657,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       message.timestamp.difference(previousMessage.timestamp).inMinutes > 5;
   
   return MessageBubbleWidget(
+    key: ValueKey('${message.id}_${message.ack}'), // CRITICAL: Key dengan ack agar rebuild saat status berubah
     message: message,
     allMessages: chatState.messages,
     showSenderInfo: showSenderInfo,

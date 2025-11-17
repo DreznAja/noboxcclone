@@ -190,6 +190,7 @@ class _ChatDetailWidgetState extends ConsumerState<ChatDetailWidget> {
                   itemBuilder: (context, index) {
                     final message = widget.messages[index];
                     return MessageBubbleWidget(
+                      key: ValueKey('${message.id}_${message.ack}'), // CRITICAL: Key dengan ack agar rebuild saat status berubah
                       message: message,
                       onReply: () => _handleReply(message),
                       onForward: () => _handleForward(message),

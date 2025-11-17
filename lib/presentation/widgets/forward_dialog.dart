@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:nobox_chat/core/providers/theme_provider.dart';
 import '../../core/models/chat_models.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -281,6 +282,7 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
     return Dialog(
       shape: RoundedRectangleBorder(
@@ -291,26 +293,38 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
         height: MediaQuery.of(context).size.height * 0.8,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? AppTheme.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           children: [
             // Header
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Forward Message',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.forward_to_inbox,
+                    color: Color(0xFF1976D2),
+                    size: 24,
                   ),
                 ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Forward Message',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(Icons.close, color: AppTheme.primaryColor),
+                  icon: const Icon(Icons.close),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -323,9 +337,11 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.neutralLight,
+                color: isDarkMode ? AppTheme.darkBackground : AppTheme.neutralLight,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(
+                  color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.shade300
+                ),
               ),
               child: Row(
                 children: [
@@ -338,9 +354,9 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
                   Expanded(
                     child: Text(
                       _getMessagePreview(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppTheme.textPrimary,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -355,20 +371,29 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
             // Search bar
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(
+                  color: isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.shade300
+                ),
               ),
               child: TextField(
                 controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Search conversations...',
-                  hintStyle: TextStyle(color: Colors.grey),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                 ),
-                style: const TextStyle(color: Colors.black),
+                decoration: InputDecoration(
+                  hintText: 'Search conversations...',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
               ),
             ),
 
@@ -398,21 +423,21 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
               child: chatState.isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _filteredRooms.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 Icons.search_off,
                                 size: 48,
-                                color: AppTheme.textSecondary,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                               ),
-                              SizedBox(height: 16),
+                              const SizedBox(height: 16),
                               Text(
                                 'No conversations found',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: AppTheme.textSecondary,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                                 ),
                               ),
                             ],
@@ -428,6 +453,7 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
                               room: room,
                               isSelected: isSelected,
                               onTap: () => _toggleRoomSelection(room.id),
+                              isDarkMode: isDarkMode,
                             );
                           },
                         ),
@@ -443,8 +469,10 @@ class _ForwardDialogState extends ConsumerState<ForwardDialog> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryColor,
-                      side: BorderSide(color: AppTheme.primaryColor),
+                      foregroundColor: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.primaryColor,
+                      side: BorderSide(
+                        color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.primaryColor
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
@@ -524,11 +552,13 @@ class _ForwardRoomItem extends StatelessWidget {
   final Room room;
   final bool isSelected;
   final VoidCallback onTap;
+  final bool isDarkMode;
 
   const _ForwardRoomItem({
     required this.room,
     required this.isSelected,
     required this.onTap,
+    required this.isDarkMode,
   });
 
   Map<String, String> _getAuthHeaders() {
@@ -559,7 +589,9 @@ class _ForwardRoomItem extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: isSelected ? AppTheme.primaryColor : Colors.transparent,
                 border: Border.all(
-                  color: isSelected ? AppTheme.primaryColor : Colors.grey.shade400,
+                  color: isSelected 
+                    ? AppTheme.primaryColor 
+                    : (isDarkMode ? Colors.white.withOpacity(0.3) : Colors.grey.shade400),
                   width: 2,
                 ),
               ),
@@ -597,78 +629,21 @@ class _ForwardRoomItem extends StatelessWidget {
             
             // Room info
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    room.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 16,
-                      color: Colors.black,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      _getChannelIcon(room.channelId),
-                      const SizedBox(width: 6),
-                      Text(
-                        room.channelName,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              child: Text(
+                room.name,
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _getChannelIcon(int channelId) {
-    Color color;
-    IconData icon;
-
-    switch (channelId) {
-      case 1:
-        color = const Color(0xFF25D366);
-        icon = Icons.chat;
-        break;
-      case 1557:
-      case 1561:
-        color = const Color(0xFF25D366);
-        icon = Icons.business;
-        break;
-      case 2:
-        color = const Color(0xFF0088CC);
-        icon = Icons.send;
-        break;
-      case 3:
-        color = const Color(0xFFE4405F);
-        icon = Icons.camera_alt;
-        break;
-      case 4:
-        color = const Color(0xFF0084FF);
-        icon = Icons.messenger;
-        break;
-      case 19:
-        color = const Color(0xFFEA4335);
-        icon = Icons.email;
-        break;
-      default:
-        color = AppTheme.textSecondary;
-        icon = Icons.chat_bubble;
-    }
-
-    return Icon(icon, size: 12, color: color);
   }
 
   bool _isValidImageUrl(String? url) {

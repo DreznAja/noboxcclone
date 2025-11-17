@@ -154,8 +154,12 @@ class SignalRService {
           print('📨 SignalR: TerimaPesan received!');
           print('📨   Message ID: ${message.id}');
           print('📨   Room ID: ${message.roomId}');
+          print('📨   Type: ${message.type}');
           print('📨   Message: ${message.message}');
           print('📨   From: ${message.from}');
+          print('📨   Ack Status: ${message.ack}');
+          print('📨   ReplyId: ${message.replyId}');
+          print('📨   ReplyMsg: ${message.replyMessage}');
           print('📨   Broadcasting to ${_messageController.hasListener ? "ACTIVE" : "NO"} listeners');
           print('📨 ═══════════════════════════════════════════════════════');
           _messageController.add(message);
@@ -164,6 +168,7 @@ class SignalRService {
           _handleNewMessageNotification(message);
         } catch (e) {
           print('❌ Error parsing TerimaPesan: $e');
+          print('❌ Raw arguments: $arguments');
         }
       }
     });
@@ -231,10 +236,17 @@ class SignalRService {
     _connection!.on('TerimaAck', (List<Object?>? arguments) {
       if (arguments != null && arguments.length >= 3) {
         try {
-          final roomId = arguments[0] as String;
-          final messageId = arguments[1] as String;
-          final status = arguments[2] as int;
-          final error = arguments.length > 3 ? arguments[3] as String? : null;
+          // FIXED: Use .toString() for flexible type handling (server might send int or string)
+          final roomId = arguments[0]?.toString() ?? '';
+          final messageId = arguments[1]?.toString() ?? '';
+          
+          // FIXED: Handle both int and string for status
+          final statusValue = arguments[2];
+          final status = statusValue is int ? statusValue : int.tryParse(statusValue?.toString() ?? '0') ?? 0;
+          
+          final error = arguments.length > 3 ? arguments[3]?.toString() : null;
+          
+          print('✅ TerimaAck parsed: roomId=$roomId, messageId=$messageId, status=$status, error=$error');
           
           _ackController.add({
             'roomId': roomId,
@@ -244,6 +256,7 @@ class SignalRService {
           });
         } catch (e) {
           print('❌ Error parsing TerimaAck: $e');
+          print('❌ Arguments: $arguments');
         }
       }
     });
@@ -459,13 +472,37 @@ class SignalRService {
       final cleanedData = _cleanMessageData(messageData);
       print('📤 Sending message via SignalR: ${jsonEncode(cleanedData)}');
       
-      await _connection!.invoke('KirimPesan', args: [jsonEncode(cleanedData)]).timeout(
+      // CRITICAL: invoke doesn't return confirmation, it only throws if timeout/error
+      // Server might reject message silently!
+      final result = await _connection!.invoke('KirimPesan', args: [jsonEncode(cleanedData)]).timeout(
         const Duration(seconds: 10),
       );
-      print('✅ Message sent successfully via SignalR');
+      
+      print('✅ SignalR invoke completed (no timeout)');
+      print('   Result from server: $result'); // Check if server returns anything
+      
+      // Check if server returned error
+      if (result is Map) {
+        final isError = result['isError'] ?? result['IsError'] ?? false;
+        final errorMsg = result['errorMsg'] ?? result['ErrorMsg'] ?? '';
+        
+        if (isError == true) {
+          print('   ❌ Server rejected message: $errorMsg');
+          return false;
+        }
+        
+        print('   ✅ Server accepted message (isError: $isError)');
+      }
+      
+      // NOTE: return true means "sent to server", NOT "server confirmed received"
+      // Wait for TerimaPesan or TerimaAck for actual confirmation
       return true;
     } catch (e) {
       print('❌ Failed to send message via SignalR: $e');
+      print('   Error type: ${e.runtimeType}');
+      if (e is TimeoutException) {
+        print('   ⏱️ Timeout after 10 seconds');
+      }
       return false;
     }
   }

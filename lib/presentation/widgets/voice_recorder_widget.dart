@@ -25,11 +25,14 @@ class VoiceRecorderWidget extends ConsumerStatefulWidget {
 class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     with TickerProviderStateMixin {
   FlutterSoundRecorder? _recorder;
+  FlutterSoundPlayer? _player;
 
   bool _isRecording = false;
   bool _isPaused = false;
-  bool _isPlaying = false;
+  bool _isPlayingPreview = false;
   Duration _recordingDuration = Duration.zero;
+  Duration _previewPosition = Duration.zero;
+  Duration _previewDuration = Duration.zero;
   Timer? _timer;
   String? _recordedFilePath;
   bool _isInitialized = false;
@@ -78,6 +81,7 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     _pulseController.dispose();
     _waveController.dispose();
     _closeRecorder();
+    _closePlayer();
 
     if (_recordedFilePath != null) {
       try {
@@ -115,6 +119,30 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
       }
     } catch (e) {
       print('Error closing recorder: $e');
+    }
+  }
+
+  Future<void> _initPlayer() async {
+    try {
+      _player = FlutterSoundPlayer();
+      await _player!.openPlayer();
+      
+      _player!.setSubscriptionDuration(const Duration(milliseconds: 100));
+      
+      print('Player initialized for preview');
+    } catch (e) {
+      print('Error initializing player: $e');
+    }
+  }
+
+  Future<void> _closePlayer() async {
+    try {
+      if (_player != null) {
+        await _player!.closePlayer();
+        _player = null;
+      }
+    } catch (e) {
+      print('Error closing player: $e');
     }
   }
 
@@ -182,6 +210,21 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
           _recordedFilePath = path;
         });
         print('Recording stopped, AAC file saved at: $path');
+        
+        // Initialize player for preview
+        await _initPlayer();
+        
+        // Get duration of recorded file
+        if (_player != null) {
+          try {
+            final file = File(path);
+            final bytes = await file.readAsBytes();
+            // Note: flutter_sound doesn't provide direct duration without playing
+            // We'll get it when starting playback
+          } catch (e) {
+            print('Error getting file info: $e');
+          }
+        }
       } else {
         _showError('Failed to save recording');
         widget.onCancel();
@@ -234,10 +277,70 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     }
   }
 
+  Future<void> _togglePreviewPlayback() async {
+    if (_player == null || _recordedFilePath == null) return;
+
+    try {
+      if (_isPlayingPreview) {
+        await _player!.pausePlayer();
+        setState(() {
+          _isPlayingPreview = false;
+        });
+      } else {
+        await _player!.startPlayer(
+          fromURI: _recordedFilePath!,
+          codec: Codec.aacADTS,
+          whenFinished: () {
+            if (mounted) {
+              setState(() {
+                _isPlayingPreview = false;
+                _previewPosition = Duration.zero;
+              });
+            }
+          },
+        );
+
+        // Listen to progress
+        _player!.onProgress!.listen((event) {
+          if (mounted) {
+            setState(() {
+              _previewPosition = event.position;
+              _previewDuration = event.duration;
+            });
+          }
+        });
+
+        setState(() {
+          _isPlayingPreview = true;
+        });
+      }
+    } catch (e) {
+      print('Error toggling preview playback: $e');
+      _showError('Failed to play preview: $e');
+    }
+  }
+
+  Future<void> _stopPreview() async {
+    if (_player == null) return;
+
+    try {
+      await _player!.stopPlayer();
+      setState(() {
+        _isPlayingPreview = false;
+        _previewPosition = Duration.zero;
+      });
+    } catch (e) {
+      print('Error stopping preview: $e');
+    }
+  }
+
   Future<void> _sendVoiceNote() async {
     if (_recordedFilePath == null) return;
 
     try {
+      // Stop preview if playing
+      await _stopPreview();
+      
       final file = File(_recordedFilePath!);
       final bytes = await file.readAsBytes();
       final base64Data = base64Encode(bytes);
@@ -386,29 +489,95 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
   }
 
   Widget _buildPlaybackControls() {
+    final duration = _previewDuration > Duration.zero ? _previewDuration : _recordingDuration;
+    final position = _previewPosition;
+    
     return Container(
-      height: 100,
-      child: Center(
-        child: Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppTheme.successColor,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.successColor.withOpacity(0.3),
-                blurRadius: 20,
-                spreadRadius: 5,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.neutralLight,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          // Play/Pause button
+          GestureDetector(
+            onTap: _togglePreviewPlayback,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withOpacity(0.3),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
-            ],
+              child: Icon(
+                _isPlayingPreview ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
           ),
-          child: const Icon(
-            Icons.check,
-            color: Colors.white,
-            size: 40,
+          
+          const SizedBox(width: 12),
+          
+          // Progress bar
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                    activeTrackColor: AppTheme.primaryColor,
+                    inactiveTrackColor: Colors.grey.shade300,
+                    thumbColor: AppTheme.primaryColor,
+                  ),
+                  child: Slider(
+                    value: duration.inMilliseconds > 0 
+                        ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+                        : 0.0,
+                    onChanged: null, // No seeking for now
+                  ),
+                ),
+                
+                // Time display
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(position),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        _formatDuration(duration),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -467,10 +636,14 @@ class _VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {
+            onPressed: () async {
+              await _stopPreview();
+              await _closePlayer();
               setState(() {
                 _recordedFilePath = null;
                 _recordingDuration = Duration.zero;
+                _previewPosition = Duration.zero;
+                _previewDuration = Duration.zero;
               });
               _startRecording();
             },

@@ -1488,11 +1488,12 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         };
         
         // Add complete reply info if message found
+        // CRITICAL FIX: Never send null values - server might reject!
         if (replyMessageData != null) {
-          msgData['ReplyFrom'] = replyMessageData.from;
+          msgData['ReplyFrom'] = replyMessageData.from ?? '';
           msgData['ReplyType'] = replyMessageData.type.toString();
           msgData['ReplyMsg'] = replyMessageData.message ?? '';
-          msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file;
+          msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file ?? '';
         }
         
         final signalRData = {
@@ -1501,9 +1502,16 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         };
         
         print('Sending location reply via SignalR with complete reply data: ${jsonEncode(signalRData)}');
-        await SignalRService.sendMessage(signalRData);
-        _updateOptimisticMessage(tempId, 2); // Mark as sent
-        print('✅ Location reply sent successfully via SignalR');
+        final sendSuccess = await SignalRService.sendMessage(signalRData);
+        if (!sendSuccess) {
+          _updateOptimisticMessage(tempId, 4); // Mark as failed if send failed
+          state = state.copyWith(error: 'Failed to send location reply');
+          return;
+        }
+        
+        // Update to sent immediately
+        _updateOptimisticMessage(tempId, 2);
+        print('✅ Location reply sent via SignalR and updated to sent status');
       } else {
         _updateOptimisticMessage(tempId, 4); // Mark as failed
         state = state.copyWith(error: 'Cannot send location reply. Connection not available or invalid reply ID.');
@@ -1611,11 +1619,12 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
             };
             
             // Add complete reply info like web does
+            // CRITICAL FIX: Never send null values - server might reject!
             if (replyMessageData != null) {
-              msgData['ReplyFrom'] = replyMessageData.from;
+              msgData['ReplyFrom'] = replyMessageData.from ?? '';
               msgData['ReplyType'] = replyMessageData.type.toString();
               msgData['ReplyMsg'] = replyMessageData.message ?? '';
-              msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file;
+              msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file ?? '';
             }
             
             final signalRData = {
@@ -1624,9 +1633,25 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
             };
             
             print('Sending reply message via SignalR with complete reply data: ${jsonEncode(signalRData)}');
-            await SignalRService.sendMessage(signalRData);
-            _updateOptimisticMessage(tempId, 2); // Mark as sent
-            print('✅ Reply message sent successfully via SignalR');
+            print('🔄 BEFORE SignalRService.sendMessage call...');
+            
+            final sendSuccess = await SignalRService.sendMessage(signalRData);
+            
+            print('🔄 AFTER SignalRService.sendMessage call, result: $sendSuccess');
+            
+            if (!sendSuccess) {
+              print('❌ Send failed, updating to error status');
+              _updateOptimisticMessage(tempId, 4); // Mark as failed if send failed
+              state = state.copyWith(error: 'Failed to send reply message');
+              return;
+            }
+            
+            print('🔄 BEFORE _updateOptimisticMessage to status 2...');
+            // Update to sent immediately (SignalR confirmed message sent)
+            // If TerimaAck arrives later, it will update with real ID and possibly higher status
+            _updateOptimisticMessage(tempId, 2);
+            print('✅ Reply message sent via SignalR and updated to sent status');
+            
             return; // Exit early for reply messages
           } catch (signalRError) {
             _updateOptimisticMessage(tempId, 4); // Mark as failed
@@ -1952,11 +1977,12 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         };
         
         // Add complete reply info if message found
+        // CRITICAL FIX: Never send null values - server might reject!
         if (replyMessageData != null) {
-          msgData['ReplyFrom'] = replyMessageData.from;
+          msgData['ReplyFrom'] = replyMessageData.from ?? '';
           msgData['ReplyType'] = replyMessageData.type.toString();
           msgData['ReplyMsg'] = replyMessageData.message ?? '';
-          msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file;
+          msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file ?? '';
         }
         
         final signalRData = {
@@ -1965,11 +1991,20 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         };
         
         print('Sending media reply via SignalR with complete reply data: ${jsonEncode(signalRData)}');
-        await SignalRService.sendMessage(signalRData);
-        print('✅ Media reply sent successfully via SignalR');
+        final sendSuccess = await SignalRService.sendMessage(signalRData);
+        if (!sendSuccess) {
+          if (tempId != null && tempId.isNotEmpty) {
+            _updateOptimisticMessage(tempId, 4); // Mark as failed if send failed
+          }
+          state = state.copyWith(error: 'Failed to send media reply');
+          return;
+        }
+        
+        // Update to sent immediately
         if (tempId != null && tempId.isNotEmpty) {
           _updateOptimisticMessage(tempId, 2);
         }
+        print('✅ Media reply sent via SignalR and updated to sent status');
         
         // Media reply sent successfully, you can update the state or use a callback to notify UI
         print('Media reply sent successfully');
@@ -2132,6 +2167,7 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
 
  void _addMessage(ChatMessage message) {
   print('📨 New message received: ${message.id} for room ${message.roomId}');
+  print('📨 Message details: type=${message.type}, text="${message.message}", ack=${message.ack}, replyId=${message.replyId}');
   
   // ALWAYS update room list metadata
   _updateRoomWithNewMessage(message);
@@ -2143,12 +2179,18 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     
     final existingIndex = messages.indexWhere((m) => m.id == message.id);
     if (existingIndex == -1) {
+      print('📨 Message not found by ID, checking for optimistic message to replace...');
       // Check for optimistic message to replace
       // FIXED: For media messages, match by file field instead of message field
       // because caption might be in file JSON, not in message field
       final optimisticIndex = messages.indexWhere((m) {
         if (!m.id.startsWith('temp_')) return false;
-        if (m.timestamp.difference(message.timestamp).abs().inMinutes >= 5) return false;
+        final timeDiff = m.timestamp.difference(message.timestamp).abs();
+        if (timeDiff.inMinutes >= 5) {
+          print('   ⏰ Skipping temp message ${m.id}: time difference too large (${timeDiff.inSeconds}s)');
+          return false;
+        }
+        print('   🔍 Checking temp message ${m.id}: type=${m.type}, text="${m.message}"');
         
         // For media messages (image, video, audio, document, sticker), match by file
         if (message.type != 1 && m.type == message.type) {
@@ -2190,15 +2232,19 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         }
         
         // For text messages, match by message content
-        return m.message == message.message;
+        final matches = m.message == message.message;
+        if (matches) {
+          print('   ✅ Match found by text content!');
+        }
+        return matches;
       });
       
       if (optimisticIndex != -1) {
+        print('🔄 Replaced optimistic message ${messages[optimisticIndex].id} with server message ${message.id} (ack=${message.ack})');
         messages[optimisticIndex] = message;
-        print('🔄 Replaced optimistic message with server message');
       } else {
+        print('➕ No optimistic message found, adding as new message');
         messages.add(message);
-        print('➕ Added new message');
       }
       
       messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
@@ -2382,7 +2428,12 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     
     state = state.copyWith(messages: messages);
-    print('Added optimistic message with reply info - from: $fromId, replyId: $replyId, replyMessage: ${replyToMessage?.message}');
+    print('📝 Added optimistic message: $tempId');
+    print('   - Text: "$text"');
+    print('   - From: $fromId');
+    print('   - ReplyId: $replyId');
+    print('   - ReplyMsg: ${replyToMessage?.message}');
+    print('   - Timestamp: $now');
     
     return tempId;
   }
@@ -2452,11 +2503,17 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
   }
 
   void _updateOptimisticMessage(String messageId, int ackStatus) {
+    print('🔄 _updateOptimisticMessage called: messageId=$messageId, ackStatus=$ackStatus');
+    print('   Current messages count: ${state.messages.length}');
+    
     final messages = List<ChatMessage>.from(state.messages);
     final index = messages.indexWhere((m) => m.id == messageId);
     
+    print('   Message index found: $index');
+    
     if (index != -1) {
-      print('Updating optimistic message $messageId with ack status: $ackStatus, preserving reply data');
+      print('   ✅ Found message at index $index, current ack: ${messages[index].ack}');
+      print('   Updating optimistic message $messageId with ack status: $ackStatus, preserving reply data');
       final updatedMessage = ChatMessage(
         id: messages[index].id,
         roomId: messages[index].roomId,
@@ -2480,10 +2537,18 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       );
       
       messages[index] = updatedMessage;
+      print('   🔄 Calling state.copyWith with updated messages...');
+      print('   📊 Before update - state.messages hashCode: ${state.messages.hashCode}');
+      print('   📊 New messages list hashCode: ${messages.hashCode}');
+      
       state = state.copyWith(messages: messages);
+      
+      print('   📊 After update - state.messages hashCode: ${state.messages.hashCode}');
+      print('   ✅ State updated! New ack: ${state.messages[index].ack}');
+      print('   ✅ Messages list reference changed: ${state.messages.hashCode != messages.hashCode ? "NO - MASALAH!" : "YES - OK"}');
       print('✅ Updated optimistic message, reply data preserved: replyId=${updatedMessage.replyId}');
     } else {
-      print('Optimistic message $messageId not found for update');
+      print('   ❌ Optimistic message $messageId not found for update (index=-1)');
     }
   }
 
@@ -2494,14 +2559,117 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       return;
     }
 
-    if (state.activeRoom?.id == ackData['roomId']) {
+    // CRITICAL FIX: Don't check activeRoom - update messages even if user left chat
+    // This ensures TerimaAck updates are not lost when user navigates away
+    final roomId = ackData['roomId'] as String;
+    
+    // Only update if this is the active room's messages
+    if (state.activeRoom?.id == roomId) {
       final messages = List<ChatMessage>.from(state.messages);
-      final index = messages.indexWhere((m) => m.id == ackData['messageId']);
+      final messageIdFromServer = ackData['messageId'] as String;
+      
+      // Try to find by real message ID first
+      int index = messages.indexWhere((m) => m.id == messageIdFromServer);
+      
+      // CRITICAL FIX: If not found by real ID, search by other criteria
+      if (index == -1) {
+        print('⚠️ Real message ID $messageIdFromServer not found, searching for matching message...');
+        final now = DateTime.now();
+        
+        // DEBUG: List all messages to understand what we have
+        print('   📋 Current messages in room (${messages.length} total):');
+        for (int i = messages.length - 1; i >= 0 && i >= messages.length - 5; i--) {
+          final m = messages[i];
+          final age = now.difference(m.timestamp).abs();
+          print('      [$i] ${m.id} - "${m.message}" (age: ${age.inSeconds}s, ack: ${m.ack})');
+        }
+        
+        // Strategy 1: Find temp message (if not yet replaced by server)
+        index = messages.lastIndexWhere((m) {
+          if (!m.id.startsWith('temp_')) return false;
+          final timeDiff = now.difference(m.timestamp).abs();
+          if (timeDiff.inSeconds > 30) return false;
+          print('   🔍 Found temp message: ${m.id}, age: ${timeDiff.inSeconds}s');
+          return true;
+        });
+        
+        // Strategy 2: If no temp found, find recent message with ack=1 or ack=2
+        // (means it was already replaced by TerimaPesan but needs status update)
+        if (index == -1) {
+          print('   ⚠️ No temp message found, searching for recent message with low ack status...');
+          index = messages.lastIndexWhere((m) {
+            // Skip if already delivered/read
+            if (m.ack >= 3) return false;
+            
+            final timeDiff = now.difference(m.timestamp).abs();
+            // Look for messages sent in last 30 seconds
+            if (timeDiff.inSeconds > 30) return false;
+            
+            // Must be from agent (not customer)
+            if (m.agentId <= 0) return false;
+            
+            print('   🔍 Found recent sent message: ${m.id}, age: ${timeDiff.inSeconds}s, ack: ${m.ack}');
+            return true;
+          });
+        }
+        
+        if (index != -1) {
+          print('   ✅ Using message ${messages[index].id} (ack=${messages[index].ack}) for ack update');
+        } else {
+          print('   ❌ No matching message found in last 30 seconds');
+        }
+      }
 
       if (index != -1) {
-        // Update message ack status
-        // This would require updating the ChatMessage model to be mutable or creating a new instance
+        final status = ackData['status'] as int;
+        final error = ackData['error'] as String?;
+        final currentMessage = messages[index];
+        
+        print('✅ Received TerimaAck for message $messageIdFromServer: status=$status, error=$error');
+        
+        // Determine if we need to update the ID (only if current ID is temp)
+        final needsIdUpdate = currentMessage.id.startsWith('temp_');
+        final finalId = needsIdUpdate ? messageIdFromServer : currentMessage.id;
+        
+        // Update message with real ID (if needed) AND new ack status
+        final updatedMessage = ChatMessage(
+          id: finalId,
+          roomId: currentMessage.roomId,
+          from: currentMessage.from,
+          to: currentMessage.to,
+          agentId: currentMessage.agentId,
+          type: currentMessage.type,
+          message: currentMessage.message,
+          file: currentMessage.file,
+          files: currentMessage.files,
+          timestamp: currentMessage.timestamp,
+          ack: status, // Update ack status from server
+          replyId: currentMessage.replyId,
+          replyType: currentMessage.replyType,
+          replyFrom: currentMessage.replyFrom,
+          replyMessage: currentMessage.replyMessage,
+          replyFiles: currentMessage.replyFiles,
+          replyGrpMember: currentMessage.replyGrpMember,
+          isEdited: currentMessage.isEdited,
+          note: currentMessage.note,
+        );
+        
+        messages[index] = updatedMessage;
+        state = state.copyWith(messages: messages);
+        
+        if (error != null) {
+          print('❌ Message acknowledgment with error: $error');
+        } else {
+          print('✅ Message status updated: ${currentMessage.ack} → $status (1=sending, 2=sent, 3=delivered, 4=failed)');
+          if (needsIdUpdate) {
+            print('✅ Message ID updated: ${currentMessage.id} → $messageIdFromServer');
+          }
+        }
+      } else {
+        print('⚠️ Message $messageIdFromServer not found in current messages for ack update');
       }
+    } else {
+      print('⚠️ Ack for different room: $roomId (current: ${state.activeRoom?.id}), ignoring');
     }
   }
 
