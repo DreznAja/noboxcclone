@@ -921,98 +921,157 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
     );
   }
 
-  Widget _buildSearchableDropdownField<T>({
-    required String label,
-    required IconData icon,
-    required bool isDarkMode,
-    required String? value,
-    required List<T> items,
-    required String Function(T) itemLabel,
-    required String Function(T) itemValue,
-    required void Function(String?)? onChanged,
-    required bool isLoading,
-    required String hint,
-    required int itemCount,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                letterSpacing: 0.3,
+Widget _buildSearchableDropdownField<T>({
+  required String label,
+  required IconData icon,
+  required bool isDarkMode,
+  required String? value,
+  required List<T> items,
+  required String Function(T) itemLabel,
+  required String Function(T) itemValue,
+  required void Function(String?)? onChanged,
+  required bool isLoading,
+  required String hint,
+  required int itemCount,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+              letterSpacing: 0.3,
+            ),
+          ),
+          if (itemCount > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$itemCount',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
+                ),
               ),
             ),
-            if (itemCount > 0) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$itemCount',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ],
           ],
+        ],
+      ),
+      const SizedBox(height: 8),
+      DropdownSearch<T>(
+        items: items,
+        itemAsString: itemLabel,
+        selectedItem: value != null 
+          ? items.where((item) => itemValue(item) == value).firstOrNull
+          : null,
+        onChanged: (T? selectedItem) {
+          if (selectedItem != null) {
+            onChanged?.call(itemValue(selectedItem));
+          } else {
+            onChanged?.call(null);
+          }
+        },
+        enabled: onChanged != null && !isLoading,
+        dropdownDecoratorProps: DropDownDecoratorProps(
+          dropdownSearchDecoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: isDarkMode 
+                ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                : Colors.grey.shade400,
+              fontSize: 14,
+            ),
+            prefixIcon: isLoading 
+              ? Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppTheme.primaryColor,
+                      ),
+                    ),
+                  ),
+                )
+              : Icon(
+                  icon,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextSecondary.withOpacity(0.7)
+                    : Colors.grey.shade500,
+                  size: 20,
+                ),
+            filled: true,
+            fillColor: isDarkMode 
+              ? AppTheme.darkBackground.withOpacity(0.5)
+              : Colors.grey.shade50,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDarkMode 
+                  ? Colors.white.withOpacity(0.1) 
+                  : Colors.grey.shade200,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDarkMode 
+                  ? Colors.white.withOpacity(0.1) 
+                  : Colors.grey.shade200,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppTheme.primaryColor,
+                width: 2,
+              ),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDarkMode 
+                  ? Colors.white.withOpacity(0.05) 
+                  : Colors.grey.shade100,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        DropdownSearch<T>(
-          items: items,
-          itemAsString: itemLabel,
-          selectedItem: value != null 
-            ? items.where((item) => itemValue(item) == value).firstOrNull
-            : null,
-          onChanged: (T? selectedItem) {
-            if (selectedItem != null) {
-              onChanged?.call(itemValue(selectedItem));
-            } else {
-              onChanged?.call(null);
-            }
-          },
-          enabled: onChanged != null && !isLoading,
-          dropdownDecoratorProps: DropDownDecoratorProps(
-            dropdownSearchDecoration: InputDecoration(
-              hintText: hint,
+        popupProps: PopupProps.menu(
+          showSearchBox: true,
+          constraints: const BoxConstraints(maxHeight: 200), // Batasi tinggi dropdown
+          searchFieldProps: TextFieldProps(
+            decoration: InputDecoration(
+              hintText: 'Search...',
               hintStyle: TextStyle(
                 color: isDarkMode 
                   ? AppTheme.darkTextSecondary.withOpacity(0.5)
                   : Colors.grey.shade400,
-                fontSize: 14,
               ),
-              prefixIcon: isLoading 
-                ? Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppTheme.primaryColor,
-                        ),
-                      ),
-                    ),
-                  )
-                : Icon(
-                    icon,
-                    color: isDarkMode 
-                      ? AppTheme.darkTextSecondary.withOpacity(0.7)
-                      : Colors.grey.shade500,
-                    size: 20,
-                  ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: isDarkMode 
+                  ? AppTheme.darkTextSecondary 
+                  : Colors.grey.shade500,
+                size: 20,
+              ),
               filled: true,
               fillColor: isDarkMode 
                 ? AppTheme.darkBackground.withOpacity(0.5)
@@ -1040,134 +1099,76 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
                   width: 2,
                 ),
               ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: isDarkMode 
-                    ? Colors.white.withOpacity(0.05) 
-                    : Colors.grey.shade100,
-                ),
-              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 14,
+                vertical: 12,
               ),
+            ),
+            style: TextStyle(
+              fontSize: 15,
+              color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
             ),
           ),
-          popupProps: PopupProps.menu(
-            showSearchBox: true,
-            searchFieldProps: TextFieldProps(
-              decoration: InputDecoration(
-                hintText: 'Search...',
-                hintStyle: TextStyle(
-                  color: isDarkMode 
-                    ? AppTheme.darkTextSecondary.withOpacity(0.5)
-                    : Colors.grey.shade400,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: isDarkMode 
-                    ? AppTheme.darkTextSecondary 
-                    : Colors.grey.shade500,
-                  size: 20,
-                ),
-                filled: true,
-                fillColor: isDarkMode 
-                  ? AppTheme.darkBackground.withOpacity(0.5)
-                  : Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDarkMode 
-                      ? Colors.white.withOpacity(0.1) 
-                      : Colors.grey.shade200,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDarkMode 
-                      ? Colors.white.withOpacity(0.1) 
-                      : Colors.grey.shade200,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: AppTheme.primaryColor,
-                    width: 2,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+          menuProps: MenuProps(
+            backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          itemBuilder: (context, item, isSelected) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: isSelected 
+                  ? AppTheme.primaryColor.withOpacity(0.1)
+                  : Colors.transparent,
+              ),
+              child: Text(
+                itemLabel(item),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
-              style: TextStyle(
-                fontSize: 15,
-                color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-              ),
-            ),
-            menuProps: MenuProps(
-              backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-              elevation: 8,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            itemBuilder: (context, item, isSelected) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                    ? AppTheme.primaryColor.withOpacity(0.1)
-                    : Colors.transparent,
-                ),
-                child: Text(
-                  itemLabel(item),
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            );
+          },
+          emptyBuilder: (context, searchEntry) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 48,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                      : Colors.grey.shade400,
                   ),
-                ),
-              );
-            },
-            emptyBuilder: (context, searchEntry) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.search_off,
-                      size: 48,
+                  const SizedBox(height: 16),
+                  Text(
+                    'No results found',
+                    style: TextStyle(
+                      fontSize: 16,
                       color: isDarkMode 
-                        ? AppTheme.darkTextSecondary.withOpacity(0.5)
-                        : Colors.grey.shade400,
+                        ? AppTheme.darkTextSecondary 
+                        : AppTheme.textSecondary, 
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No results found',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDarkMode 
-                          ? AppTheme.darkTextSecondary 
-                          : AppTheme.textSecondary, 
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            searchDelay: const Duration(milliseconds: 300),
           ),
-          dropdownButtonProps: DropdownButtonProps(
-            icon: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
-            ),
+          searchDelay: const Duration(milliseconds: 300),
+        ),
+        dropdownButtonProps: DropdownButtonProps(
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 }

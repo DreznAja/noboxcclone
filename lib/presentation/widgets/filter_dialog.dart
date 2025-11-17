@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart'; // TAMBAHKAN IMPORT INI
 import '../../core/models/filter_models.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import '../../core/services/filter_api_service.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -327,12 +328,12 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     );
   }
 
-  Widget _buildDropdownField(
+    Widget _buildDropdownField(
     String label,
     String? value,
     List<String> options,
     Function(String?) onChanged, {
-    required bool isDarkMode, // TAMBAHKAN
+    required bool isDarkMode,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -345,61 +346,152 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
           ),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE
-                border: Border.all(
-                  color: isDarkMode 
-                    ? Colors.grey.shade700 
-                    : Colors.grey.shade300, // UPDATE
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButton<String>(
-                value: value,
-                hint: Text(
-                  '--select--',
-                  style: TextStyle(
+            child: DropdownSearch<String>(
+              items: options,
+              selectedItem: value,
+              onChanged: onChanged,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(
+                  hintText: '--select--',
+                  hintStyle: TextStyle(
                     color: isDarkMode 
                       ? AppTheme.darkTextSecondary 
-                      : Colors.grey, // UPDATE
+                      : Colors.grey,
+                    fontSize: 14,
+                  ),
+                  filled: true,
+                  fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: isDarkMode 
+                        ? Colors.grey.shade700 
+                        : Colors.grey.shade300,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: isDarkMode 
+                        ? Colors.grey.shade700 
+                        : Colors.grey.shade300,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: AppTheme.primaryColor,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
                   ),
                 ),
-                isExpanded: true,
-                underline: const SizedBox(),
-                iconEnabledColor: isDarkMode 
-                  ? AppTheme.darkTextPrimary 
-                  : Colors.black, // UPDATE
-                style: TextStyle(
-                  color: isDarkMode 
-                    ? AppTheme.darkTextPrimary 
-                    : Colors.black, // UPDATE
-                  fontSize: 14,
-                ),
-                dropdownColor: isDarkMode 
-                  ? AppTheme.darkSurface 
-                  : Colors.white, // TAMBAHKAN
-                items: options.map((String option) {
-                  return DropdownMenuItem<String>(
-                    value: option,
-                    child: Text(
-                      option,
-                      style: TextStyle(
+              ),
+              popupProps: PopupProps.menu(
+                showSearchBox: true,
+                constraints: const BoxConstraints(maxHeight: 200),
+                searchFieldProps: TextFieldProps(
+                  decoration: InputDecoration(
+                    hintText: 'Search...',
+                    hintStyle: TextStyle(
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                        : Colors.grey.shade400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: isDarkMode 
+                        ? AppTheme.darkTextSecondary 
+                        : Colors.grey.shade500,
+                      size: 20,
+                    ),
+                    filled: true,
+                    fillColor: isDarkMode 
+                      ? AppTheme.darkBackground.withOpacity(0.5)
+                      : Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
                         color: isDarkMode 
-                          ? AppTheme.darkTextPrimary 
-                          : Colors.black, // UPDATE
+                          ? Colors.white.withOpacity(0.1) 
+                          : Colors.grey.shade200,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                  ),
+                ),
+                menuProps: MenuProps(
+                  backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                itemBuilder: (context, item, isSelected) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected 
+                        ? AppTheme.primaryColor.withOpacity(0.1)
+                        : Colors.transparent,
+                    ),
+                    child: Text(
+                      item,
+                      style: TextStyle(
                         fontSize: 14,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
                   );
-                }).toList(),
-                onChanged: onChanged,
+                },
+                emptyBuilder: (context, searchEntry) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 40,
+                          color: isDarkMode 
+                            ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                            : Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No results found',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary 
+                              : AppTheme.textSecondary, 
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                searchDelay: const Duration(milliseconds: 300),
+              ),
+              dropdownButtonProps: DropdownButtonProps(
+                icon: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
+                ),
               ),
             ),
           ),
@@ -413,7 +505,7 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     String? value,
     List<FilterDataItem> options,
     Function(String?) onChanged, {
-    required bool isDarkMode, // TAMBAHKAN
+    required bool isDarkMode,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -426,93 +518,202 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
           ),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: isDarkMode ? AppTheme.darkSurface : Colors.white, // UPDATE
-                border: Border.all(
-                  color: isDarkMode 
-                    ? Colors.grey.shade700 
-                    : Colors.grey.shade300, // UPDATE
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: _isLoadingData
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: isDarkMode 
-                                ? AppTheme.darkTextPrimary 
-                                : AppTheme.primaryColor, // UPDATE
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Loading...', 
-                            style: TextStyle(
-                              color: isDarkMode 
-                                ? AppTheme.darkTextSecondary 
-                                : Colors.grey, // UPDATE
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
+            child: _isLoadingData
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                      border: Border.all(
+                        color: isDarkMode 
+                          ? Colors.grey.shade700 
+                          : Colors.grey.shade300,
                       ),
-                    )
-                  : DropdownButton<String>(
-                      value: value,
-                      hint: Text(
-                        '--select--',
-                        style: TextStyle(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: isDarkMode 
+                              ? AppTheme.darkTextPrimary 
+                              : AppTheme.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Loading...', 
+                          style: TextStyle(
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary 
+                              : Colors.grey,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : DropdownSearch<FilterDataItem>(
+                    items: options,
+                    itemAsString: (FilterDataItem item) => 
+                      item.name.isNotEmpty ? item.name : 'ID: ${item.id}',
+                    selectedItem: value != null 
+                      ? options.where((item) => item.id == value).firstOrNull
+                      : null,
+                    onChanged: (FilterDataItem? selectedItem) {
+                      if (selectedItem != null) {
+                        onChanged(selectedItem.id);
+                      } else {
+                        onChanged(null);
+                      }
+                    },
+                    dropdownDecoratorProps: DropDownDecoratorProps(
+                      dropdownSearchDecoration: InputDecoration(
+                        hintText: '--select--',
+                        hintStyle: TextStyle(
                           color: isDarkMode 
                             ? AppTheme.darkTextSecondary 
-                            : Colors.grey, // UPDATE
+                            : Colors.grey,
                           fontSize: 14,
                         ),
+                        filled: true,
+                        fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDarkMode 
+                              ? Colors.grey.shade700 
+                              : Colors.grey.shade300,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDarkMode 
+                              ? Colors.grey.shade700 
+                              : Colors.grey.shade300,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: AppTheme.primaryColor,
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
-                      isExpanded: true,
-                      underline: const SizedBox(),
-                      iconEnabledColor: isDarkMode 
-                        ? AppTheme.darkTextPrimary 
-                        : Colors.black, // UPDATE
-                      style: TextStyle(
-                        color: isDarkMode 
-                          ? AppTheme.darkTextPrimary 
-                          : Colors.black, // UPDATE
-                        fontSize: 14,
+                    ),
+                    popupProps: PopupProps.menu(
+                      showSearchBox: true,
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      searchFieldProps: TextFieldProps(
+                        decoration: InputDecoration(
+                          hintText: 'Search...',
+                          hintStyle: TextStyle(
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                              : Colors.grey.shade400,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: isDarkMode 
+                              ? AppTheme.darkTextSecondary 
+                              : Colors.grey.shade500,
+                            size: 20,
+                          ),
+                          filled: true,
+                          fillColor: isDarkMode 
+                            ? AppTheme.darkBackground.withOpacity(0.5)
+                            : Colors.grey.shade50,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: isDarkMode 
+                                ? Colors.white.withOpacity(0.1) 
+                                : Colors.grey.shade200,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                        ),
                       ),
-                      dropdownColor: isDarkMode 
-                        ? AppTheme.darkSurface 
-                        : Colors.white, // TAMBAHKAN
-                      items: options.map((FilterDataItem item) {
-                        return DropdownMenuItem<String>(
-                          value: item.id,
+                      menuProps: MenuProps(
+                        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                        elevation: 8,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      itemBuilder: (context, item, isSelected) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected 
+                              ? AppTheme.primaryColor.withOpacity(0.1)
+                              : Colors.transparent,
+                          ),
                           child: Text(
                             item.name.isNotEmpty ? item.name : 'ID: ${item.id}',
                             style: TextStyle(
-                              color: isDarkMode 
-                                ? AppTheme.darkTextPrimary 
-                                : Colors.black, // UPDATE
                               fontSize: 14,
+                              color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         );
-                      }).toList(),
-                      onChanged: onChanged,
+                      },
+                      emptyBuilder: (context, searchEntry) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 40,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary.withOpacity(0.5)
+                                  : Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No results found',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : AppTheme.textSecondary, 
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      searchDelay: const Duration(milliseconds: 300),
                     ),
-            ),
+                    dropdownButtonProps: DropdownButtonProps(
+                      icon: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),
