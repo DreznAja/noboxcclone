@@ -77,6 +77,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
   ChatNotifier() : super(ChatState()) {
     // Don't initialize SignalR here - it will be initialized after login
     _setupSignalRListeners();
+
+      // Listen to block/unblock updates
+  SignalRService.blockUnblockUpdates.listen((data) {
+    _handleBlockUnblockUpdate(data);
+  });
+
   }
 
   // Create note for active room
@@ -114,6 +120,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return false;
     }
   }
+  
 
   // Delete message
   Future<bool> deleteMessage(String messageId) async {
@@ -250,45 +257,180 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
-  // Toggle block/unblock contact
-  Future<bool> toggleBlockContact(String roomId, bool shouldBlock) async {
-    print('🚫 [Block Contact] ${shouldBlock ? "Blocking" : "Unblocking"} contact for room: $roomId');
+// chat_provider.dart - toggleBlockContact (pakai SignalR)
+
+Future<bool> toggleBlockContact(String roomId, bool shouldBlock) async {
+  print('🚫 [Block Contact] ${shouldBlock ? "Blocking" : "Unblocking"} contact for room: $roomId');
+  
+  // Optimistic update
+  final rooms = List<Room>.from(state.rooms);
+  final roomIndex = rooms.indexWhere((r) => r.id == roomId);
+  
+  Room? previousActiveRoom;
+  List<Room>? previousRooms;
+  
+  if (roomIndex != -1) {
+    previousRooms = List<Room>.from(rooms);
+    previousActiveRoom = state.activeRoom;
     
-    try {
-      print('🚫 [Block Contact] Request data: EntityId=$roomId, CtIsBlock=${shouldBlock ? 1 : 0}');
-      
-      final response = await ApiService.dio.post(
-        'Services/Chat/Chatrooms/Update',
-        data: {
-          'EntityId': roomId,
-          'Entity': {
-            'CtIsBlock': shouldBlock ? 1 : 0,
-          },
-        },
-      );
-      
-      print('🚫 [Block Contact] Response: ${response.statusCode} - ${response.data}');
-      
-      if (response.statusCode == 200) {
-        final isError = response.data['IsError'];
-        final hasError = isError == true;
-        
-        if (!hasError) {
-          print('✅ [Block Contact] Success');
-          return true;
-        } else {
-          print('❌ [Block Contact] Error: ${response.data['ErrorMsg'] ?? response.data['Error']}');
-          return false;
-        }
+    final room = rooms[roomIndex];
+    final updatedRoom = Room(
+      id: room.id,
+      ctId: room.ctId,
+      ctRealId: room.ctRealId,
+      grpId: room.grpId,
+      name: room.name,
+      lastMessage: room.lastMessage,
+      lastMessageTime: room.lastMessageTime,
+      unreadCount: room.unreadCount,
+      status: room.status,
+      channelId: room.channelId,
+      channelName: room.channelName,
+      accountName: room.accountName,
+      botName: room.botName,
+      contactImage: room.contactImage,
+      linkImage: room.linkImage,
+      isGroup: room.isGroup,
+      isPinned: room.isPinned,
+      isBlocked: shouldBlock, // ✅ Optimistic update
+      isMuteBot: room.isMuteBot,
+      tags: room.tags,
+      funnel: room.funnel,
+      funnelId: room.funnelId,
+      tagIds: room.tagIds,
+      needReply: room.needReply,
+    );
+    
+    rooms[roomIndex] = updatedRoom;
+    
+    Room? updatedActiveRoom = state.activeRoom;
+    if (state.activeRoom?.id == roomId) {
+      updatedActiveRoom = updatedRoom;
+    }
+    
+    state = state.copyWith(
+      rooms: rooms,
+      activeRoom: updatedActiveRoom,
+    );
+  }
+  
+  try {
+    final room = state.rooms.firstWhere((r) => r.id == roomId);
+    final contactId = room.ctRealId ?? room.ctId;
+    
+    if (contactId == null) {
+      print('❌ Cannot find contactId');
+      if (previousRooms != null) {
+        state = state.copyWith(rooms: previousRooms, activeRoom: previousActiveRoom);
       }
-      
-      print('❌ [Block Contact] API Error: ${response.data}');
-      return false;
-    } catch (e) {
-      print('❌ [Block Contact] Exception: $e');
       return false;
     }
+    
+    print('🔄 [Block Contact] Updating via Contacts table');
+    print('   Contact ID: $contactId');
+    
+    final blockValue = shouldBlock ? 1 : 0;
+    
+    // ✅ LANGSUNG GUNAKAN CONTACTS TABLE (skip testing fields)
+    final contactResponse = await ApiService.dio.post(
+      'Services/Nobox/Contact/Update',
+      data: {
+        'EntityId': contactId,
+        'Entity': {
+          'IsBlock': blockValue,
+        },
+      },
+    );
+    
+    print('📞 Contact API Response: ${contactResponse.statusCode}');
+    
+    if (contactResponse.statusCode == 200 && contactResponse.data['Error'] == null) {
+      print('✅ [Block Contact] SUCCESS! Contact ${shouldBlock ? "blocked" : "unblocked"}');
+      
+      // ✅ TIDAK PERLU TUNGGU 2 DETIK - langsung return success
+      // Optimistic update sudah menampilkan UI yang benar
+      
+      // ✅ Background reload (tidak blocking UI)
+      Future.delayed(const Duration(milliseconds: 500), () {
+        loadRooms(); // Sync dengan backend tanpa blocking
+      });
+      
+      return true;
+    } else {
+      print('❌ Contact update failed');
+      
+      // Revert optimistic update
+      if (previousRooms != null) {
+        state = state.copyWith(rooms: previousRooms, activeRoom: previousActiveRoom);
+      }
+      return false;
+    }
+    
+  } catch (e) {
+    print('❌ [Block Contact] Exception: $e');
+    
+    // Revert optimistic update
+    if (previousRooms != null) {
+      state = state.copyWith(rooms: previousRooms, activeRoom: previousActiveRoom);
+    }
+    return false;
   }
+}
+
+void _handleBlockUnblockUpdate(Map<String, dynamic> data) {
+  final roomId = data['roomId'] as String;
+  final isBlocked = data['isBlocked'] as bool;
+  
+  print('🔄 Handling block/unblock update: Room $roomId, Blocked: $isBlocked');
+  
+  final rooms = List<Room>.from(state.rooms);
+  final roomIndex = rooms.indexWhere((r) => r.id == roomId);
+  
+  if (roomIndex != -1) {
+    final room = rooms[roomIndex];
+    final updatedRoom = Room(
+      id: room.id,
+      ctId: room.ctId,
+      ctRealId: room.ctRealId,
+      grpId: room.grpId,
+      name: room.name,
+      lastMessage: room.lastMessage,
+      lastMessageTime: room.lastMessageTime,
+      unreadCount: room.unreadCount,
+      status: room.status,
+      channelId: room.channelId,
+      channelName: room.channelName,
+      accountName: room.accountName,
+      botName: room.botName,
+      contactImage: room.contactImage,
+      linkImage: room.linkImage,
+      isGroup: room.isGroup,
+      isPinned: room.isPinned,
+      isBlocked: isBlocked,
+      isMuteBot: room.isMuteBot,
+      tags: room.tags,
+      messageTags: room.messageTags,
+      funnel: room.funnel,
+      funnelId: room.funnelId,
+      tagIds: room.tagIds,
+      needReply: room.needReply,
+    );
+    
+    rooms[roomIndex] = updatedRoom;
+    
+    Room? updatedActiveRoom = state.activeRoom;
+    if (state.activeRoom?.id == roomId) {
+      updatedActiveRoom = updatedRoom;
+    }
+    
+    state = state.copyWith(
+      rooms: rooms,
+      activeRoom: updatedActiveRoom,
+    );
+    
+    print('✅ Block status updated for room $roomId');
+  }
+}
 
   void _setupSignalRListeners() {
     // Listen to connection status

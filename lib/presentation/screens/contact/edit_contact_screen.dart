@@ -11,6 +11,7 @@ import 'package:nobox_chat/core/providers/contact_detail_provider.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:nobox_chat/core/services/address_service.dart';
 import 'package:nobox_chat/core/services/contact_detail_service.dart';
+import 'package:nobox_chat/core/services/media_service.dart';
 import 'package:nobox_chat/core/services/storage_service.dart';
 import 'package:nobox_chat/core/theme/app_theme.dart';
 
@@ -265,152 +266,238 @@ class _EditContactScreenState extends ConsumerState<EditContactScreen> {
     }
   }
 
-  Future<void> _changeProfilePhoto() async {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+Future<void> _changeProfilePhoto() async {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 16),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
+  final source = await showModalBottomSheet<ImageSource>(
+    context: context,
+    backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 16),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Change Profile Photo',
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Change Profile Photo',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ListTile(
+            leading: Icon(
+              Icons.camera_alt,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+            ),
+            title: Text(
+              'Take Photo',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: Icon(
-                Icons.camera_alt,
+                fontSize: 16,
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
               ),
-              title: Text(
-                'Take Photo',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
-                ),
-              ),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
-            ListTile(
-              leading: Icon(
-                Icons.photo_library,
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.photo_library,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+            ),
+            title: Text(
+              'Choose from Gallery',
+              style: TextStyle(
+                fontSize: 16,
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
               ),
-              title: Text(
-                'Choose from Gallery',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
-                ),
-              ),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
-            if (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null)
-              ListTile(
-                leading: const Icon(
-                  Icons.delete,
-                  color: Colors.red,
-                ),
-                title: const Text(
-                  'Remove Photo',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.red,
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          if (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null)
+            // ListTile(
+            //   leading: const Icon(
+            //     Icons.delete,
+            //     color: Colors.red,
+            //   ),
+            //   title: const Text(
+            //     'Remove Photo',
+            //     style: TextStyle(
+            //       fontSize: 16,
+            //       color: Colors.red,
+            //     ),
+            //   ),
+            //   onTap: () => Navigator.pop(context, null),
+            // ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    ),
+  );
+
+    // ✅ PERBAIKAN: Jika user close bottom sheet (source == null), langsung return
+  if (source == null || !mounted) return;
+  
+  // // Handle remove photo
+  // if (source == null) {
+  //   if (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null) {
+  //     final confirmed = await showDialog<bool>(
+  //       context: context,
+  //       builder: (context) => AlertDialog(
+  //         backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+  //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //         title: const Text('Remove Photo'),
+  //         content: const Text('Are you sure you want to remove the profile photo?'),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () => Navigator.pop(context, false),
+  //             child: const Text('Cancel'),
+  //           ),
+  //           ElevatedButton(
+  //             onPressed: () => Navigator.pop(context, true),
+  //             style: ElevatedButton.styleFrom(
+  //               backgroundColor: Colors.red,
+  //               foregroundColor: Colors.white,
+  //             ),
+  //             child: const Text('Remove'),
+  //           ),
+  //         ],
+  //       ),
+  //     );
+
+  //     if (confirmed == true) {
+  //       setState(() {
+  //         _selectedImageFile = null;
+  //         _newPhotoBase64 = '';
+  //       });
+  //       _showSnackBar('Profile photo will be removed when you save', isError: false);
+  //     }
+  //   }
+  //   return;
+  // }
+
+  // ✅ PERBAIKAN: Upload dengan proper loading state management
+  await _uploadProfilePhoto(source, isDarkMode);
+}
+
+// ✅ TAMBAHAN: Method terpisah untuk upload dengan loading management yang lebih baik
+Future<void> _uploadProfilePhoto(ImageSource source, bool isDarkMode) async {
+  try {
+    // Step 1: Pick image DULU, baru show loading
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: source,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 70,
+    );
+
+    // User cancel? langsung return
+    if (image == null || !mounted) return;
+
+    // Step 2: Show loading SETELAH image dipilih
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppTheme.primaryColor,
+                    ),
                   ),
                 ),
-                onTap: () => Navigator.pop(context, null),
-              ),
-            const SizedBox(height: 16),
-          ],
+                const SizedBox(height: 16),
+                Text(
+                  'Uploading photo...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
 
-    if (source == null && !mounted) return;
+    // Step 3: Convert to base64
+    final bytes = await File(image.path).readAsBytes();
+    final base64Image = base64Encode(bytes);
+    
+    print('📤 Uploading to TemporaryUpload - Size: ${base64Image.length} characters');
 
-    if (source == null && (widget.contact.image != null && widget.contact.image!.isNotEmpty || _selectedImageFile != null)) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Remove Photo'),
-          content: const Text('Are you sure you want to remove the profile photo?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Remove'),
-            ),
-          ],
-        ),
-      );
+    // Step 4: Upload menggunakan MediaService
+    final uploadResponse = await MediaService.uploadBase64(
+      filename: image.name,
+      mimetype: 'image/jpeg',
+      base64Data: base64Image,
+    );
 
-      if (confirmed == true) {
+    // Step 5: Close loading dialog
+    if (mounted) Navigator.pop(context);
+
+    // Step 6: Handle hasil upload
+    if (!uploadResponse.isError && uploadResponse.data != null) {
+      final uploadedFile = uploadResponse.data!;
+      
+      print('✅ Upload successful! Filename: ${uploadedFile.filename}');
+
+      if (mounted) {
         setState(() {
-          _selectedImageFile = null;
-          _newPhotoBase64 = '';
+          _selectedImageFile = File(image.path);
+          _newPhotoBase64 = uploadedFile.filename;
         });
-        _showSnackBar('Profile photo will be removed when you save', isError: false);
+
+        _showSnackBar('Profile photo selected. Click Save to apply changes.', isError: false);
       }
-      return;
+    } else {
+      throw Exception(uploadResponse.error ?? 'Upload failed');
     }
 
-    if (source == null) return;
-
-    try {
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: source,
-        maxWidth: 200,
-        maxHeight: 200,
-        imageQuality: 50,
-      );
-
-      if (image == null) return;
-
-      final bytes = await File(image.path).readAsBytes();
-      final base64Image = base64Encode(bytes);
-      
-      print('Base64 size: ${base64Image.length} characters');
-
-      setState(() {
-        _selectedImageFile = File(image.path);
-        _newPhotoBase64 = base64Image;
-      });
-
-      _showSnackBar('Profile photo selected. Save to apply changes.', isError: false);
-    } catch (e) {
-      _showSnackBar('Error: ${e.toString()}', isError: true);
+  } catch (e) {
+    // Pastikan loading dialog tertutup jika ada error
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst || !route.willHandlePopInternally);
+    }
+    
+    print('❌ Error uploading photo: $e');
+    
+    if (mounted) {
+      _showSnackBar('Failed to upload photo: ${e.toString()}', isError: true);
     }
   }
+}
 
   void _showSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(

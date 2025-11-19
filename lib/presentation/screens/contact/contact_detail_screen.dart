@@ -2411,154 +2411,165 @@ void _showFunnelDropdown() {
     super.dispose();
   }
 
-  Future<void> _toggleBlockContact(ContactDetail contact) async {
-    if (_currentRoomId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Room ID not found. Please try again.'),
-          backgroundColor: AppTheme.errorColor,
-        ),
-      );  
-      return;
-    }
+Future<void> _toggleBlockContact(ContactDetail contact) async {
+  if (_currentRoomId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Room ID not found. Please try again.'),
+        backgroundColor: AppTheme.errorColor,
+      ),
+    );  
+    return;
+  }
 
-    final isCurrentlyBlocked = contact.isBlocked;
-    final action = isCurrentlyBlocked ? 'Unblock' : 'Block';
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
-    
-    // Show confirmation dialog
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                isCurrentlyBlocked ? Icons.check_circle_outline : Icons.block,
-                color: const Color(0xFF1976D2),
-                size: 24,
-              ),
+  final isCurrentlyBlocked = contact.isBlocked;
+  final action = isCurrentlyBlocked ? 'Unblock' : 'Block';
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  // Show confirmation dialog
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                ? const Color(0xFF1976D2).withOpacity(0.2)
+                : const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 12),
-            Text(
+            child: Icon(
+              isCurrentlyBlocked ? Icons.check_circle_outline : Icons.block,
+              color: const Color(0xFF1976D2),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
               '$action Contact',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
+                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
-            ),
-          ],
-        ),
-        content: Text(
-          isCurrentlyBlocked
-              ? 'Are you sure you want to unblock this contact? You will receive messages from them.'
-              : 'Are you sure you want to block this contact? You will not receive messages from them.',
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.black87,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              action,
-              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
         ],
       ),
+      content: Text(
+        isCurrentlyBlocked
+            ? 'Are you sure you want to unblock this contact? You will receive messages from them.'
+            : 'Are you sure you want to block this contact? You will not receive messages from them.',
+        style: TextStyle(
+          fontSize: 14,
+          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black87,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1976D2),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Text(
+            action,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm != true) return;
+
+  try {
+    // ✅ Update local contact state IMMEDIATELY (optimistic)
+    final updatedContact = ContactDetail(
+      id: contact.id,
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email,
+      channelId: contact.channelId,
+      channelName: contact.channelName,
+      image: contact.image,
+      address: contact.address,
+      isGroup: contact.isGroup,
+      description: contact.description,
+      isBlocked: !isCurrentlyBlocked, // ✅ Toggle immediately
+    );
+    
+    ref.read(contactDetailProvider.notifier).setContact(updatedContact);
+    
+    // Call API
+    final response = await ref.read(chatProvider.notifier).toggleBlockContact(
+      _currentRoomId!,
+      !isCurrentlyBlocked,
     );
 
-    if (confirm != true) return;
-
-    try {
-      // Call API to update block status using Chatrooms/Update endpoint
-      final response = await ref.read(chatProvider.notifier).toggleBlockContact(
-        _currentRoomId!,
-        !isCurrentlyBlocked,
+    if (response && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isCurrentlyBlocked
+                ? 'Contact unblocked successfully'
+                : 'Contact blocked successfully',
+          ),
+          backgroundColor: AppTheme.successColor,
+        ),
       );
-
-      if (response && mounted) {
-        // Update local contact state
-        final updatedContact = ContactDetail(
-          id: contact.id,
-          name: contact.name,
-          phone: contact.phone,
-          email: contact.email,
-          channelId: contact.channelId,
-          channelName: contact.channelName,
-          image: contact.image,
-          address: contact.address,
-          isGroup: contact.isGroup,
-          description: contact.description,
-          isBlocked: !isCurrentlyBlocked,
-        );
-        
-        ref.read(contactDetailProvider.notifier).setContact(updatedContact);
-        
-        // Reload rooms to sync with updated block status
-        await ref.read(chatProvider.notifier).loadRooms();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isCurrentlyBlocked
-                  ? 'Contact unblocked successfully'
-                  : 'Contact blocked successfully',
-            ),
-            backgroundColor: AppTheme.successColor,
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to ${action.toLowerCase()} contact'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Error toggling block status: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
+      
+      // ✅ JANGAN reload rooms - biar optimistic update bekerja
+    } else if (mounted) {
+      // ✅ Revert jika gagal
+      ref.read(contactDetailProvider.notifier).setContact(contact);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to ${action.toLowerCase()} contact'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    }
+  } catch (e) {
+    print('❌ Error toggling block status: $e');
+    
+    // ✅ Revert on error
+    if (mounted) {
+      ref.read(contactDetailProvider.notifier).setContact(contact);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
     }
   }
+}
 
   String _getBotName(Room room) {
     // FIXED: Match home screen display logic exactly

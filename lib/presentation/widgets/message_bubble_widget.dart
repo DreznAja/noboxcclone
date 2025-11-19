@@ -635,70 +635,74 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
     );
   }
   
-  Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode) {
-    final urlRegex = RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
-    final matches = urlRegex.allMatches(text);
-    
-    if (matches.isEmpty) {
-      return Text(
-        text,
-        style: TextStyle(
-          color: isMe 
-            ? Colors.white 
-            : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
-          fontSize: 16,
-          height: 1.3,
-        ),
-      );
-    }
-    
-    final List<TextSpan> spans = [];
-    int currentIndex = 0;
-    
-    for (final match in matches) {
-      if (match.start > currentIndex) {
-        spans.add(TextSpan(
-          text: text.substring(currentIndex, match.start),
-          style: TextStyle(
-            color: isMe 
-              ? Colors.white 
-              : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
-            fontSize: 16,
-            height: 1.3,
-          ),
-        ));
-      }
-      
-      final url = match.group(0)!;
-      spans.add(TextSpan(
-        text: url,
-        style: const TextStyle(
-          color: Colors.blue,
-          fontSize: 16,
-          height: 1.3,
-          decoration: TextDecoration.underline,
-        ),
-        recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
-      ));
-      
-      currentIndex = match.end;
-    }
-    
-    if (currentIndex < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(currentIndex),
-        style: TextStyle(
-          color: isMe 
-            ? Colors.white 
-            : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
-          fontSize: 16,
-          height: 1.3,
-        ),
-      ));
-    }
-    
-    return RichText(text: TextSpan(children: spans));
+Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode) {
+  final urlRegex = RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
+  final matches = urlRegex.allMatches(text);
+  
+  if (matches.isEmpty) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: isMe 
+          ? Colors.white 
+          : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+        fontSize: 16,
+        height: 1.3,
+      ),
+    );
   }
+  
+  final List<TextSpan> spans = [];
+  int currentIndex = 0;
+  
+  for (final match in matches) {
+    if (match.start > currentIndex) {
+      spans.add(TextSpan(
+        text: text.substring(currentIndex, match.start),
+        style: TextStyle(
+          color: isMe 
+            ? Colors.white 
+            : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+          fontSize: 16,
+          height: 1.3,
+        ),
+      ));
+    }
+    
+    final url = match.group(0)!;
+    spans.add(TextSpan(
+      text: url,
+      style: TextStyle(
+        // ✅ FIXED: Cyan untuk bubble biru (pesan sendiri), biru untuk bubble lainnya
+        color: isMe 
+          ? Colors.cyanAccent  // Cyan terang untuk bubble biru - seperti WhatsApp
+          : Colors.blue,       // Biru standar untuk bubble putih/abu
+        fontSize: 16,
+        height: 1.3,
+        decoration: TextDecoration.underline,
+        decorationColor: isMe ? Colors.cyanAccent : Colors.blue,
+      ),
+      recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
+    ));
+    
+    currentIndex = match.end;
+  }
+  
+  if (currentIndex < text.length) {
+    spans.add(TextSpan(
+      text: text.substring(currentIndex),
+      style: TextStyle(
+        color: isMe 
+          ? Colors.white 
+          : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+        fontSize: 16,
+        height: 1.3,
+      ),
+    ));
+  }
+  
+  return RichText(text: TextSpan(children: spans));
+}
   
   Future<void> _launchURL(String url) async {
     String finalUrl = url;
