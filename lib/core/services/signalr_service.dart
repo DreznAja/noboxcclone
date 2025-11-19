@@ -7,6 +7,8 @@ import 'storage_service.dart';
 import 'push_notification_service.dart';
 import 'api_service.dart';
 
+
+
 class SignalRService {
   static HubConnection? _connection;
   static final StreamController<Room> _roomUpdateController = StreamController<Room>.broadcast();
@@ -14,6 +16,13 @@ class SignalRService {
   static final StreamController<Map<String, dynamic>> _ackController = StreamController<Map<String, dynamic>>.broadcast();
   static final StreamController<String> _connectionStatusController = StreamController<String>.broadcast();
   
+  static final StreamController<Map<String, dynamic>> _blockUnblockController = 
+    StreamController<Map<String, dynamic>>.broadcast();
+
+// Tambahkan getter
+static Stream<Map<String, dynamic>> get blockUnblockUpdates => _blockUnblockController.stream;
+
+
   static Timer? _heartbeatTimer;
   static Timer? _reconnectTimer;
   static Timer? _subscriptionTimer;
@@ -260,6 +269,54 @@ class SignalRService {
         }
       }
     });
+
+    // Tambahkan di dalam method _setupEventHandlers(), setelah handler lainnya
+
+// Handler untuk block/unblock contact
+// Web format: TerimaBlockUnblock(room, st, ctId, num)
+// room = roomId, st = status, ctId = contactId, num = blockStatus (1=blocked, 0=unblocked)
+// Di dalam _setupEventHandlers(), update handler ini:
+_connection!.on('TerimaBlockUnblock', (List<Object?>? arguments) {
+  if (arguments != null && arguments.length >= 4) {
+    try {
+      // ✅ FIXED: Parse dengan safety check
+      final roomIdRaw = arguments[0];
+      final statusRaw = arguments[1];
+      final contactIdRaw = arguments[2];
+      final numRaw = arguments[3];
+      
+      final roomId = roomIdRaw?.toString() ?? '';
+      final status = statusRaw is int ? statusRaw : int.tryParse(statusRaw?.toString() ?? '0') ?? 0;
+      final contactId = contactIdRaw?.toString() ?? '';
+      final num = numRaw is int ? numRaw : (numRaw == '1' || numRaw == 1 || numRaw == true ? 1 : 0);
+      
+      final isBlocked = num == 1;
+      
+      print('🚫 ═══════════════════════════════════════════════════════');
+      print('🚫 SignalR: TerimaBlockUnblock received!');
+      print('🚫   Room ID: $roomId (type: ${roomIdRaw.runtimeType})');
+      print('🚫   Status: $status (type: ${statusRaw.runtimeType})');
+      print('🚫   Contact ID: $contactId (type: ${contactIdRaw.runtimeType})');
+      print('🚫   Num: $num (type: ${numRaw.runtimeType})');
+      print('🚫   Is Blocked: $isBlocked');
+      print('🚫 ═══════════════════════════════════════════════════════');
+      
+      // Broadcast block status update
+      _blockUnblockController.add({
+        'roomId': roomId,
+        'contactId': contactId,
+        'status': status,
+        'isBlocked': isBlocked,
+      });
+    } catch (e) {
+      print('❌ Error parsing TerimaBlockUnblock: $e');
+      print('❌ Arguments types: ${arguments.map((a) => a.runtimeType).toList()}');
+      print('❌ Arguments values: $arguments');
+    }
+  } else {
+    print('⚠️ TerimaBlockUnblock received with insufficient arguments: $arguments');
+  }
+});
   }
 
   static Future<void> _handleNewMessageNotification(ChatMessage message) async {
@@ -722,6 +779,87 @@ class SignalRService {
     }
   }
 
+static Future<bool> invokeBlockUnblock({
+  required String roomId,
+  required int status,
+  required String contactId,
+  required bool shouldBlock,
+}) async {
+  try {
+    await ensureConnection();
+    
+    final blockValue = shouldBlock ? 1 : 0;
+    
+    print('🚫 Invoking ContactBlockUnblock via SignalR (dynamic args):');
+    print('   Room ID: $roomId');
+    print('   Status: $status');
+    print('   Contact ID: $contactId');
+    print('   Block Value: $blockValue');
+    
+    // ✅ Try 1: Semua parameter sebagai dynamic
+    try {
+      final result = await _connection!.invoke(
+        'ContactBlockUnblock',
+        args: <Object>[roomId, status, contactId, blockValue],
+      ).timeout(const Duration(seconds: 10));
+      
+      print('✅ SignalR invoke success with dynamic args');
+      print('   Result: $result');
+      return true;
+    } catch (e1) {
+      print('❌ Try 1 failed (dynamic): $e1');
+      
+      // ✅ Try 2: Convert roomId dan contactId ke int
+      try {
+        final roomIdInt = int.parse(roomId);
+        final contactIdInt = int.parse(contactId);
+        
+        print('🔄 Trying with all integers...');
+        print('   Room ID: $roomIdInt (int)');
+        print('   Contact ID: $contactIdInt (int)');
+        
+        final result = await _connection!.invoke(
+          'ContactBlockUnblock',
+          args: [roomIdInt, status, contactIdInt, blockValue]
+        ).timeout(const Duration(seconds: 10));
+        
+        print('✅ SignalR invoke success with int args');
+        print('   Result: $result');
+        return true;
+      } catch (e2) {
+        print('❌ Try 2 failed (all int): $e2');
+        
+        // ✅ Try 3: Coba format JSON string seperti beberapa SignalR implementation
+        try {
+          print('🔄 Trying with JSON encoded args...');
+          
+          final jsonArgs = jsonEncode({
+            'roomId': roomId,
+            'status': status,
+            'contactId': contactId,
+            'blockValue': blockValue,
+          });
+          
+          final result = await _connection!.invoke(
+            'ContactBlockUnblock',
+            args: [jsonArgs]
+          ).timeout(const Duration(seconds: 10));
+          
+          print('✅ SignalR invoke success with JSON args');
+          print('   Result: $result');
+          return true;
+        } catch (e3) {
+          print('❌ Try 3 failed (JSON): $e3');
+          throw e3;
+        }
+      }
+    }
+  } catch (e) {
+    print('❌ All invoke attempts failed: $e');
+    return false;
+  }
+}
+
   static void dispose() {
     _heartbeatTimer?.cancel();
     _reconnectTimer?.cancel();
@@ -736,6 +874,7 @@ class SignalRService {
     _messageController.close();
     _ackController.close();
     _connectionStatusController.close();
+    _blockUnblockController.close(); // ← TAMBAHKAN INI
   }
 
   static bool get isConnected => _connection?.state == HubConnectionState.Connected && _isFullyInitialized;

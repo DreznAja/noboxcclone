@@ -669,11 +669,11 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
         ));
       }
       
-     final url = match.group(0)!;
+      final url = match.group(0)!;
       spans.add(TextSpan(
         text: url,
-        style: TextStyle(
-          color: isMe ? Colors.white : Colors.blue,
+        style: const TextStyle(
+          color: Colors.blue,
           fontSize: 16,
           height: 1.3,
           decoration: TextDecoration.underline,
@@ -695,7 +695,7 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
           height: 1.3,
         ),
       ));
-    } 
+    }
     
     return RichText(text: TextSpan(children: spans));
   }

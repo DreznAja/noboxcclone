@@ -163,7 +163,7 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     });
     print('Filters reset');
   },
-  icon: const Icon(Icons.refresh, size: 16,color: AppTheme.primaryColor),
+  icon: Icon(Icons.refresh, size: 16,color: isDarkMode ? Colors.white : AppTheme.primaryColor,),
   label: Text(
     'Reset',
     style: TextStyle(

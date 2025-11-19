@@ -299,56 +299,67 @@ Widget build(BuildContext context, WidgetRef ref) {
                     children: [
                       // First row: Name, Mute Bot Icon, Time, Pin
                       Row(
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    room.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 16,
-                                      color: isDarkMode ? Colors.white : Colors.black,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                // Muted AI Agent icon
-                                if (room.isMuteBot) ...[
-                                  const SizedBox(width: 6),
-                                  const Icon(
-                                    Icons.smart_toy,
-                                    size: 16,
-                                    color: Colors.red,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          
-                          // Time
-                          if (room.lastMessageTime != null)
-                            Text(
-                              _formatMessageTime(room.lastMessageTime!),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                              ),
-                            ),
-                          
-                          // Pin icon
-                          if (room.isPinned) ...[
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.push_pin,
-                              size: 16,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ],
-                        ],
-                      ),
+  children: [
+    Expanded(
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              room.name,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Muted AI Agent icon
+          if (room.isMuteBot) ...[
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.smart_toy,
+              size: 16,
+              color: Colors.red,
+            ),
+          ],
+        ],
+      ),
+    ),
+    
+    // Time
+    if (room.lastMessageTime != null)
+      Text(
+        _formatMessageTime(room.lastMessageTime!),
+        style: TextStyle(
+          fontSize: 12,
+          color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+        ),
+      ),
+    
+    // ✅ BLOCKED ICON - Tampil di sebelah kanan time
+    if (room.isBlocked) ...[
+      const SizedBox(width: 6),
+      const Icon(
+        Icons.person_off,
+        size: 16,
+        color: Colors.red,
+      ),
+    ],
+    
+    // Pin icon
+    if (room.isPinned) ...[
+      const SizedBox(width: 6),
+      const Icon(
+        Icons.push_pin,
+        size: 16,
+        color: AppTheme.primaryColor,
+      ),
+    ],
+    
+  ],
+),
                       
                       const SizedBox(height: 3),
 
