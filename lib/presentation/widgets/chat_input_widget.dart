@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
+import 'package:nobox_chat/presentation/screens/location/location_picker_screen.dart';
 import 'dart:io';
 import 'voice_recorder_widget.dart';
 import 'quick_reply_overlay.dart';
@@ -315,74 +317,63 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
     );
   }
 
-  Future<void> _sendLocation() async {
-    try {
-      // Show loading indicator
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              ),
-              SizedBox(width: 12),
-              Text('Getting your location...'),
-            ],
-          ),
-          backgroundColor: AppTheme.primaryColor,
-          duration: Duration(seconds: 5),
+Future<void> _sendLocation() async {
+  try {
+    // Import the location picker screen
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => LocationPickerScreen(
+          // Optionally pass initial location (e.g., Jakarta)
+          initialLocation: const LatLng(-6.2088, 106.8456),
         ),
-      );
-
-      // Get current location
-      final location = await LocationService.getCurrentLocation();
-      
-      // Hide loading indicator
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      
-      if (location == null) {
-        // Show error if location is null
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to get current location'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        return;
-      }
-      
-      // Send location using the chat provider
-      final chatNotifier = ref.read(chatProvider.notifier);
-      await chatNotifier.sendLocationMessage(
-        location,
-        replyId: widget.replyingTo?.id,
-      );
-      
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.replyingTo != null ? 'Location reply sent successfully' : 'Location sent successfully'),
-          backgroundColor: AppTheme.successColor,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      
-    } catch (e) {
-      // Hide loading indicator
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      
-      // Show error message
-      _showError('Failed to get location: $e');
+      ),
+    );
+    
+    // If user cancelled, result will be null
+    if (result == null) {
+      return;
     }
     
-    setState(() {
-      _showAttachmentOptions = false;
-      _showVoiceRecorder = false;
-    });
+    // Extract location data from result
+    final latitude = result['latitude'] as double;
+    final longitude = result['longitude'] as double;
+    final address = result['address'] as String?;
+    
+    // Prepare location data
+    final locationData = {
+      'latitude': latitude,
+      'longitude': longitude,
+      'address': address,
+    };
+    
+    // Send location using the chat provider
+    final chatNotifier = ref.read(chatProvider.notifier);
+    await chatNotifier.sendLocationMessage(
+      locationData,
+      replyId: widget.replyingTo?.id,
+    );
+    
+    // // Show success message
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   SnackBar(
+    //     content: Text(widget.replyingTo != null 
+    //         ? 'Location reply sent successfully' 
+    //         : 'Location sent successfully'),
+    //     backgroundColor: AppTheme.successColor,
+    //     duration: const Duration(seconds: 2),
+    //   ),
+    // );
+    
+  } catch (e) {
+    // Show error message
+    _showError('Failed to send location: $e');
   }
+  
+  setState(() {
+    _showAttachmentOptions = false;
+    _showVoiceRecorder = false;
+  });
+}
 
   Future<void> _startVoiceRecording() async {
     setState(() {
@@ -406,13 +397,13 @@ class _ChatInputWidgetState extends ConsumerState<ChatInputWidget> {
         _showVoiceRecorder = false;
       });
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Voice note sent successfully'),
-          backgroundColor: AppTheme.successColor,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   const SnackBar(
+      //     content: Text('Voice note sent successfully'),
+      //     backgroundColor: AppTheme.successColor,
+      //     duration: Duration(seconds: 2),
+      //   ),
+      // );
     } catch (e) {
       _showError('Failed to send voice note: $e');
     }

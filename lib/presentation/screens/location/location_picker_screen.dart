@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/theme_provider.dart';
 
-class LocationPickerScreen extends StatefulWidget {
+class LocationPickerScreen extends ConsumerStatefulWidget {
   final LatLng? initialLocation;
 
   const LocationPickerScreen({
@@ -14,23 +16,32 @@ class LocationPickerScreen extends StatefulWidget {
   });
 
   @override
-  State<LocationPickerScreen> createState() => _LocationPickerScreenState();
+  ConsumerState<LocationPickerScreen> createState() => _LocationPickerScreenState();
 }
 
-class _LocationPickerScreenState extends State<LocationPickerScreen> {
+class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen> {
   late MapController _mapController;
   LatLng? _selectedLocation;
   String _selectedAddress = 'Loading address...';
   bool _isLoadingAddress = false;
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
+  bool _showHint = true; // TAMBAHKAN INI
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    _selectedLocation = widget.initialLocation ?? const LatLng(-6.2088, 106.8456); // Default Jakarta
+    _selectedLocation = widget.initialLocation ?? const LatLng(-6.2088, 106.8456);
     _getAddressFromLatLng(_selectedLocation!);
+
+        Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() {
+          _showHint = false;
+        });
+      }
+    });
   }
 
   Future<void> _getAddressFromLatLng(LatLng location) async {
@@ -88,9 +99,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location services are disabled')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled')),
+          );
+        }
         return;
       }
 
@@ -98,19 +111,23 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permissions are denied')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permissions are denied')),
+            );
+          }
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permissions are permanently denied'),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permissions are permanently denied'),
+            ),
+          );
+        }
         return;
       }
 
@@ -125,15 +142,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _getAddressFromLatLng(newLocation);
     } catch (e) {
       print('Error getting location: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng location) {
     setState(() {
       _selectedLocation = location;
+      _showHint = false; // TAMBAHKAN INI - Hide hint saat user tap
     });
     _getAddressFromLatLng(location);
   }
@@ -166,18 +186,22 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         setState(() {
           _isSearching = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location not found')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location not found')),
+          );
+        }
       }
     } catch (e) {
       setState(() {
         _isSearching = false;
       });
       print('Error searching location: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to search: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to search: $e')),
+        );
+      }
     }
   }
 
@@ -193,18 +217,17 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
     return Scaffold(
-      appBar: AppBar(
+            appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const Text('Select Location'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.my_location),
-            onPressed: _moveToCurrentLocation,
-            tooltip: 'My Location',
-          ),
-        ],
       ),
       body: Stack(
         children: [
@@ -216,11 +239,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             child: Container(
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDarkMode ? AppTheme.darkSurface : Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -228,22 +251,42 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
               child: TextField(
                 controller: _searchController,
+                style: TextStyle(
+                  color: isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Search location...',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
+                  hintStyle: TextStyle(
+                    color: isDarkMode 
+                        ? AppTheme.darkTextSecondary.withOpacity(0.6)
+                        : Colors.grey.shade400,
+                  ),
                   prefixIcon: _isSearching
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
+                      ? Padding(
+                          padding: const EdgeInsets.all(12.0),
                           child: SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppTheme.primaryColor,
+                            ),
                           ),
                         )
-                      : const Icon(Icons.search, color: AppTheme.primaryColor),
+                      : Icon(
+                          Icons.search, 
+                          color: isDarkMode 
+                              ? AppTheme.primaryColor.withOpacity(0.8)
+                              : AppTheme.primaryColor,
+                        ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          icon: Icon(
+                            Icons.clear, 
+                            color: isDarkMode 
+                                ? AppTheme.darkTextSecondary 
+                                : Colors.grey,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {});
@@ -275,7 +318,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: isDarkMode
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: isDarkMode ? const ['a', 'b', 'c', 'd'] : const [],
                 userAgentPackageName: 'com.nobox.chat',
                 maxZoom: 19,
               ),
@@ -297,6 +343,81 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ],
           ),
 
+// TAMBAHKAN INI - Hint overlay
+if (_showHint)
+  Positioned(
+    top: 80,
+    left: 0,
+    right: 0,
+    child: Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.touch_app,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Tap anywhere on the map to select location',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showHint = false;
+                });
+              },
+              child: const Icon(
+                Icons.close,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+
+  // Tambahkan setelah hint overlay dan sebelum address info card
+
+// My Location button - pojok kanan bawah
+Positioned(
+  right: 16,
+  bottom: 240, // Sesuaikan dengan tinggi address card
+  child: FloatingActionButton(
+    onPressed: _moveToCurrentLocation,
+    backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    foregroundColor: isDarkMode ? Colors.white : AppTheme.primaryColor,
+    elevation: 4,
+    child: const Icon(Icons.my_location),
+  ),
+),
+
           // Address info card at bottom
           Positioned(
             left: 0,
@@ -304,10 +425,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             bottom: 0,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDarkMode ? AppTheme.darkSurface : Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -323,17 +444,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.location_on,
                               color: AppTheme.primaryColor,
                               size: 20,
                             ),
                             const SizedBox(width: 8),
-                            const Text(
+                            Text(
                               'Selected Location',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : Colors.grey,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -341,21 +464,24 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         ),
                         const SizedBox(height: 8),
                         if (_isLoadingAddress)
-                          const Row(
+                          Row(
                             children: [
                               SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
+                                  color: AppTheme.primaryColor,
                                 ),
                               ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               Text(
                                 'Loading address...',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.black87,
+                                  color: isDarkMode 
+                                      ? AppTheme.darkTextPrimary 
+                                      : Colors.black87,
                                 ),
                               ),
                             ],
@@ -363,9 +489,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         else
                           Text(
                             _selectedAddress,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
-                              color: Colors.black87,
+                              color: isDarkMode 
+                                  ? AppTheme.darkTextPrimary 
+                                  : Colors.black87,
                               fontWeight: FontWeight.w500,
                             ),
                             maxLines: 2,
@@ -377,7 +505,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             '${_selectedLocation!.latitude.toStringAsFixed(6)}, ${_selectedLocation!.longitude.toStringAsFixed(6)}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
+                              color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : Colors.grey.shade600,
                             ),
                           ),
                         ],
@@ -408,26 +538,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
-
-          // Crosshair in center (optional visual guide)
-          Positioned(
-            top: MediaQuery.of(context).size.height / 2 - 200,
-            left: MediaQuery.of(context).size.width / 2 - 1,
-            child: Container(
-              width: 2,
-              height: 40,
-              color: Colors.black26,
-            ),
-          ),
-          Positioned(
-            top: MediaQuery.of(context).size.height / 2 - 180,
-            left: MediaQuery.of(context).size.width / 2 - 20,
-            child: Container(
-              width: 40,
-              height: 2,
-              color: Colors.black26,
             ),
           ),
         ],
