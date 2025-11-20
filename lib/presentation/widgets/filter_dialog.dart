@@ -360,9 +360,7 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                 dropdownSearchDecoration: InputDecoration(
                   hintText: '--select--',
                   hintStyle: TextStyle(
-                    color: isDarkMode 
-                      ? AppTheme.darkTextSecondary 
-                      : Colors.grey,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     fontSize: 14,
                   ),
                   filled: true,
@@ -494,6 +492,15 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                   color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                 ),
               ),
+dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black, // Putih untuk dark mode, hitam untuk light mode
+      fontSize: 14,
+    ),
+  );
+},
             ),
           ),
         ],
@@ -714,6 +721,18 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
                         color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                       ),
                     ),
+dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem != null 
+      ? (selectedItem.name.isNotEmpty ? selectedItem.name : 'ID: ${selectedItem.id}')
+      : '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black, // Putih untuk dark mode, hitam untuk light mode
+      fontSize: 14,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+},
                   ),
           ),
         ],

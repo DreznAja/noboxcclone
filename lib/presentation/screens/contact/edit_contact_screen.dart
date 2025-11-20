@@ -1035,24 +1035,24 @@ Widget _buildSearchableDropdownField<T>({
               letterSpacing: 0.3,
             ),
           ),
-          if (itemCount > 0) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$itemCount',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-            ),
-          ],
+          // if (itemCount > 0) ...[
+          //   const SizedBox(width: 8),
+          //   Container(
+          //     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          //     decoration: BoxDecoration(
+          //       color: AppTheme.primaryColor.withOpacity(0.1),
+          //       borderRadius: BorderRadius.circular(12),
+          //     ),
+          //     child: Text(
+          //       '$itemCount',
+          //       style: const TextStyle(
+          //         fontSize: 11,
+          //         fontWeight: FontWeight.w600,
+          //         color: AppTheme.primaryColor,
+          //       ),
+          //     ),
+          //   ),
+          // ],
         ],
       ),
       const SizedBox(height: 8),

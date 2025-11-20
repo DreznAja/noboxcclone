@@ -87,13 +87,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   final Map<String, int?> _roomAgentCache = {};
 
-  Future<int?> _getAgentForRoom(String roomId) async {
+Future<int?> _getAgentForRoom(String roomId) async {
   // Check cache first
   if (_roomAgentCache.containsKey(roomId)) {
+    print('   💾 Using cached agent for room $roomId: ${_roomAgentCache[roomId]}');
     return _roomAgentCache[roomId];
   }
   
   try {
+    print('   🔍 Fetching agent from DetailRoom for room $roomId...');
+    
     final response = await ApiService.dio.post(
       'Services/Chat/Chatrooms/DetailRoom',
       data: {'EntityId': roomId},
@@ -104,19 +107,33 @@ class ChatNotifier extends StateNotifier<ChatState> {
       
       int? agentId;
       
-      // Try RoomAgents
+      // Source 1: RoomAgents array (most reliable)
       if (data['RoomAgents'] != null && data['RoomAgents'] is List) {
         final agents = data['RoomAgents'] as List;
         if (agents.isNotEmpty) {
           agentId = int.tryParse(agents[0]['UserId']?.toString() ?? '');
+          if (agentId != null) {
+            print('      Found agent in RoomAgents: $agentId');
+          }
         }
       }
       
-      // Try SelectAgents
+      // Source 2: SelectAgents array
       if (agentId == null && data['SelectAgents'] != null && data['SelectAgents'] is List) {
         final agents = data['SelectAgents'] as List;
         if (agents.isNotEmpty) {
           agentId = int.tryParse(agents[0]['UserId']?.toString() ?? '');
+          if (agentId != null) {
+            print('      Found agent in SelectAgents: $agentId');
+          }
+        }
+      }
+      
+      // Source 3: Room.UpBy
+      if (agentId == null && data['Room']?['UpBy'] != null) {
+        agentId = int.tryParse(data['Room']['UpBy'].toString());
+        if (agentId != null) {
+          print('      Found agent in Room.UpBy: $agentId');
         }
       }
       
@@ -125,12 +142,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return agentId;
     }
   } catch (e) {
-    print('Error getting agent for room $roomId: $e');
+    print('   ❌ Error getting agent for room $roomId: $e');
   }
   
   return null;
 }
-
 
   // Create note for active room
   Future<bool> createNote(String content) async {
@@ -694,34 +710,42 @@ if (filters != null && filters.containsKey('TagIdFilter')) {
 }
 
 // IMPORTANT: Client-side filtering for Human Agent
-// Di chat_provider.dart, update filtering Human Agent
+// OPTIMIZED VERSION dengan parallel batch processing
 if (filters != null && filters.containsKey('HumanAgentIdFilter')) {
   final humanAgentIdFilterValue = filters['HumanAgentIdFilter'];
   print('🔍 [CHAT PROVIDER] Applying Human Agent filter: $humanAgentIdFilterValue');
   print('   Total rooms before filter: ${rooms.length}');
   
-  // Show loading indicator
-  state = state.copyWith(isLoading: true);
+  print('📡 Fetching agent data from DetailRoom (batch processing)...');
   
-  try {
-    // Get agent data for all rooms (with caching)
-    final List<Room> matchingRooms = [];
+  // Batch process 10 rooms at a time untuk balance speed vs server load
+  final List<Room> matchingRooms = [];
+  final batchSize = 10;
+  
+  for (int i = 0; i < rooms.length; i += batchSize) {
+    final batch = rooms.skip(i).take(batchSize).toList();
     
-    for (final room in rooms) {
+    // Process batch in parallel
+    final futures = batch.map((room) async {
       final agentId = await _getAgentForRoom(room.id);
       
       if (agentId?.toString() == humanAgentIdFilterValue) {
-        matchingRooms.add(room);
         print('  ✅ Room ${room.name} -> Agent $agentId');
+        return room;
       }
-    }
+      
+      return null;
+    });
     
-    rooms = matchingRooms;
-    print('🔍 [CHAT PROVIDER] After Human Agent filter: ${rooms.length} rooms');
+    final results = await Future.wait(futures);
+    matchingRooms.addAll(results.whereType<Room>());
     
-  } finally {
-    state = state.copyWith(isLoading: false);
+    // Show progress
+    print('   Processed ${i + batch.length}/${rooms.length} rooms...');
   }
+  
+  rooms = matchingRooms;
+  print('🔍 [CHAT PROVIDER] After Human Agent filter: ${rooms.length} rooms\n');
 }
 
 // IMPORTANT: Client-side filtering for Link

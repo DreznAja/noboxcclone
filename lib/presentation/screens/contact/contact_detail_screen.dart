@@ -64,6 +64,12 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+
+    // ✅ TAMBAHKAN delay kecil untuk memastikan data ter-sync
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    // ✅ Load dengan order yang benar
+    await ref.read(contactDetailProvider.notifier).loadAvailableFunnels();
       // Don't auto-refresh rooms to avoid disrupting new conversations
       // Room will be refreshed automatically after first message is sent
       // print('🔄 Contact screen opened - refreshing rooms to get latest data');
@@ -1199,158 +1205,154 @@ body: RefreshIndicator(
     );
   }
 
-  Widget _buildFunnelSection() {
-    final contactState = ref.watch(contactDetailProvider);
-    final chatState = ref.watch(chatProvider);
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
-    
-    // Get funnel info from active room if available
-    String? currentFunnelName = contactState.funnel?.name;
-    String? currentFunnelId = contactState.funnel?.id;
-    
-    // If no funnel from contact detail, check if we have it from the active room
-    if (currentFunnelName == null && chatState.activeRoom != null) {
-      currentFunnelName = chatState.activeRoom!.funnel;
-      currentFunnelId = chatState.activeRoom!.funnelId;
-      print('📋 Using funnel from active room: $currentFunnelName (ID: $currentFunnelId)');
-    }
-    
-    return Container(
-      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 16),
-            child: Row(
-              children: [
-                Text(
-                  'Funnel',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                  ),
+// contact_detail_screen.dart - Perbaikan _buildFunnelSection
+
+Widget _buildFunnelSection() {
+  final contactState = ref.watch(contactDetailProvider);
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  // ✅ PERBAIKAN: Ambil funnel langsung dari state
+  String? currentFunnelName = contactState.funnel?.name;
+  String? currentFunnelId = contactState.funnel?.id;
+  
+  print('📋 [Funnel Section] Current funnel: $currentFunnelName (ID: $currentFunnelId)');
+  
+  return Container(
+    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, top: 16, right: 16, bottom: 16),
+          child: Row(
+            children: [
+              Text(
+                'Funnel',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add, color: Colors.blue, size: 20),
-                  onPressed: _showFunnelDialog,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.add, color: Colors.blue, size: 20),
+                onPressed: _showFunnelDialog,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-            child: contactState.isLoadingFunnels
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                : currentFunnelName != null
-                    ? Container(
-                        key: _funnelKey,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+          child: contactState.isLoadingFunnels
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              : currentFunnelName != null && currentFunnelName.isNotEmpty
+                  ? Container(
+                      key: _funnelKey,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDarkMode 
+                          ? AppTheme.darkBackground.withOpacity(0.5) 
+                          : const Color(0xFFF0F8FF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
                           color: isDarkMode 
-                            ? AppTheme.darkBackground.withOpacity(0.5) 
-                            : const Color(0xFFF0F8FF), // ← UBAH INI
+                            ? Colors.white.withOpacity(0.2) 
+                            : const Color(0xFF007AFF).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              currentFunnelName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: currentFunnelId != null ? () => _removeFunnel(widget.contactId) : null,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.close,
+                                size: 16,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _showFunnelDropdown(),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 16,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GestureDetector(
+                      key: _funnelKey,
+                      onTap: () => _showFunnelDropdown(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? AppTheme.darkBackground : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isDarkMode 
-                              ? Colors.white.withOpacity(0.2) 
-                              : const Color(0xFF007AFF).withOpacity(0.3), // ← UBAH INI JUGA
-                            width: 1,
+                              ? Colors.white.withOpacity(0.1) 
+                              : Colors.grey.shade300
                           ),
                         ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
-                                currentFunnelName!,
+                                'No funnel assigned',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                                  fontWeight: FontWeight.w500,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
                             ),
                             GestureDetector(
-                              onTap: currentFunnelId != null ? () => _removeFunnel(widget.contactId) : null,
+                              onTap: () => _showFunnelDialog(),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
-                                child: Icon(
-                                  Icons.close,
+                                child: const Icon(
+                                  Icons.add,
                                   size: 16,
-                                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () => _showFunnelDropdown(),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(
-                                  Icons.keyboard_arrow_down,
-                                  size: 16,
-                                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                                  color: Colors.blue,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      )
-                    : GestureDetector(
-                        key: _funnelKey,
-                        onTap: () => _showFunnelDropdown(),
-                        child: Container(
-  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-  decoration: BoxDecoration(
-    color: isDarkMode ? AppTheme.darkBackground : Colors.grey.shade50, // ← UBAH INI
-    borderRadius: BorderRadius.circular(8),
-    border: Border.all(
-      color: isDarkMode 
-        ? Colors.white.withOpacity(0.1) 
-        : Colors.grey.shade300 // ← UBAH INI
-    ),
-  ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'No funnel assigned',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () => _showFunnelDialog(),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  child: const Icon(
-                                    Icons.add,
-                                    size: 16,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
-          ),
-        ],
-      ),
-    );
-  }
+                    ),
+        ),
+      ],
+    ),
+  );
+}
 
 // Update bagian _buildMessageTagsSection
 Widget _buildMessageTagsSection(tag_models.TagState tagState) {
@@ -2255,6 +2257,8 @@ void _deleteNote(ContactNote note, String contactId) {
     );
   }
   
+// contact_detail_screen.dart - Perbaikan di bagian _showFunnelDropdown
+
 void _showFunnelDropdown() {
   final contactState = ref.read(contactDetailProvider);
   final isDarkMode = ref.read(themeProvider).isDarkMode;
@@ -2316,11 +2320,24 @@ void _showFunnelDropdown() {
                     onTap: () async {
                       _removeFunnelOverlay();
                       if (_currentRoomId != null) {
+                        // ✅ PERBAIKAN: Assign funnel dulu
                         final success = await ref.read(contactDetailProvider.notifier).assignFunnel(_currentRoomId!, funnel.id);
 
                         if (success) {
-                          await ref.read(chatProvider.notifier).loadRooms();
-                          print('🔄 Reloaded rooms after funnel assignment');
+                          // ✅ PERBAIKAN: Update state langsung dengan funnel yang dipilih
+                          final currentState = ref.read(contactDetailProvider);
+                          ref.read(contactDetailProvider.notifier).state = currentState.copyWith(
+                            funnel: funnel, // ← SET LANGSUNG dengan object funnel yang dipilih
+                          );
+                          
+                          print('✅ Funnel UI updated immediately: ${funnel.name} (${funnel.id})');
+                          
+                          // ✅ Background sync tanpa blocking UI
+                          Future.microtask(() async {
+                            await Future.delayed(const Duration(milliseconds: 300));
+                            await ref.read(chatProvider.notifier).loadRooms();
+                            print('🔄 Rooms reloaded in background');
+                          });
 
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -2334,9 +2351,8 @@ void _showFunnelDropdown() {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Funnel assignment is only available via web dashboard'),
-                                backgroundColor: AppTheme.warningColor,
-                                duration: Duration(seconds: 4),
+                                content: Text('Failed to assign funnel'),
+                                backgroundColor: AppTheme.errorColor,
                               ),
                             );
                           }

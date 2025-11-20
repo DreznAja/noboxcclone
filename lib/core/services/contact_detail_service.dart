@@ -439,46 +439,68 @@ Future<ContactFormResult?> getContactFormResult(String contactId) async {
 }
 
 
-  Future<ContactFunnel?> getContactFunnel(String contactId) async {
-    try {
-      print('Fetching contact funnel for contact ID: $contactId');
-      
-      final requestData = {
-        'EqualityFilter': {'CtId': contactId},
-        'IncludeColumns': ['Id', 'Name', 'Description'],
-        'ColumnSelection': 1,
-        'Take': 1,
-        'Skip': 0,
-      };
+// contact_detail_service.dart - Perbaikan di getContactFunnel
 
-      print('Contact funnel request: $requestData');
+// contact_detail_service.dart - Perbaikan getContactFunnel
 
-      final response = await _dio.post(
-        'Services/Chat/Chatfunnels/List',
-        data: requestData,
-      );
-
-      print('Contact funnel response: ${response.statusCode} - ${response.data}');
-
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        final List<dynamic> entities = response.data['Entities'] ?? [];
-        if (entities.isNotEmpty) {
-          print('Found contact funnel: ${entities.first}');
-          return ContactFunnel.fromJson(entities.first);
-        } else {
-          print('No funnel found for contact ID: $contactId');
-        }
-      } else {
-        print('Contact Funnel API Error: ${response.data}');
-      }
-
-      return null;
-    } catch (e) {
-      print('Error fetching contact funnel: $e');
+Future<ContactFunnel?> getContactFunnel(String contactId) async {
+  try {
+    print('📋 Fetching contact funnel for contact ID: $contactId');
+    
+    // Get Room ID
+    final roomId = await _getRoomIdFromContactId(contactId);
+    
+    if (roomId == null) {
+      print('⚠️ No Room ID found for contact $contactId');
       return null;
     }
+    
+    print('📋 Using Room ID: $roomId');
+    
+    // ✅ PERBAIKAN: Get detail room - sudah ada Fn dan FnId di response!
+    final detailResponse = await _dio.post(
+      'Services/Chat/Chatrooms/DetailRoom',
+      data: {'EntityId': roomId},
+    );
+    
+    if (detailResponse.statusCode == 200 && detailResponse.data['IsError'] != true) {
+      final roomData = detailResponse.data['Data']?['Room'];
+      
+      if (roomData != null) {
+        final funnelId = roomData['FnId']?.toString();
+        final funnelName = roomData['Fn']?.toString(); // ← AMBIL INI!
+        
+        if (funnelId != null && funnelId != '0' && funnelId.isNotEmpty) {
+          print('📋 Found FnId in Room: $funnelId');
+          print('📋 Found Fn (name) in Room: $funnelName');
+          
+          // ✅ PERBAIKAN: Langsung buat ContactFunnel dari data Room
+          // TIDAK PERLU panggil Detail endpoint yang 404!
+          if (funnelName != null && funnelName.isNotEmpty) {
+            print('✅ Creating ContactFunnel from Room data');
+            return ContactFunnel(
+              id: funnelId,
+              name: funnelName,
+              description: null,
+            );
+          }
+          
+          // ❌ HAPUS bagian Detail endpoint - endpoint ini tidak ada!
+          // Detail endpoint causes 404, skip it
+          print('⚠️ Fn field empty in Room, cannot create funnel');
+        } else {
+          print('⚠️ No FnId in Room data');
+        }
+      }
+    }
+    
+    print('⚠️ No funnel found for contact ID: $contactId');
+    return null;
+  } catch (e) {
+    print('❌ Error fetching contact funnel: $e');
+    return null;
   }
-
+}
   Future<List<ContactFunnel>> getAllFunnels() async {
     try {
       print('Fetching all available funnels');
@@ -621,6 +643,9 @@ Future<ContactFormResult?> getContactFormResult(String contactId) async {
         
         if (!hasError) {
           print('✅ [Assign Funnel] Success');
+
+          await Future.delayed(const Duration(milliseconds: 500));
+
           return true;
         } else {
           print('❌ [Assign Funnel] Error: ${response.data['ErrorMsg'] ?? response.data['Error']}');

@@ -103,7 +103,7 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
   }
 
   Future<void> loadContactDetail(String contactId) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(isLoading: true, clearError: true, clearFunnel: true,);
 
     print('Loading contact detail for ID: $contactId');
 
@@ -234,27 +234,62 @@ Future<void> loadRoomHumanAgents(String contactId) async {
     await loadContactNotesFromRoom(contactId);
   }
 
-  Future<void> loadContactFunnel(String contactId) async {
-    if (!mounted) return;
-    state = state.copyWith(isLoadingFunnels: true);
+// contact_detail_provider.dart - Perbaikan di loadContactFunnel
 
-    try {
-      final funnel = await _service.getContactFunnel(contactId);
+// contact_detail_provider.dart - Perbaikan loadContactFunnel
+
+Future<void> loadContactFunnel(String contactId) async {
+  if (!mounted) return;
+  state = state.copyWith(isLoadingFunnels: true);
+
+  try {
+    final funnel = await _service.getContactFunnel(contactId);
+    
+    if (funnel != null) {
+      print('📋 Loaded contact funnel: ${funnel.name} (ID: ${funnel.id})');
+      
+      // ✅ PERBAIKAN: Verifikasi dengan availableFunnels untuk consistency
+      ContactFunnel? verifiedFunnel = funnel;
+      
+      if (state.availableFunnels.isNotEmpty) {
+        final matchedFunnel = state.availableFunnels.firstWhere(
+          (f) => f.id == funnel.id,
+          orElse: () => funnel,
+        );
+        
+        // Gunakan nama dari availableFunnels jika lebih lengkap
+        // Tapi prioritaskan nama dari Room karena itu yang aktif
+        if (matchedFunnel.id == funnel.id) {
+          // ID cocok, gunakan nama dari Room (funnel) karena itu real-time
+          verifiedFunnel = funnel;
+          print('✅ Using funnel name from Room: ${funnel.name}');
+        }
+      }
+      
       if (mounted) {
         state = state.copyWith(
-          funnel: funnel,
+          funnel: verifiedFunnel,
           isLoadingFunnels: false,
         );
       }
-    } catch (e) {
+    } else {
+      print('⚠️ No funnel data returned from service');
       if (mounted) {
         state = state.copyWith(
+          clearFunnel: true, // ← PENTING: Clear funnel jika tidak ada
           isLoadingFunnels: false,
         );
       }
-      print('Failed to load contact funnel: $e');
+    }
+  } catch (e) {
+    print('❌ Error loading contact funnel: $e');
+    if (mounted) {
+      state = state.copyWith(
+        isLoadingFunnels: false,
+      );
     }
   }
+}
 
   Future<void> loadAvailableFunnels() async {
     if (!mounted) return;
@@ -292,30 +327,34 @@ Future<void> loadRoomHumanAgents(String contactId) async {
     }
   }
 
-  Future<bool> assignFunnel(String roomId, String funnelId) async {
-    try {
-      final success = await _service.assignFunnelToContact(roomId, funnelId);
-      if (success) {
-        final assignedFunnel = state.availableFunnels.firstWhere(
-          (f) => f.id == funnelId,
-          orElse: () => ContactFunnel(id: funnelId, name: 'Unknown Funnel'),
-        );
-        
-        if (mounted) {
-          state = state.copyWith(funnel: assignedFunnel);
-          print('✅ Funnel state updated: ${assignedFunnel.name} (${assignedFunnel.id})');
-        }
-        
-        return true;
-      } else {
-        state = state.copyWith(error: 'Failed to assign funnel');
-        return false;
+// contact_detail_provider.dart - Perbaikan di method assignFunnel
+
+Future<bool> assignFunnel(String roomId, String funnelId) async {
+  try {
+    final success = await _service.assignFunnelToContact(roomId, funnelId);
+    if (success) {
+      // ✅ PERBAIKAN: Cari funnel dari availableFunnels dan set langsung
+      final assignedFunnel = state.availableFunnels.firstWhere(
+        (f) => f.id == funnelId,
+        orElse: () => ContactFunnel(id: funnelId, name: ''), // Fallback jika tidak ketemu
+      );
+      
+      if (mounted && assignedFunnel.name.isNotEmpty) {
+        // ✅ Update state dengan funnel object yang lengkap
+        state = state.copyWith(funnel: assignedFunnel);
+        print('✅ Provider: Funnel state updated to: ${assignedFunnel.name} (${assignedFunnel.id})');
       }
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to assign funnel: $e');
+      
+      return true;
+    } else {
+      state = state.copyWith(error: 'Failed to assign funnel');
       return false;
     }
+  } catch (e) {
+    state = state.copyWith(error: 'Failed to assign funnel: $e');
+    return false;
   }
+}
 
   Future<bool> removeFunnel(String roomId) async {
     try {

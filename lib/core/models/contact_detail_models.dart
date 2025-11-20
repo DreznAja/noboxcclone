@@ -299,44 +299,55 @@ class ContactFunnel {
     this.description,
   });
 
-  factory ContactFunnel.fromJson(Map<String, dynamic> json) {
-    print('ContactFunnel JSON: $json');
-    
-    String displayName = '';
-    
-    final nameFields = [
-      'Name', 'name', 'DisplayName', 'Nm', 'Title', 'title', 
-      'FunnelName', 'Label', 'label'
-    ];
-    
-    for (final field in nameFields) {
-      if (json[field] != null && json[field].toString().trim().isNotEmpty) {
-        displayName = json[field].toString().trim();
-        print('Found funnel name in field "$field": $displayName');
-        break;
-      }
+// contact_detail_models.dart - Perbaikan di ContactFunnel.fromJson
+
+factory ContactFunnel.fromJson(Map<String, dynamic> json) {
+  print('ContactFunnel JSON: $json');
+  
+  String displayName = '';
+  
+  // ✅ PERBAIKAN: Coba semua field name yang mungkin
+  final nameFields = [
+    'Nm',           // ← PRIORITASKAN INI DULU (field asli dari Chatfunnels table)
+    'Name',
+    'name', 
+    'DisplayName', 
+    'Title', 
+    'title', 
+    'FunnelName', 
+    'Label', 
+    'label'
+  ];
+  
+  for (final field in nameFields) {
+    if (json[field] != null && json[field].toString().trim().isNotEmpty) {
+      displayName = json[field].toString().trim();
+      print('✅ Found funnel name in field "$field": $displayName');
+      break;
     }
-    
-    if (displayName.isEmpty) {
-      displayName = 'Funnel ID: ${json['Id']?.toString() ?? json['id']?.toString() ?? 'Unknown'}';
-      print('Using fallback name: $displayName');
-    }
-    
-    String? description;
-    final descFields = ['Description', 'description', 'Desc', 'desc'];
-    for (final field in descFields) {
-      if (json[field] != null && json[field].toString().trim().isNotEmpty) {
-        description = json[field].toString().trim();
-        break;
-      }
-    }
-    
-    return ContactFunnel(
-      id: json['Id']?.toString() ?? '',
-      name: displayName,
-      description: description,
-    );
   }
+  
+  // ✅ PERBAIKAN: Jika masih kosong, gunakan ID saja (jangan buat fallback name palsu)
+  if (displayName.isEmpty) {
+    displayName = json['Id']?.toString() ?? json['id']?.toString() ?? '';
+    print('⚠️ No name found for funnel, using ID only: $displayName');
+  }
+  
+  String? description;
+  final descFields = ['Description', 'description', 'Desc', 'desc'];
+  for (final field in descFields) {
+    if (json[field] != null && json[field].toString().trim().isNotEmpty) {
+      description = json[field].toString().trim();
+      break;
+    }
+  }
+  
+  return ContactFunnel(
+    id: json['Id']?.toString() ?? json['id']?.toString() ?? '',
+    name: displayName,
+    description: description,
+  );
+}
 }
 
 class GroupAgent {

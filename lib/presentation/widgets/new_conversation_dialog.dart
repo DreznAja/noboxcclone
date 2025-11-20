@@ -736,6 +736,15 @@ Widget _buildDropdownField(
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
               ),
             ),
+            dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 14,
+    ),
+  );
+},
           ),
         ),
       ],
@@ -919,6 +928,16 @@ Widget _buildChannelDropdown(bool isDarkMode) {
                       color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                     ),
                   ),
+                  dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem?.name ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 14,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+},
                 ),
         ),
       ],
@@ -1111,6 +1130,16 @@ Widget _buildAccountDropdown(bool isDarkMode) {
                       color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                     ),
                   ),
+                  dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem?.name ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 14,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+},
                 ),
         ),
       ],
@@ -1374,6 +1403,16 @@ Widget _buildContactDropdown(bool isDarkMode) {
                       color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                     ),
                   ),
+                  dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem?.name ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 14,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+},
                 ),
         ),
       ],
@@ -1557,6 +1596,16 @@ Widget _buildLinkDropdown(bool isDarkMode) {
                       color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                     ),
                   ),
+                  dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem?.name ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 14,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+},
                 ),
         ),
       ],
@@ -1740,6 +1789,16 @@ Widget _buildGroupDropdown(bool isDarkMode) {
                       color: isDarkMode ? AppTheme.darkTextPrimary : Colors.grey.shade600,
                     ),
                   ),
+                  dropdownBuilder: (context, selectedItem) {
+  return Text(
+    selectedItem?.name ?? '--select--',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 14,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+},
                 ),
         ),
       ],
