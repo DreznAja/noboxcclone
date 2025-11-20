@@ -17,6 +17,8 @@ class ContactDetailState {
   final bool isLoadingNotes;
   final bool isLoadingFunnels;
   final String? error;
+  final List<Map<String, dynamic>> roomTags; // TAMBAH INI
+  final List<Map<String, dynamic>> roomHumanAgents; // TAMBAH INI
 
   ContactDetailState({
     this.contact,
@@ -33,6 +35,8 @@ class ContactDetailState {
     this.isLoadingNotes = false,
     this.isLoadingFunnels = false,
     this.error,
+    this.roomTags = const [], // TAMBAH INI
+    this.roomHumanAgents = const [], // TAMBAH INI
   });
 
   // ✅ COPYWITH YANG BENER - PAKAI CLEAR FLAGS
@@ -40,6 +44,8 @@ class ContactDetailState {
     ContactDetail? contact,
     List<ConversationHistory>? conversationHistory,
     List<ContactNote>? notes,
+    List<Map<String, dynamic>>? roomTags, // TAMBAH INI
+    List<Map<String, dynamic>>? roomHumanAgents, // TAMBAH INI
     ContactCampaign? campaign,
     ContactDeal? deal,
     ContactFormTemplate? formTemplate,
@@ -75,6 +81,8 @@ class ContactDetailState {
       isLoadingNotes: isLoadingNotes ?? this.isLoadingNotes,
       isLoadingFunnels: isLoadingFunnels ?? this.isLoadingFunnels,
       error: clearError ? null : (error ?? this.error),
+      roomTags: roomTags ?? this.roomTags, // TAMBAH INI
+      roomHumanAgents: roomHumanAgents ?? this.roomHumanAgents, // TAMBAH INI
     );
   }
 }
@@ -119,6 +127,8 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
             loadContactDeal(contactId),
             loadContactFormTemplate(contactId),
             loadContactFormResult(contactId),
+            loadRoomTags(contactId), // TAMBAH INI
+            loadRoomHumanAgents(contactId), // TAMBAH INI
           ]);
         } catch (additionalDataError) {
           print('Some additional data failed to load: $additionalDataError');
@@ -136,6 +146,35 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
       );
     }
   }
+
+  // Tambahkan method baru
+Future<void> loadRoomTags(String contactId) async {
+  if (!mounted) return;
+  
+  try {
+    final tags = await _service.getRoomTags(contactId);
+    if (mounted) {
+      state = state.copyWith(roomTags: tags);
+      print('✅ Loaded ${tags.length} room tags');
+    }
+  } catch (e) {
+    print('Failed to load room tags: $e');
+  }
+}
+
+Future<void> loadRoomHumanAgents(String contactId) async {
+  if (!mounted) return;
+  
+  try {
+    final agents = await _service.getRoomHumanAgents(contactId);
+    if (mounted) {
+      state = state.copyWith(roomHumanAgents: agents);
+      print('✅ Loaded ${agents.length} room human agents');
+    }
+  } catch (e) {
+    print('Failed to load room human agents: $e');
+  }
+}
 
   Future<void> loadConversationHistory(String contactId) async {
     if (!mounted) return;

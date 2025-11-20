@@ -28,6 +28,8 @@ class Room {
   final List<String> tagIds;
   final bool needReply;
   final int? lastUpdatedBy; // Agent ID who last updated the room (UpBy field)
+  final int? assignedAgentId; // TAMBAH INI - untuk agent yang di-assign
+  final String? assignedAgentName; // TAMBAH INI - nama agent
 
   Room({
     required this.id,
@@ -56,6 +58,8 @@ class Room {
     this.tagIds = const [],
     this.needReply = false,
     this.lastUpdatedBy,
+    this.assignedAgentId, // TAMBAH INI
+    this.assignedAgentName, // TAMBAH INI
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -74,6 +78,13 @@ class Room {
     
     final botName = json['BotNm'] ?? json['BotName'];
     final contactName = json['CtRealNm'] ?? json['Ct'] ?? json['Grp'];
+
+    print('🔍 [Room.fromJson] Parsing Human Agent fields:');
+    print('   UpBy: ${json['UpBy']}');
+    print('   AgentId: ${json['AgentId']}');
+    print('   AssignedTo: ${json['AssignedTo']}');
+    print('   HandledBy: ${json['HandledBy']}');
+    print('   CurrentAgent: ${json['CurrentAgent']}');
     
     return Room(
       id: json['Id']?.toString() ?? '',
@@ -107,6 +118,10 @@ class Room {
       tagIds: (json['TagsIds'] as String?)?.split(',').where((t) => t.trim().isNotEmpty).toList() ?? [],
       needReply: json['NeedReply'] == 1 || json['NeedReply'] == true || json['IsNeedReply'] == 1 || json['IsNeedReply'] == true,
       lastUpdatedBy: json['UpBy'] != null ? int.tryParse(json['UpBy'].toString()) : null,
+       assignedAgentId: json['AgentId'] != null ? int.tryParse(json['AgentId'].toString()) : 
+                       json['AssignedTo'] != null ? int.tryParse(json['AssignedTo'].toString()) :
+                       json['HandledBy'] != null ? int.tryParse(json['HandledBy'].toString()) : null,
+      assignedAgentName: json['AgentName']?.toString() ?? json['AssignedAgentName']?.toString(),
     );
   }
 

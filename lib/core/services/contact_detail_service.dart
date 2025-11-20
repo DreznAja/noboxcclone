@@ -70,6 +70,68 @@ class ContactDetailService {
   }
 }
 
+// Tambahkan method ini di ContactDetailService class
+
+Future<List<Map<String, dynamic>>> getRoomTags(String roomId) async {
+  try {
+    print('🏷️ [Get Room Tags] Loading tags for room: $roomId');
+    
+    final data = await getContactDetailWithRelations(roomId);
+    
+    if (data != null && data['Tags'] != null) {
+      // Tags bisa berupa List atau String comma-separated
+      if (data['Tags'] is List) {
+        final List<dynamic> tagsData = data['Tags'] as List;
+        print('✅ Found ${tagsData.length} tags');
+        return tagsData.map((tag) => tag as Map<String, dynamic>).toList();
+      } else if (data['Tags'] is String) {
+        // Parse comma-separated tag IDs
+        final tagIdsStr = data['Tags'] as String;
+        if (tagIdsStr.isNotEmpty) {
+          final tagIds = tagIdsStr.split(',').where((id) => id.trim().isNotEmpty).toList();
+          print('✅ Found ${tagIds.length} tag IDs from string');
+          
+          // Return as list of maps with Id
+          return tagIds.map((id) => {'Id': id.trim()}).toList();
+        }
+      }
+    }
+    
+    print('⚠️ No tags data available');
+    return [];
+  } catch (e) {
+    print('❌ Error fetching room tags: $e');
+    return [];
+  }
+}
+
+Future<List<Map<String, dynamic>>> getRoomHumanAgents(String roomId) async {
+  try {
+    print('👥 [Get Room Agents] Loading agents for room: $roomId');
+    
+    final data = await getContactDetailWithRelations(roomId);
+    
+    if (data != null) {
+      // Cek RoomAgents atau SelectAgents
+      if (data['RoomAgents'] != null && data['RoomAgents'] is List) {
+        final List<dynamic> agentsData = data['RoomAgents'] as List;
+        print('✅ Found ${agentsData.length} RoomAgents');
+        return agentsData.map((agent) => agent as Map<String, dynamic>).toList();
+      } else if (data['SelectAgents'] != null && data['SelectAgents'] is List) {
+        final List<dynamic> agentsData = data['SelectAgents'] as List;
+        print('✅ Found ${agentsData.length} SelectAgents');
+        return agentsData.map((agent) => agent as Map<String, dynamic>).toList();
+      }
+    }
+    
+    print('⚠️ No agents data available');
+    return [];
+  } catch (e) {
+    print('❌ Error fetching room agents: $e');
+    return [];
+  }
+}
+
 Future<Map<String, dynamic>?> getContactDetailWithRelations(String contactId) async {
   try {
     print('📋 Fetching contact detail with relations for Contact ID: $contactId');

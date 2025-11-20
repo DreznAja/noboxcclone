@@ -85,6 +85,53 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   }
 
+  final Map<String, int?> _roomAgentCache = {};
+
+  Future<int?> _getAgentForRoom(String roomId) async {
+  // Check cache first
+  if (_roomAgentCache.containsKey(roomId)) {
+    return _roomAgentCache[roomId];
+  }
+  
+  try {
+    final response = await ApiService.dio.post(
+      'Services/Chat/Chatrooms/DetailRoom',
+      data: {'EntityId': roomId},
+    );
+
+    if (response.statusCode == 200 && response.data['IsError'] != true) {
+      final data = response.data['Data'];
+      
+      int? agentId;
+      
+      // Try RoomAgents
+      if (data['RoomAgents'] != null && data['RoomAgents'] is List) {
+        final agents = data['RoomAgents'] as List;
+        if (agents.isNotEmpty) {
+          agentId = int.tryParse(agents[0]['UserId']?.toString() ?? '');
+        }
+      }
+      
+      // Try SelectAgents
+      if (agentId == null && data['SelectAgents'] != null && data['SelectAgents'] is List) {
+        final agents = data['SelectAgents'] as List;
+        if (agents.isNotEmpty) {
+          agentId = int.tryParse(agents[0]['UserId']?.toString() ?? '');
+        }
+      }
+      
+      // Cache the result
+      _roomAgentCache[roomId] = agentId;
+      return agentId;
+    }
+  } catch (e) {
+    print('Error getting agent for room $roomId: $e');
+  }
+  
+  return null;
+}
+
+
   // Create note for active room
   Future<bool> createNote(String content) async {
     final activeRoom = state.activeRoom;
@@ -313,6 +360,8 @@ Future<bool> toggleBlockContact(String roomId, bool shouldBlock) async {
       activeRoom: updatedActiveRoom,
     );
   }
+
+  
   
   try {
     final room = state.rooms.firstWhere((r) => r.id == roomId);
@@ -365,6 +414,8 @@ Future<bool> toggleBlockContact(String roomId, bool shouldBlock) async {
       }
       return false;
     }
+
+    
     
   } catch (e) {
     print('❌ [Block Contact] Exception: $e');
@@ -429,6 +480,8 @@ void _handleBlockUnblockUpdate(Map<String, dynamic> data) {
     );
     
     print('✅ Block status updated for room $roomId');
+
+    
   }
 }
 
@@ -462,6 +515,7 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
   final preserveActiveRoom = state.activeRoom;
   final preserveMessages = state.messages;
   final preserveHasMore = state.hasMoreMessages;
+  _roomAgentCache.clear();
   
   // IMPORTANT: Preserve newly created rooms that might not be in API yet
   // These are rooms with status=1, no lastMessage, and recent lastMessageTime (< 10 seconds old)
@@ -482,6 +536,8 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       print('   - ${room.id}: ${room.name} (age: ${now.difference(room.lastMessageTime!).inSeconds}s)');
     }
   }
+
+  
   
   // Always show loading state (for shimmer effect)
   // Reset pagination untuk initial load
@@ -506,6 +562,8 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     } else {
       finalFilters = {};
     }
+
+    
     
     print('🔍 [CHAT PROVIDER] Step 2: Processing status filter...');
     if (!finalFilters.containsKey('St')) {
@@ -530,6 +588,7 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
     final funnelIdFilter = finalFilters.remove('FunnelIdFilter');
     final tagIdFilter = finalFilters.remove('TagIdFilter');
     final humanAgentIdFilter = finalFilters.remove('HumanAgentIdFilter');
+    final linkIdFilter = finalFilters.remove('LinkIdFilter'); // TAMBAHKAN INI
     // Note: AccountFilter was removed, now using AccId which goes to backend
     if (chatTypeFilter != null) {
       print('🔍 [CHAT PROVIDER] Removed ChatTypeFilter (client-side only): $chatTypeFilter');
@@ -606,56 +665,88 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       rooms = rooms.where((room) => room.funnelId?.toString() == funnelIdFilterValue).toList();
       print('🔍 [CHAT PROVIDER] After Funnel filter: ${rooms.length} rooms');
     }
+
     
-    // IMPORTANT: Client-side filtering for Tag
-    // Backend TagId filter causes error 500
-    if (filters != null && filters.containsKey('TagIdFilter')) {
-      final tagIdFilterValue = filters['TagIdFilter'];
-      print('🔍 [CHAT PROVIDER] Applying client-side Tag filter (tagId = $tagIdFilterValue)');
-      print('🔍 [CHAT PROVIDER] Total rooms before filter: ${rooms.length}');
+
+// IMPORTANT: Client-side filtering for Tag
+if (filters != null && filters.containsKey('TagIdFilter')) {
+  final tagIdFilterValue = filters['TagIdFilter'];
+  print('🔍 [CHAT PROVIDER] Applying client-side Tag filter (tagId = $tagIdFilterValue)');
+  print('🔍 [CHAT PROVIDER] Total rooms before filter: ${rooms.length}');
+  
+  rooms = rooms.where((room) {
+    // Check tagIds list (format: List<String>)
+    final hasTagInList = room.tagIds.contains(tagIdFilterValue.toString());
+    
+    // Also check messageTags array
+    final hasTagInMessageTags = room.messageTags.any((tag) => tag.id == tagIdFilterValue.toString());
+    
+    final hasTag = hasTagInList || hasTagInMessageTags;
+    
+    if (hasTag) {
+      print('  ✅ Room ${room.name} has tag $tagIdFilterValue');
+      print('     - tagIds: ${room.tagIds}');
+      print('     - messageTags: ${room.messageTags.map((t) => '${t.id}:${t.name}').join(', ')}');
+    }
+    return hasTag;
+  }).toList();
+  print('🔍 [CHAT PROVIDER] After Tag filter: ${rooms.length} rooms');
+}
+
+// IMPORTANT: Client-side filtering for Human Agent
+// Di chat_provider.dart, update filtering Human Agent
+if (filters != null && filters.containsKey('HumanAgentIdFilter')) {
+  final humanAgentIdFilterValue = filters['HumanAgentIdFilter'];
+  print('🔍 [CHAT PROVIDER] Applying Human Agent filter: $humanAgentIdFilterValue');
+  print('   Total rooms before filter: ${rooms.length}');
+  
+  // Show loading indicator
+  state = state.copyWith(isLoading: true);
+  
+  try {
+    // Get agent data for all rooms (with caching)
+    final List<Room> matchingRooms = [];
+    
+    for (final room in rooms) {
+      final agentId = await _getAgentForRoom(room.id);
       
-      // Debug: Print all rooms with their tagIds
-      for (final room in rooms) {
-        print('  📊 Room: ${room.name}');
-        print('    - tagIds: ${room.tagIds}');
-        print('    - tags: ${room.tags}');
-        print('    - messageTags: ${room.messageTags.map((t) => '${t.id}:${t.name}').join(', ')}');
+      if (agentId?.toString() == humanAgentIdFilterValue) {
+        matchingRooms.add(room);
+        print('  ✅ Room ${room.name} -> Agent $agentId');
       }
-      
-      rooms = rooms.where((room) {
-        // Check if room has this tag in tagIds list (tagIds is List<String>)
-        final hasTag = room.tagIds.contains(tagIdFilterValue.toString());
-        if (hasTag) {
-          print('  ✅ Room ${room.name} has tag $tagIdFilterValue (tagIds: ${room.tagIds})');
-        }
-        return hasTag;
-      }).toList();
-      print('🔍 [CHAT PROVIDER] After Tag filter: ${rooms.length} rooms');
     }
     
-    // IMPORTANT: Client-side filtering for Human Agent
-    // Backend AgentId filter causes error 500
-    // We filter by lastUpdatedBy field which indicates which agent last handled the room
-    if (filters != null && filters.containsKey('HumanAgentIdFilter')) {
-      final humanAgentIdFilterValue = filters['HumanAgentIdFilter'];
-      print('🔍 [CHAT PROVIDER] Applying client-side Human Agent filter (agentId = $humanAgentIdFilterValue)');
-      print('🔍 [CHAT PROVIDER] Total rooms before filter: ${rooms.length}');
-      
-      // Debug: Print all rooms with their lastUpdatedBy values
-      for (final room in rooms) {
-        print('  👤 Room: ${room.name}, lastUpdatedBy: ${room.lastUpdatedBy}');
-      }
-      
-      rooms = rooms.where((room) {
-        // Filter by lastUpdatedBy (agent who last handled the conversation)
-        final matches = room.lastUpdatedBy?.toString() == humanAgentIdFilterValue;
-        if (matches) {
-          print('  ✅ Room ${room.name} handled by agent $humanAgentIdFilterValue (lastUpdatedBy: ${room.lastUpdatedBy})');
-        }
-        return matches;
-      }).toList();
-      print('🔍 [CHAT PROVIDER] After Human Agent filter: ${rooms.length} rooms');
+    rooms = matchingRooms;
+    print('🔍 [CHAT PROVIDER] After Human Agent filter: ${rooms.length} rooms');
+    
+  } finally {
+    state = state.copyWith(isLoading: false);
+  }
+}
+
+// IMPORTANT: Client-side filtering for Link
+if (filters != null && filters.containsKey('LinkIdFilter')) {
+  final linkIdFilterValue = filters['LinkIdFilter'];
+  print('🔍 [CHAT PROVIDER] Applying client-side Link filter (linkId = $linkIdFilterValue)');
+  print('🔍 [CHAT PROVIDER] Total rooms before filter: ${rooms.length}');
+  
+  // Debug: Print all rooms with their ctId values
+  for (final room in rooms) {
+    print('  🔗 Room: ${room.name}');
+    print('    - ctId: ${room.ctId}');
+    print('    - ctRealId: ${room.ctRealId}');
+  }
+  
+  rooms = rooms.where((room) {
+    // Match by ctId (Link ID)
+    final matches = room.ctId?.toString() == linkIdFilterValue;
+    if (matches) {
+      print('  ✅ Room ${room.name} has link $linkIdFilterValue (ctId: ${room.ctId})');
     }
+    return matches;
+  }).toList();
+  print('🔍 [CHAT PROVIDER] After Link filter: ${rooms.length} rooms');
+}
     // Account filter now uses AccId sent to backend, no client-side filtering needed
     
     final nonArchivedRooms = rooms.where((room) => room.status != 4).toList();
@@ -720,6 +811,8 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
         print('✅ [Load Rooms] Newly created room ${newRoom.id} already in API response');
       }
     }
+
+    
     
     // Sort final rooms
     finalRooms.sort((a, b) {
@@ -800,6 +893,7 @@ Future<void> loadRooms({String? search, Map<String, dynamic>? filters}) async {
       finalFilters.remove('FunnelIdFilter');
       finalFilters.remove('TagIdFilter');
       finalFilters.remove('HumanAgentIdFilter');
+      
       // Note: AccountFilter was removed, now using AccId which goes to backend
       
       final response = await ApiService.getRoomList(

@@ -228,35 +228,38 @@ Widget _buildShimmer({required Widget child}) {
 }
 
 
-  Future<void> _loadRoomTagsForContact() async {
-    try {
-      // Try to find the room ID for this contact from the chat provider
-      final chatState = ref.read(chatProvider);
-
-      // Look for a room that matches this contact
-      Room? matchingRoom;
-      for (final room in chatState.rooms) {
-        if (room.ctId == widget.contactId ||
-            room.ctRealId == widget.contactId ||
-            room.id == widget.contactId) {
-          matchingRoom = room;
-          break;
-        }
+// Update _loadRoomTagsForContact method
+Future<void> _loadRoomTagsForContact() async {
+  try {
+    final chatState = ref.read(chatProvider);
+    Room? matchingRoom;
+    
+    for (final room in chatState.rooms) {
+      if (room.ctId == widget.contactId ||
+          room.ctRealId == widget.contactId ||
+          room.id == widget.contactId) {
+        matchingRoom = room;
+        break;
       }
-
-      if (matchingRoom != null) {
-        print('🏷️ Found matching room for contact: ${matchingRoom.id}');
-        _currentRoomId = matchingRoom.id;
-        await ref.read(tagProvider.notifier).loadRoomTags(matchingRoom.id);
-      } else {
-        print('🏷️ No matching room found for contact, trying with contact ID: ${widget.contactId}');
-        _currentRoomId = widget.contactId;
-        await ref.read(tagProvider.notifier).loadRoomTags(widget.contactId);
-      }
-    } catch (e) {
-      print('❌ Error loading room tags for contact: $e');
     }
+
+    if (matchingRoom != null) {
+      print('🏷️ Found matching room for contact: ${matchingRoom.id}');
+      print('🏷️ Room tagIds: ${matchingRoom.tagIds}');
+      print('🏷️ Room messageTags: ${matchingRoom.messageTags.map((t) => '${t.id}:${t.name}').join(', ')}');
+      
+      _currentRoomId = matchingRoom.id;
+      await ref.read(tagProvider.notifier).loadRoomTags(matchingRoom.id);
+      
+      // Load tags dari contact detail provider juga
+      await ref.read(contactDetailProvider.notifier).loadRoomTags(widget.contactId);
+    } else {
+      print('🏷️ No matching room found for contact: ${widget.contactId}');
+    }
+  } catch (e) {
+    print('❌ Error loading room tags: $e');
   }
+}
 
   void _loadNeedReplyStatus() {
     try {

@@ -301,32 +301,41 @@ class FilterApiService {
     }
   }
 
-  Future<List<DealItem>> getDeals() async {
-    try {
-      final requestData = {
-        'IncludeColumns': ['Id', 'Name', 'DisplayName'],
-        'ColumnSelection': 1,
-        'Take': 100,
-        'Skip': 0,
-      };
+Future<List<DealItem>> getDeals() async {
+  try {
+    final requestData = {
+      'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm'],
+      'ColumnSelection': 1,
+      'Take': 100,
+      'Skip': 0,
+    };
 
-      final response = await _dio.post(
-        'Services/Nobox/Deals/List',
-        data: requestData,
-      );
+    final response = await _dio.post(
+      'Services/Nobox/Deals/List',
+      data: requestData,
+    );
 
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
-        final List<dynamic> entities = response.data['Entities'] ?? [];
-        return entities.map((item) => DealItem.fromJson(item)).toList();
+    if (response.statusCode == 200 && response.data['IsError'] != true) {
+      final List<dynamic> entities = response.data['Entities'] ?? [];
+      
+      // DEBUG: Print raw response untuk melihat structure data
+      if (entities.isNotEmpty) {
+        print('=== DEAL API RESPONSE DEBUG ===');
+        print('First deal item: ${entities.first}');
+        print('Available fields: ${entities.first.keys.toList()}');
+        print('================================');
       }
       
-      print('Deal API Error: ${response.data}');
-      return [];
-    } catch (e) {
-      print('Error fetching deals: $e');
-      return [];
+      return entities.map((item) => DealItem.fromJson(item)).toList();
     }
+    
+    print('Deal API Error: ${response.data}');
+    return [];
+  } catch (e) {
+    print('Error fetching deals: $e');
+    return [];
   }
+}
 
   Future<List<HumanAgentItem>> getHumanAgents() async {
     try {

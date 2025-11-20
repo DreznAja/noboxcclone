@@ -173,7 +173,8 @@ onError: (error, handler) async {
         'IncludeColumns': [
           'Id', 'CtId', 'CtRealId', 'GrpId', 'CtRealNm', 'Ct', 'Grp',
           'LastMsg', 'TimeMsg', 'Uc', 'St', 'ChId', 'ChAcc', 'AccNm', 'BotNm', 'CtImg', 'LinkImg',
-          'IsGrp', 'IsPin', 'CtIsBlock', 'IsMuteBot', 'IsNeedReply', 'Tags', 'Fn', 'FnId', 'FnNm', 'FunnelId', 'TagsIds'
+          'IsGrp', 'IsPin', 'CtIsBlock', 'IsMuteBot', 'IsNeedReply', 'Tags', 'Fn', 'FnId', 'FnNm', 'FunnelId', 'TagsIds',
+          'UpBy', 'AgentId', 'AssignedTo', 'HandledBy', 'AgentName', 'AssignedAgentName',
         ],
         'ColumnSelection': 1,
       };
@@ -1186,6 +1187,70 @@ onError: (error, handler) async {
       );
     }
   }
+
+  // Tambahkan di class ApiService
+
+// Get agent info for multiple rooms efficiently
+static Future<Map<String, int?>> getAgentsForRooms(List<String> roomIds) async {
+  final Map<String, int?> agentMap = {};
+  
+  // Process in batches of 5 to avoid overwhelming the server
+  for (int i = 0; i < roomIds.length; i += 5) {
+    final batch = roomIds.skip(i).take(5).toList();
+    
+    final futures = batch.map((roomId) async {
+      try {
+        final response = await dio.post(
+          'Services/Chat/Chatrooms/DetailRoom',
+          data: {'EntityId': roomId},
+        );
+
+        if (response.statusCode == 200 && response.data['IsError'] != true) {
+          final data = response.data['Data'];
+          
+          // Try multiple sources to find agent ID
+          int? agentId;
+          
+          // Source 1: RoomAgents array
+          if (data['RoomAgents'] != null && data['RoomAgents'] is List) {
+            final agents = data['RoomAgents'] as List;
+            if (agents.isNotEmpty) {
+              agentId = int.tryParse(agents[0]['UserId']?.toString() ?? '');
+            }
+          }
+          
+          // Source 2: SelectAgents array
+          if (agentId == null && data['SelectAgents'] != null && data['SelectAgents'] is List) {
+            final agents = data['SelectAgents'] as List;
+            if (agents.isNotEmpty) {
+              agentId = int.tryParse(agents[0]['UserId']?.toString() ?? '');
+            }
+          }
+          
+          // Source 3: Room object fields
+          if (agentId == null && data['Room'] != null) {
+            final room = data['Room'];
+            agentId = int.tryParse(room['AgentId']?.toString() ?? 
+                                  room['AssignedTo']?.toString() ?? 
+                                  room['UpBy']?.toString() ?? '');
+          }
+          
+          return MapEntry(roomId, agentId);
+        }
+      } catch (e) {
+        print('Error getting agent for room $roomId: $e');
+      }
+      return MapEntry(roomId, null);
+    });
+    
+    final results = await Future.wait(futures);
+    for (final entry in results) {
+      agentMap[entry.key] = entry.value;
+    }
+  }
+  
+  return agentMap;
+}
 
   // Get Conversation History for a contact
   static Future<ApiResponse<List<Room>>> getConversationHistory(String contactId) async {

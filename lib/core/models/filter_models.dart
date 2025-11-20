@@ -133,7 +133,10 @@ class FilterOptions {
       // Alternative if CtRealId doesn't work:
       // filters['CtId'] = [int.parse(contactId!)];
     }
-    if (linkId != null) filters['LinkId'] = [int.parse(linkId!)];
+    if (linkId != null) {
+  filters['LinkIdFilter'] = linkId;
+  print('📝 [FilterOptions] Link filter: $linkId (will filter client-side)');
+}
     if (groupId != null) filters['GrpId'] = [int.parse(groupId!)];
     if (campaignId != null) filters['CampaignId'] = [int.parse(campaignId!)];
     
@@ -280,9 +283,19 @@ class DealItem extends FilterDataItem {
   DealItem({required super.id, required super.name});
 
   factory DealItem.fromJson(Map<String, dynamic> json) {
+    // Debug print untuk melihat data yang diterima
+    print('DealItem.fromJson: $json');
+    
     return DealItem(
       id: json['Id']?.toString() ?? '',
-      name: json['Name']?.toString() ?? json['DisplayName']?.toString() ?? '',
+      // Coba berbagai kemungkinan field name untuk deal
+      name: json['Name']?.toString() ?? 
+            json['DisplayName']?.toString() ?? 
+            json['Title']?.toString() ?? 
+            json['Nm']?.toString() ?? 
+            json['DealName']?.toString() ?? 
+            json['Label']?.toString() ?? 
+            'Deal ${json['Id']}', // Fallback dengan ID
     );
   }
 }
