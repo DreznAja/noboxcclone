@@ -1593,7 +1593,7 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
     );
   }
 
-  Widget _buildCampaignSection(ContactCampaign? campaign) {
+Widget _buildCampaignSection(ContactCampaign? campaign) {
   final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
   return Container(
@@ -1602,7 +1602,7 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header dengan tombol open
+        // Header dengan tombol edit yang SELALU muncul
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1614,14 +1614,14 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
-            if (campaign != null)
-              IconButton(
-                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
-                onPressed: () => _viewCampaign(campaign),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'View campaign',
-              ),
+            // ✅ Icon edit SELALU tampil
+            IconButton(
+              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+              onPressed: () => _showCampaignDialog(),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Edit campaign',
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1689,7 +1689,7 @@ Widget _buildTagChip(tag_models.MessageTag tag) {
             'Not Set',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.red.shade400,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -1720,7 +1720,7 @@ String _getCampaignStatusText(int status) {
   }
 }
 
- Widget _buildDealSection(ContactDeal? deal) {
+Widget _buildDealSection(ContactDeal? deal) {
   final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
   return Container(
@@ -1729,7 +1729,7 @@ String _getCampaignStatusText(int status) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header dengan tombol open
+        // Header dengan tombol edit yang SELALU muncul
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1741,14 +1741,14 @@ String _getCampaignStatusText(int status) {
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
-            if (deal != null)
-              IconButton(
-                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
-                onPressed: () => _viewDeal(deal),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'View deal',
-              ),
+            // ✅ Icon edit SELALU tampil
+            IconButton(
+              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+              onPressed: () => _showDealDialog(),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Edit deal',
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1843,7 +1843,7 @@ String _getCampaignStatusText(int status) {
             'Not Set',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.red.shade400,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -1853,7 +1853,7 @@ String _getCampaignStatusText(int status) {
   );
 }
 
-// 🎨 FIXED: Form Template Section - Mirip Web
+// 🔧 PERBAIKAN: Form Template Section - Icon Edit Selalu Muncul
 Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
   final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
@@ -1863,7 +1863,7 @@ Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header dengan tombol open
+        // Header dengan tombol edit yang SELALU muncul
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1875,14 +1875,14 @@ Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
-            if (formTemplate != null)
-              IconButton(
-                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
-                onPressed: () => _viewFormTemplate(formTemplate),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'View form template',
-              ),
+            // ✅ Icon edit SELALU tampil
+            IconButton(
+              icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+              onPressed: () => _showFormTemplateDialog(),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Edit form template',
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1902,7 +1902,7 @@ Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
             'Not Set',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.red.shade400,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -1912,7 +1912,7 @@ Widget _buildFormTemplateSection(ContactFormTemplate? formTemplate) {
   );
 }
 
-// 🎨 FIXED: Form Result Section - Mirip Web
+// 🔧 PERBAIKAN: Form Result Section - Icon Edit Selalu Muncul
 Widget _buildFormResultSection(ContactFormResult? formResult) {
   final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
@@ -1922,7 +1922,7 @@ Widget _buildFormResultSection(ContactFormResult? formResult) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header dengan tombol open
+        // Header dengan tombol edit yang SELALU muncul
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1934,14 +1934,23 @@ Widget _buildFormResultSection(ContactFormResult? formResult) {
                 color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
               ),
             ),
-            if (formResult != null)
-              IconButton(
-                icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
-                onPressed: () => _viewFormResult(formResult),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                tooltip: 'View form result',
-              ),
+            // ✅ Icon edit SELALU tampil (bisa diganti dengan view atau edit sesuai kebutuhan)
+            // IconButton(
+            //   icon: const Icon(Icons.open_in_new, color: Colors.blue, size: 20),
+            //   onPressed: formResult != null 
+            //       ? () => _viewFormResult(formResult)
+            //       : () {
+            //           ScaffoldMessenger.of(context).showSnackBar(
+            //             const SnackBar(
+            //               content: Text('No form result to view'),
+            //               backgroundColor: AppTheme.warningColor,
+            //             ),
+            //           );
+            //         },
+            //   padding: EdgeInsets.zero,
+            //   constraints: const BoxConstraints(),
+            //   tooltip: formResult != null ? 'View form result' : 'No result available',
+            // ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1977,7 +1986,7 @@ Widget _buildFormResultSection(ContactFormResult? formResult) {
             'Not Set',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.red.shade400,
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
               fontStyle: FontStyle.italic,
             ),
           ),

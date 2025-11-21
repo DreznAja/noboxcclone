@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/api_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/providers/theme_provider.dart';
 
-class FormTemplateSelectionDialog extends StatefulWidget {
+class FormTemplateSelectionDialog extends ConsumerStatefulWidget {
   final String contactId;
   final Function(String formTemplateId, String formTemplateName, String? formResultId) onFormSelected;
 
@@ -13,10 +15,10 @@ class FormTemplateSelectionDialog extends StatefulWidget {
   });
 
   @override
-  State<FormTemplateSelectionDialog> createState() => _FormTemplateSelectionDialogState();
+  ConsumerState<FormTemplateSelectionDialog> createState() => _FormTemplateSelectionDialogState();
 }
 
-class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialog> {
+class _FormTemplateSelectionDialogState extends ConsumerState<FormTemplateSelectionDialog> {
   final ApiService _apiService = ApiService();
   
   List<Map<String, dynamic>> _formTemplates = [];
@@ -82,7 +84,10 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
     return Dialog(
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
@@ -97,7 +102,9 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
+                    color: isDarkMode 
+                      ? const Color(0xFF1976D2).withOpacity(0.2)
+                      : const Color(0xFFE3F2FD),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -107,16 +114,20 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
-                  'Select Form Template',
+                Text(
+                  'Form Template',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
+                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                   ),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(
+                    Icons.close,
+                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -133,32 +144,51 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Form Template Dropdown
-                    const Text(
+                    Text(
                       'Form Template',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: Colors.black,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                        border: Border.all(
+                          color: isDarkMode 
+                            ? Colors.white.withOpacity(0.2)
+                            : Colors.grey.shade300,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: _isLoadingTemplates
                           ? const Padding(
                               padding: EdgeInsets.all(12.0),
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
                             )
                           : DropdownButton<String>(
                               value: _selectedFormTemplateId,
-                              hint: const Text('--select--'),
+                              hint: Text(
+                                '--select--',
+                                style: TextStyle(
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : Colors.grey,
+                                ),
+                              ),
                               isExpanded: true,
                               underline: const SizedBox(),
+                              dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                              style: TextStyle(
+                                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                              ),
                               items: _formTemplates.map((template) {
                                 return DropdownMenuItem<String>(
                                   value: template['Id']?.toString(),
@@ -176,20 +206,24 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                     const SizedBox(height: 16),
 
                     // Form Result Dropdown
-                    const Text(
+                    Text(
                       'Form Result',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: Colors.black,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                        border: Border.all(
+                          color: isDarkMode 
+                            ? Colors.white.withOpacity(0.2)
+                            : Colors.grey.shade300,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -198,13 +232,28 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                             child: _isLoadingResults
                                 ? const Padding(
                                     padding: EdgeInsets.all(12.0),
-                                    child: Center(child: CircularProgressIndicator()),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                    ),
                                   )
                                 : DropdownButton<String>(
                                     value: _selectedFormResultId,
-                                    hint: const Text('--select--'),
+                                    hint: Text(
+                                      '--select--',
+                                      style: TextStyle(
+                                        color: isDarkMode 
+                                          ? AppTheme.darkTextSecondary 
+                                          : Colors.grey,
+                                      ),
+                                    ),
                                     isExpanded: true,
                                     underline: const SizedBox(),
+                                    dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                                    style: TextStyle(
+                                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                                    ),
                                     items: _formResults.map((result) {
                                       return DropdownMenuItem<String>(
                                         value: result['Id']?.toString(),
@@ -227,6 +276,7 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                               label: const Text('Load'),
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
+                                foregroundColor: AppTheme.primaryColor,
                               ),
                             ),
                         ],
@@ -238,18 +288,30 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                          color: isDarkMode 
+                            ? Colors.red.shade900.withOpacity(0.3)
+                            : Colors.red.shade50,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade200),
+                          border: Border.all(
+                            color: isDarkMode 
+                              ? Colors.red.shade700
+                              : Colors.red.shade200,
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline, color: Colors.red),
+                            Icon(
+                              Icons.error_outline,
+                              color: isDarkMode ? Colors.red.shade300 : Colors.red,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 _error!,
-                                style: const TextStyle(color: Colors.red, fontSize: 12),
+                                style: TextStyle(
+                                  color: isDarkMode ? Colors.red.shade300 : Colors.red,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ],
@@ -269,6 +331,11 @@ class _FormTemplateSelectionDialogState extends State<FormTemplateSelectionDialo
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDarkMode 
+                      ? AppTheme.darkTextSecondary 
+                      : Colors.grey.shade700,
+                  ),
                   child: const Text('Cancel'),
                 ),
                 const SizedBox(width: 12),
