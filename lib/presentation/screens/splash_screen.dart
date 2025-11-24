@@ -20,8 +20,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  String _initStatus = 'Initializing...';
-  bool _isNavigating = false; // Tambahkan flag
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -51,10 +50,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       
       if (!mounted) return;
       
-      setState(() {
-        _initStatus = 'Checking authentication...';
-      });
-      
       await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
       
@@ -80,10 +75,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<void> _handleAuthenticatedUser() async {
     try {
       if (!mounted) return;
-
-      setState(() {
-        _initStatus = 'Connecting to chat service...';
-      });
 
       // Try to connect SignalR with timeout
       try {
@@ -122,10 +113,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final hasCredentials = await Future(() => StorageService.hasCredentials());
     
     if (hasCredentials) {
-      setState(() {
-        _initStatus = 'Auto login...';
-      });
-      
       print('🔄 Found saved credentials, attempting auto login...');
       
       final success = await authNotifier.tryAutoReLogin();
@@ -140,10 +127,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         print('❌ Auto login failed');
       }
     }
-    
-    setState(() {
-      _initStatus = 'Redirecting to login...';
-    });
     
     await Future.delayed(const Duration(milliseconds: 500));
     
@@ -207,146 +190,170 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
-@override
-Widget build(BuildContext context) {
-  final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
-  
-  return Scaffold(
-    backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white, // UPDATE INI
-    body: Center(
-      child: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Logo
-            Container(
-              width: 180,
-              height: 180,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.1), // UPDATE INI
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
+    return Scaffold(
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo
+              Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    isDarkMode ? 'assets/nobox.png' : 'assets/nobox2.png',
+                    width: 180,
+                    height: 180,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 180,
+                        height: 180,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF007AFF),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: const Icon(
+                          Icons.chat_bubble_rounded,
+                          size: 80,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
                   ),
-                ],
+                ),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Image.asset(
-                  'assets/nobox2.png',
-                  width: 180,
-                  height: 180,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 180,
-                      height: 180,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF007AFF), // Tetap biru
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Icon(
-                        Icons.chat_bubble_rounded,
-                        size: 80,
-                        color: Colors.white,
+              
+              const SizedBox(height: 24),
+              Text(
+                'NoBoxChat',
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextPrimary 
+                    : const Color(0xFF1A1A1A),
+                  letterSpacing: 2,
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              Text(
+                'Professional Chat Management',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
+                    : const Color(0xFF666666),
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              
+              const SizedBox(height: 48),
+              
+              // Animated Loading Indicator - Circle with rotating arc
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: AnimatedBuilder(
+                  animation: _animationController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      painter: LoadingCirclePainter(
+                        progress: _animationController.value,
+                        isDarkMode: isDarkMode,
                       ),
                     );
                   },
                 ),
               ),
-            ),
-            
-            const SizedBox(height: 24),
-            Text(
-              'NoBoxChat',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode 
-                  ? AppTheme.darkTextPrimary 
-                  : const Color(0xFF1A1A1A), // UPDATE INI
-                letterSpacing: 2,
-              ),
-            ),
-            
-            const SizedBox(height: 12),
-            Text(
-              'Professional Chat Management',
-              style: TextStyle(
-                fontSize: 16,
-                color: isDarkMode 
-                  ? AppTheme.darkTextSecondary 
-                  : const Color(0xFF666666), // UPDATE INI
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            
-            const SizedBox(height: 48),
-            
-            // Loading dots
-            SizedBox(
-              width: 60,
-              height: 24,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildDot(0, isDarkMode), // TAMBAHKAN isDarkMode
-                  const SizedBox(width: 8),
-                  _buildDot(1, isDarkMode), // TAMBAHKAN isDarkMode
-                  const SizedBox(width: 8),
-                  _buildDot(2, isDarkMode), // TAMBAHKAN isDarkMode
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Status text
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: Text(
-                _initStatus,
-                key: ValueKey(_initStatus),
+              
+              const SizedBox(height: 24),
+              
+              // Loading text
+              Text(
+                'Loading...',
                 style: TextStyle(
                   fontSize: 14,
                   color: isDarkMode 
                     ? AppTheme.darkTextSecondary 
-                    : const Color(0xFF666666), // UPDATE INI
+                    : const Color(0xFF666666),
                   fontWeight: FontWeight.w500,
                 ),
                 textAlign: TextAlign.center,
               ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-Widget _buildDot(int index, bool isDarkMode) { // TAMBAHKAN PARAMETER
-  return AnimatedBuilder(
-    animation: _animationController,
-    builder: (context, child) {
-      double animationValue = (_animationController.value + (index * 0.3)) % 1.0;
-      double scale = 0.5 + (0.5 * (1 - (animationValue - 0.5).abs() * 2).clamp(0.0, 1.0));
-      double opacity = 0.4 + (0.6 * (1 - (animationValue - 0.5).abs() * 2).clamp(0.0, 1.0));
-      
-      return Transform.scale(
-        scale: scale,
-        child: Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: const Color(0xFF007AFF).withOpacity(opacity), // Dot tetap biru
-            borderRadius: BorderRadius.circular(4),
+            ],
           ),
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
+
+// Custom Painter for Loading Circle Animation
+class LoadingCirclePainter extends CustomPainter {
+  final double progress;
+  final bool isDarkMode;
+
+  LoadingCirclePainter({
+    required this.progress,
+    required this.isDarkMode,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // Background circle (static border)
+    final bgPaint = Paint()
+      ..color = isDarkMode 
+        ? Colors.white.withOpacity(0.1) 
+        : Colors.grey.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+
+    canvas.drawCircle(center, radius, bgPaint);
+
+    // Animated arc (rotating loader)
+    final arcPaint = Paint()
+      ..color = const Color(0xFF007AFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    const sweepAngle = 3.14159 / 2; // 90 degrees arc
+    final startAngle = progress * 2 * 3.14159 - 3.14159 / 2; // Start from top and rotate
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      arcPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(LoadingCirclePainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.isDarkMode != isDarkMode;
+  }
 }

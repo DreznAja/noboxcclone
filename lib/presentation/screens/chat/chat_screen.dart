@@ -1018,12 +1018,16 @@ if (!widget.isArchived)
             value: 'help',
             child: Row(
               children: [
-                const Icon(Icons.help_outline, size: 20, color: Colors.red),
+                const Icon(
+                  Icons.help_outline, 
+                  size: 20, 
+                  color: Colors.red, // ← MERAH
+                ),
                 const SizedBox(width: 12),
-                Text(
+                const Text(
                   'Help',
                   style: TextStyle(
-                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.red,
+                    color: Colors.red, // ← MERAH JUGA
                   ),
                 ),
               ],
@@ -1038,12 +1042,16 @@ if (!widget.isArchived)
           value: 'add_agent',
           child: Row(
             children: [
-              const Icon(Icons.person_add_outlined, size: 20, color: Colors.blue),
+              Icon(
+                Icons.person_add_outlined, 
+                size: 20, 
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
               const SizedBox(width: 12),
               Text(
                 'Add Human Agent',
                 style: TextStyle(
-                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.blue,
+                  color: isDarkMode ? Colors.white : Colors.black,
                 ),
               ),
             ],
@@ -1053,12 +1061,16 @@ if (!widget.isArchived)
           value: 'resolve',
           child: Row(
             children: [
-              const Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
+              Icon(
+                Icons.check_circle_outline, 
+                size: 20, 
+                color: isDarkMode ? Colors.white : Colors.black,
+              ),
               const SizedBox(width: 12),
               Text(
                 'Mark as Resolved',
                 style: TextStyle(
-                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.green,
+                  color: isDarkMode ? Colors.white : Colors.black,
                 ),
               ),
             ],
@@ -1068,12 +1080,16 @@ if (!widget.isArchived)
           value: 'help',
           child: Row(
             children: [
-              const Icon(Icons.help_outline, size: 20, color: Colors.red),
+              const Icon(
+                Icons.help_outline, 
+                size: 20, 
+                color: Colors.red, // ← MERAH
+              ),
               const SizedBox(width: 12),
-              Text(
+              const Text(
                 'Help',
                 style: TextStyle(
-                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.red,
+                  color: Colors.red, // ← MERAH JUGA
                 ),
               ),
             ],

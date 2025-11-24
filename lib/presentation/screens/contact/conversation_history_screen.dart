@@ -114,32 +114,36 @@ class _ConversationHistoryScreenState extends ConsumerState<ConversationHistoryS
     
     return Scaffold(
       backgroundColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF8F9FA), // UPDATE
-      appBar: AppBar(
-        backgroundColor: AppTheme.primaryColor, // Tetap biru
-        foregroundColor: Colors.white, // UPDATE
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Conversation History',
-              style: TextStyle(
-                color: Colors.white, // UPDATE
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              widget.contactName,
-              style: const TextStyle(
-                color: Colors.white70, // UPDATE
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ],
+     appBar: AppBar(
+  backgroundColor: AppTheme.primaryColor,
+  foregroundColor: Colors.white,
+  elevation: 0,
+  leading: IconButton(
+    icon: const Icon(Icons.arrow_back_ios_new),
+    onPressed: () => Navigator.of(context).pop(),
+  ),
+  title: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Conversation History',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
         ),
       ),
+      Text(
+        widget.contactName,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 12,
+          fontWeight: FontWeight.normal,
+        ),
+      ),
+    ],
+  ),
+),
       body: _isLoading
           ? Center(
               child: CircularProgressIndicator(

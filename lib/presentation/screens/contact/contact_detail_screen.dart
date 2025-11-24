@@ -372,25 +372,23 @@ Future<void> _loadRoomTagsForContact() async {
 
 return Scaffold(
   backgroundColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF8F9FA), // ← UBAH INI
-  appBar: AppBar(
-    backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white, // ← UBAH INI
-    foregroundColor: isDarkMode ? Colors.white : Colors.black, // ← UBAH INI
-    elevation: 0,
-    title: Text(
-      widget.isGroup ? 'Extra Panel' : 'Contact Detail',
-      style: TextStyle(
-        color: isDarkMode ? Colors.white : Colors.black, // ← UBAH INI
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
-      ),
+appBar: AppBar(
+  backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+  foregroundColor: isDarkMode ? Colors.white : Colors.black,
+  elevation: 0,
+  leading: IconButton(
+    icon: const Icon(Icons.arrow_back_ios_new),
+    onPressed: () => Navigator.of(context).pop(),
+  ),
+  title: Text(
+    widget.isGroup ? 'Extra Panel' : 'Contact Detail',
+    style: TextStyle(
+      color: isDarkMode ? Colors.white : Colors.black,
+      fontSize: 18,
+      fontWeight: FontWeight.w600,
     ),
-        // actions: [
-        //   IconButton(
-        //     icon: const Icon(Icons.close, color: Colors.black),
-        //     onPressed: () => Navigator.of(context).pop(),
-        //   ),
-        // ],
-      ),
+  ),
+),
 body: RefreshIndicator(
   onRefresh: _handleRefresh,
   color: AppTheme.primaryColor,

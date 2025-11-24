@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/services/storage_service.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../home/home_screen.dart';
 
@@ -32,12 +33,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   void _loadLastUsername() {
-  final lastUsername = StorageService.getLastUsername();
-  if (lastUsername != null && lastUsername.isNotEmpty) {
-    _usernameController.text = lastUsername;
-    print('📝 Loaded last username: $lastUsername');
+    final lastUsername = StorageService.getLastUsername();
+    if (lastUsername != null && lastUsername.isNotEmpty) {
+      _usernameController.text = lastUsername;
+      print('📝 Loaded last username: $lastUsername');
+    }
   }
-}
 
   @override
   void dispose() {
@@ -45,29 +46,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _passwordController.dispose();
     _loadingAnimationController.dispose();
     super.dispose();
-  }
-
-  Widget _buildLoadingDot(int index) {
-    return AnimatedBuilder(
-      animation: _loadingAnimationController,
-      builder: (context, child) {
-        double animationValue = (_loadingAnimationController.value + (index * 0.3)) % 1.0;
-        double scale = 0.5 + (0.5 * (1 - (animationValue - 0.5).abs() * 2).clamp(0.0, 1.0));
-        double opacity = 0.4 + (0.6 * (1 - (animationValue - 0.5).abs() * 2).clamp(0.0, 1.0));
-        
-        return Transform.scale(
-          scale: scale,
-          child: Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(opacity),
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _handleLogin() async {
@@ -97,320 +75,370 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     }
   }
 
-// TIDAK ADA PERUBAHAN DI IMPORT - Tetap seperti original
-// TIDAK PERLU import theme_provider karena login screen tidak pakai dark mode
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
-@override
-Widget build(BuildContext context) {
-  final authState = ref.watch(authProvider);
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+        ref.read(authProvider.notifier).clearError();
+      }
+    });
 
-  ref.listen<AuthState>(authProvider, (previous, next) {
-    if (next.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(next.error!),
-          backgroundColor: AppTheme.errorColor,
-        ),
-      );
-      ref.read(authProvider.notifier).clearError();
-    }
-  });
-
-  // WRAP DENGAN THEME UNTUK FORCE LIGHT MODE
-  return Theme(
-    data: ThemeData.light().copyWith(
-      scaffoldBackgroundColor: Colors.white,
-      // Force input decoration theme to light
-      inputDecorationTheme: const InputDecorationTheme(
-        fillColor: Colors.white,
-        filled: false,
-      ),
-      // Force text theme to dark colors
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: Color(0xFF1A1A1A)),
-        bodyMedium: TextStyle(color: Color(0xFF1A1A1A)),
-      ),
-    ),
-    child: Scaffold(
-      backgroundColor: Colors.white,
+    return Scaffold(
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo
-                  Image.asset(
-                    'assets/nobox2.png',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
-                  ),
-                  
-                  const SizedBox(height: 40),
-                  
-                  // Title
-                  const Text(
-                    'NoBoxChat',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 8),
-                  
-                  const Text(
-                    'Sign in to your account',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF666666),
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Username field - FIXED ROUNDED CORNERS
-Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    const Text(
-      'Username',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w500,
-        color: Color(0xFF1A1A1A),
-      ),
-    ),
-    const SizedBox(height: 8),
-    TextFormField(
-      controller: _usernameController,
-      style: const TextStyle(
-        fontSize: 16,
-        color: Color(0xFF1A1A1A),
-      ),
-      decoration: InputDecoration(
-        hintText: 'Enter your username',
-        hintStyle: const TextStyle(
-          color: Color(0xFF999999),
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-        ),
-        prefixIcon: const Icon(
-          Icons.person_outline_rounded,
-          color: Color(0xFF666666),
-          size: 22,
-        ),
-        fillColor: Colors.white,
-        filled: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 20,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.grey.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFF007AFF),
-            width: 2,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 1,
-          ),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
-        ),
-      ),
-      keyboardType: TextInputType.text,
-      textInputAction: TextInputAction.next,
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Username is required';
-        }
-        return null;
-      },
-    ),
-  ],
-),
-
-const SizedBox(height: 20),
-
-// Password field - FIXED ROUNDED CORNERS
-Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    const Text(
-      'Password',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w500,
-        color: Color(0xFF1A1A1A),
-      ),
-    ),
-    const SizedBox(height: 8),
-    TextFormField(
-      controller: _passwordController,
-      obscureText: _obscurePassword,
-      style: const TextStyle(
-        fontSize: 16,
-        color: Color(0xFF1A1A1A),
-      ),
-      decoration: InputDecoration(
-        hintText: 'Enter your password',
-        hintStyle: const TextStyle(
-          color: Color(0xFF999999),
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-        ),
-        prefixIcon: const Icon(
-          Icons.lock_outline_rounded,
-          color: Color(0xFF666666),
-          size: 22,
-        ),
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscurePassword
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
-            color: const Color(0xFF666666),
-            size: 22,
-          ),
-          onPressed: () {
-            setState(() {
-              _obscurePassword = !_obscurePassword;
-            });
-          },
-        ),
-        fillColor: Colors.white,
-        filled: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 20,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.grey.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFF007AFF),
-            width: 2,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 1,
-          ),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-            width: 2,
-          ),
-        ),
-      ),
-      textInputAction: TextInputAction.done,
-      onFieldSubmitted: (_) => _handleLogin(),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Password is required';
-        }
-        return null;
-      },
-    ),
-  ],
-),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Login Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: authState.isLoading ? null : _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF007AFF),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                        shadowColor: Colors.transparent,
-                        disabledBackgroundColor: Colors.grey[400],
+        child: Stack(
+          children: [
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logo
+                      Image.asset(
+                        isDarkMode ? 'assets/nobox.png' : 'assets/nobox2.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.contain,
                       ),
-                      child: authState.isLoading
-                          ? SizedBox(
-                              width: 40,
-                              height: 20,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _buildLoadingDot(0),
-                                  const SizedBox(width: 4),
-                                  _buildLoadingDot(1),
-                                  const SizedBox(width: 4),
-                                  _buildLoadingDot(2),
-                                ],
-                              ),
-                            )
-                          : const Text(
-                              'Sign In',
-                              style: TextStyle(
+                      
+                      const SizedBox(height: 40),
+                      
+                      // Title
+                      Text(
+                        'NoBoxChat',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 8),
+                      
+                      Text(
+                        'Sign in to your account',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDarkMode ? AppTheme.darkTextSecondary : const Color(0xFF666666),
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Username field
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Username',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _usernameController,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Enter your username',
+                              hintStyle: TextStyle(
+                                color: isDarkMode ? AppTheme.darkTextSecondary : const Color(0xFF999999),
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.person_outline_rounded,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : const Color(0xFF666666),
+                                size: 22,
+                              ),
+                              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                              filled: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 20,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                  color: isDarkMode 
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey.withOpacity(0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF007AFF),
+                                  width: 2,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Colors.red,
+                                  width: 1,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Colors.red,
+                                  width: 2,
+                                ),
                               ),
                             ),
-                    ),
+                            keyboardType: TextInputType.text,
+                            textInputAction: TextInputAction.next,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Username is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Password field
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Password',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Enter your password',
+                              hintStyle: TextStyle(
+                                color: isDarkMode ? AppTheme.darkTextSecondary : const Color(0xFF999999),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.lock_outline_rounded,
+                                color: isDarkMode ? AppTheme.darkTextSecondary : const Color(0xFF666666),
+                                size: 22,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: isDarkMode ? AppTheme.darkTextSecondary : const Color(0xFF666666),
+                                  size: 22,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                              filled: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 20,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                  color: isDarkMode 
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey.withOpacity(0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF007AFF),
+                                  width: 2,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Colors.red,
+                                  width: 1,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Colors.red,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _handleLogin(),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Password is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Login Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: authState.isLoading ? null : _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF007AFF),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            disabledBackgroundColor: Colors.grey[400],
+                          ),
+                          child: authState.isLoading
+                              ? SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: AnimatedBuilder(
+                                    animation: _loadingAnimationController,
+                                    builder: (context, child) {
+                                      return CustomPaint(
+                                        painter: LoginLoadingPainter(
+                                          progress: _loadingAnimationController.value,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : const Text(
+                                  'Sign In',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 40),
+                      
+                      // Footer
+                      Text(
+                        'Powered by Nobox',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
-                  
-                  const SizedBox(height: 40),
-                  
-                  // Footer
-                  const Text(
-                    'Powered by Nobox',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+            
+            // Theme Toggle Button (Top Right)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: IconButton(
+                onPressed: () async {
+                  await ref.read(themeProvider.notifier).toggleTheme();
+                },
+                icon: Icon(
+                  isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                  color: isDarkMode ? Colors.white : const Color(0xFF666666),
+                ),
+                tooltip: isDarkMode ? 'Light Mode' : 'Dark Mode',
+              ),
+            ),
+          ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
+
+// Custom Painter for Login Button Loading Animation
+class LoginLoadingPainter extends CustomPainter {
+  final double progress;
+
+  LoginLoadingPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // Background circle (static border) - white semi-transparent
+    final bgPaint = Paint()
+      ..color = Colors.white.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    canvas.drawCircle(center, radius, bgPaint);
+
+    // Animated arc (rotating loader) - solid white
+    final arcPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    const sweepAngle = 3.14159 / 2; // 90 degrees arc
+    final startAngle = progress * 2 * 3.14159 - 3.14159 / 2; // Start from top and rotate
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      arcPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(LoginLoadingPainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
 }

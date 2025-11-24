@@ -868,7 +868,7 @@ Widget _buildNormalAppBar() {
                 value: 'archive',
                 child: Row(
                   children: [
-                    Icon(Icons.archive, color: isDarkMode ? Colors.white : Colors.blue),
+                    Icon(Icons.archive, color: isDarkMode ? Colors.white : Colors.black),
                     const SizedBox(width: 12),
                     Text(
                       'Archived Conversation',
