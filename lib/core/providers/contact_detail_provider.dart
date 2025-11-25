@@ -102,50 +102,67 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     );
   }
 
-  Future<void> loadContactDetail(String contactId) async {
-    state = state.copyWith(isLoading: true, clearError: true, clearFunnel: true,);
+Future<void> loadContactDetail(String contactId) async {
+  state = state.copyWith(isLoading: true, clearError: true, clearFunnel: true);
 
-    print('Loading contact detail for ID: $contactId');
+  print('Loading contact detail for ID: $contactId');
 
-    try {
-      final contact = await _service.getContactDetail(contactId);
-      
-      if (contact != null) {
-        print('Contact detail loaded successfully: ${contact.name}');
-        state = state.copyWith(
-          contact: contact,
-          isLoading: false,
-        );
+  try {
+    final contact = await _service.getContactDetail(contactId);
+    
+    if (contact != null) {
+      print('Contact detail loaded successfully: ${contact.name}');
+      state = state.copyWith(
+        contact: contact,
+        isLoading: false,
+      );
 
-        try {
-          await Future.wait([
-            loadConversationHistory(contactId),
-            loadContactNotesFromRoom(contactId),
-            loadContactFunnel(contactId),
-            loadAvailableFunnels(),
-            loadContactCampaign(contactId),
-            loadContactDeal(contactId),
+      try {
+        // ✅ PERBAIKAN: Load data dengan getContactDetailWithRelations dulu
+        final detailData = await _service.getContactDetailWithRelations(contactId);
+        
+        await Future.wait([
+          loadConversationHistory(contactId),
+          loadContactNotesFromRoom(contactId),
+          loadContactFunnel(contactId),
+          loadAvailableFunnels(),
+          // ✅ HANYA load jika ada datanya di backend
+          if (detailData?['Campaign'] != null) loadContactCampaign(contactId),
+          if (detailData?['Deal'] != null) loadContactDeal(contactId),
+          if (detailData?['FormR'] != null) ...[
             loadContactFormTemplate(contactId),
             loadContactFormResult(contactId),
-            loadRoomTags(contactId), // TAMBAH INI
-            loadRoomHumanAgents(contactId), // TAMBAH INI
-          ]);
-        } catch (additionalDataError) {
-          print('Some additional data failed to load: $additionalDataError');
+          ],
+          loadRoomTags(contactId),
+          loadRoomHumanAgents(contactId),
+        ]);
+        
+        // ✅ CLEAR state untuk yang tidak ada datanya
+        if (detailData?['Campaign'] == null) {
+          state = state.copyWith(clearCampaign: true);
         }
-      } else {
-        print('Contact not found for ID: $contactId');
-        state = state.copyWith(
-          isLoading: false,
-        );
+        if (detailData?['Deal'] == null) {
+          state = state.copyWith(clearDeal: true);
+        }
+        if (detailData?['FormR'] == null) {
+          state = state.copyWith(clearFormTemplate: true, clearFormResult: true);
+        }
+      } catch (additionalDataError) {
+        print('Some additional data failed to load: $additionalDataError');
       }
-    } catch (e) {
-      print('Exception loading contact detail for ID $contactId: $e');
+    } else {
+      print('Contact not found for ID: $contactId');
       state = state.copyWith(
         isLoading: false,
       );
     }
+  } catch (e) {
+    print('Exception loading contact detail for ID $contactId: $e');
+    state = state.copyWith(
+      isLoading: false,
+    );
   }
+}
 
 Future<bool> assignCampaign(String roomId, String campaignId) async {
   try {
@@ -421,57 +438,146 @@ Future<bool> assignFunnel(String roomId, String funnelId) async {
     }
   }
 
-  Future<void> loadContactCampaign(String contactId) async {
-    if (!mounted) return;
+Future<void> loadContactCampaign(String contactId) async {
+  if (!mounted) return;
+  
+  try {
+    print('📋 Fetching campaign for contact: $contactId');
     
-    try {
-      final campaign = await _service.getContactCampaign(contactId);
+    final data = await _service.getContactDetailWithRelations(contactId);
+    
+    // ✅ ONLY set jika ada data
+    if (data != null && data['Campaign'] != null) {
+      final campaignData = data['Campaign'];
+      print('✅ Campaign found: ${campaignData['Name']}');
+      
       if (mounted) {
-        state = state.copyWith(campaign: campaign);
+        state = state.copyWith(campaign: ContactCampaign.fromJson(campaignData));
       }
-    } catch (e) {
-      print('Error loading campaign: $e');
+    } else {
+      print('⚠️ No campaign data - clearing state');
+      
+      // ✅ CLEAR jika tidak ada
+      if (mounted) {
+        state = state.copyWith(clearCampaign: true);
+      }
+    }
+  } catch (e) {
+    print('❌ Error fetching contact campaign: $e');
+    if (mounted) {
+      state = state.copyWith(clearCampaign: true);
     }
   }
+}
 
-  Future<void> loadContactDeal(String contactId) async {
-    if (!mounted) return;
+Future<void> loadContactDeal(String contactId) async {
+  if (!mounted) return;
+  
+  try {
+    print('📋 Fetching deal for contact: $contactId');
     
-    try {
-      final deal = await _service.getContactDeal(contactId);
+    final data = await _service.getContactDetailWithRelations(contactId);
+    
+    // ✅ ONLY set jika ada data
+    if (data != null && data['Deal'] != null) {
+      final dealData = data['Deal'];
+      print('✅ Deal found: ${dealData['Name']}');
+      
       if (mounted) {
-        state = state.copyWith(deal: deal);
+        state = state.copyWith(deal: ContactDeal.fromJson(dealData));
       }
-    } catch (e) {
-      print('Error loading deal: $e');
+    } else {
+      print('⚠️ No deal data - clearing state');
+      
+      // ✅ CLEAR jika tidak ada
+      if (mounted) {
+        state = state.copyWith(clearDeal: true);
+      }
+    }
+  } catch (e) {
+    print('❌ Error fetching contact deal: $e');
+    if (mounted) {
+      state = state.copyWith(clearDeal: true);
     }
   }
+}
 
-  Future<void> loadContactFormTemplate(String contactId) async {
-    if (!mounted) return;
+Future<void> loadContactFormTemplate(String contactId) async {
+  if (!mounted) return;
+  
+  try {
+    print('📋 Fetching form template for contact: $contactId');
     
-    try {
-      final formTemplate = await _service.getContactFormTemplate(contactId);
-      if (mounted) {
-        state = state.copyWith(formTemplate: formTemplate);
+    final data = await _service.getContactDetailWithRelations(contactId);
+    
+    // ✅ ONLY set jika ada data
+    if (data != null && data['FormR'] != null) {
+      final formRData = data['FormR'];
+      
+      if (formRData['FormId'] != null) {
+        final formId = formRData['FormId'].toString();
+        print('✅ FormTemplate found with FormId: $formId');
+        
+        if (mounted) {
+          state = state.copyWith(
+            formTemplate: ContactFormTemplate(
+              id: formId,
+              name: 'Form #$formId',
+              description: null,
+            ),
+          );
+        }
+      } else {
+        print('⚠️ No FormId - clearing state');
+        if (mounted) {
+          state = state.copyWith(clearFormTemplate: true);
+        }
       }
-    } catch (e) {
-      print('Error loading form template: $e');
+    } else {
+      print('⚠️ No form template data - clearing state');
+      if (mounted) {
+        state = state.copyWith(clearFormTemplate: true);
+      }
+    }
+  } catch (e) {
+    print('❌ Error fetching contact form template: $e');
+    if (mounted) {
+      state = state.copyWith(clearFormTemplate: true);
     }
   }
+}
 
-  Future<void> loadContactFormResult(String contactId) async {
-    if (!mounted) return;
+Future<void> loadContactFormResult(String contactId) async {
+  if (!mounted) return;
+  
+  try {
+    print('📋 Fetching form result for contact: $contactId');
     
-    try {
-      final formResult = await _service.getContactFormResult(contactId);
+    final data = await _service.getContactDetailWithRelations(contactId);
+    
+    // ✅ ONLY set jika ada data
+    if (data != null && data['FormR'] != null) {
+      final formRData = data['FormR'];
+      print('✅ FormResult found: ${formRData['SenderNm']}');
+      
       if (mounted) {
-        state = state.copyWith(formResult: formResult);
+        state = state.copyWith(formResult: ContactFormResult.fromJson(formRData));
       }
-    } catch (e) {
-      print('Error loading form result: $e');
+    } else {
+      print('⚠️ No form result data - clearing state');
+      
+      // ✅ CLEAR jika tidak ada
+      if (mounted) {
+        state = state.copyWith(clearFormResult: true);
+      }
+    }
+  } catch (e) {
+    print('❌ Error fetching contact form result: $e');
+    if (mounted) {
+      state = state.copyWith(clearFormResult: true);
     }
   }
+}
 
   Future<void> addNote(String roomId, String content) async {
     try {
