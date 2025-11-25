@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/filter_cache_provider.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart'; // TAMBAHKAN IMPORT INI
 import '../../core/models/filter_models.dart';
 import 'package:dropdown_search/dropdown_search.dart';
@@ -61,34 +62,75 @@ class _FilterDialogState extends ConsumerState<FilterDialog> {
     _loadApiData();
   }
 
-  Future<void> _loadApiData() async {
+Future<void> _loadApiData() async {
+  // Cek cache terlebih dahulu
+  final cache = ref.read(filterCacheProvider);
+  
+  // Jika cache sudah ada dan masih fresh, gunakan cache
+  if (cache.isLoaded && !ref.read(filterCacheProvider.notifier).shouldRefresh()) {
+    print('✅ Using cached filter data');
     setState(() {
-      _isLoadingData = true;
-      _loadingError = null;
+      _channels = cache.channels;
+      _accounts = cache.accounts;
+      _contacts = cache.contacts;
+      _links = cache.links;
+      _groups = cache.groups;
+      _campaigns = cache.campaigns;
+      _funnels = cache.funnels;
+      _deals = cache.deals;
+      _tags = cache.tags;
+      _humanAgents = cache.humanAgents;
+      _isLoadingData = false;
     });
-
-    try {
-      _channels = await _apiService.getChannels();
-      _accounts = await _apiService.getAccounts();
-      _contacts = await _apiService.getContacts();
-      _links = await _apiService.getLinks();
-      _groups = await _apiService.getGroups();
-      _campaigns = await _apiService.getCampaigns();
-      _funnels = await _apiService.getFunnels();
-      _deals = await _apiService.getDeals();
-      _tags = await _apiService.getTags();
-      _humanAgents = await _apiService.getHumanAgents();
-
-      setState(() {
-        _isLoadingData = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingData = false;
-        _loadingError = 'Failed to load filter data: $e';
-      });
-    }
+    return;
   }
+
+  // Jika tidak ada cache atau sudah expired, load dari API
+  print('📡 Loading filter data from API...');
+  setState(() {
+    _isLoadingData = true;
+    _loadingError = null;
+  });
+
+  try {
+    _channels = await _apiService.getChannels();
+    _accounts = await _apiService.getAccounts();
+    _contacts = await _apiService.getContacts();
+    _links = await _apiService.getLinks();
+    _groups = await _apiService.getGroups();
+    _campaigns = await _apiService.getCampaigns();
+    _funnels = await _apiService.getFunnels();
+    _deals = await _apiService.getDeals();
+    _tags = await _apiService.getTags();
+    _humanAgents = await _apiService.getHumanAgents();
+
+    // Simpan ke cache
+    ref.read(filterCacheProvider.notifier).setFilterData(
+      channels: _channels,
+      accounts: _accounts,
+      contacts: _contacts,
+      links: _links,
+      groups: _groups,
+      campaigns: _campaigns,
+      funnels: _funnels,
+      deals: _deals,
+      tags: _tags,
+      humanAgents: _humanAgents,
+    );
+
+    setState(() {
+      _isLoadingData = false;
+    });
+    
+    print('✅ Filter data loaded and cached');
+  } catch (e) {
+    setState(() {
+      _isLoadingData = false;
+      _loadingError = 'Failed to load filter data: $e';
+    });
+    print('❌ Error loading filter data: $e');
+  }
+}
 
   @override
   Widget build(BuildContext context) {

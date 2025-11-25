@@ -1541,91 +1541,132 @@ static Future<Map<String, int?>> getAgentsForRooms(List<String> roomIds) async {
   }
 
   // Get deal pipelines
-  Future<List<Map<String, dynamic>>> getDealPipelines() async {
-    try {
-      print('📋 [Get Pipelines] Loading pipelines...');
+Future<List<Map<String, dynamic>>> getDealPipelines() async {
+  try {
+    print('📋 [Get Pipelines] Loading pipelines...');
+    
+    final response = await dio.post(
+      'Services/Nobox/Dealpipelines/List',
+      data: {
+        'Take': 100,
+        'Skip': 0,
+      },
+    );
+    
+    print('📋 [Get Pipelines] Response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200 && response.data['Entities'] != null) {
+      final entities = response.data['Entities'] as List;
+      print('✅ [Get Pipelines] Loaded ${entities.length} pipelines');
       
-      final response = await dio.post(
-        'Services/Nobox/Dealpipelines/List',
-        data: {
-          'Take': 100,
-          'Skip': 0,
-        },
-      );
-      
-      print('📋 [Get Pipelines] Response status: ${response.statusCode}');
-      
-      if (response.statusCode == 200 && response.data['Entities'] != null) {
-        final entities = response.data['Entities'] as List;
-        print('✅ [Get Pipelines] Loaded ${entities.length} pipelines');
-        return entities.cast<Map<String, dynamic>>();
+      // ✅ DEBUG: Print struktur data
+      if (entities.isNotEmpty) {
+        print('📋 [DEBUG] First pipeline keys: ${entities.first.keys.toList()}');
+        print('📋 [DEBUG] First pipeline data: ${entities.first}');
+        
+        // Print semua pipeline
+        print('📋 [DEBUG] All pipelines:');
+        for (var i = 0; i < entities.length; i++) {
+          final pipeline = entities[i];
+          print('   [$i] ID: ${pipeline['Id']}, Name: ${pipeline['Name']}, Nm: ${pipeline['Nm']}');
+        }
       }
       
-      print('❌ [Get Pipelines] Failed to load pipelines');
-      return [];
-    } catch (e) {
-      print('❌ [Get Pipelines] Error: $e');
-      throw Exception('Failed to load pipelines: $e');
+      return entities.cast<Map<String, dynamic>>();
     }
+    
+    print('❌ [Get Pipelines] Failed to load pipelines');
+    return [];
+  } catch (e) {
+    print('❌ [Get Pipelines] Error: $e');
+    throw Exception('Failed to load pipelines: $e');
   }
-
+}
   // Get deal pipeline types (stages)
-  Future<List<Map<String, dynamic>>> getDealPipelineTypes() async {
-    try {
-      print('📋 [Get Stages] Loading stages...');
+Future<List<Map<String, dynamic>>> getDealPipelineTypes() async {
+  try {
+    print('📋 [Get Stages] Loading stages...');
+    
+    final response = await dio.post(
+      'Services/Nobox/Dealpipelinetypes/List',
+      data: {
+        'Take': 100,
+        'Skip': 0,
+      },
+    );
+    
+    print('📋 [Get Stages] Response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200 && response.data['Entities'] != null) {
+      final entities = response.data['Entities'] as List;
+      print('✅ [Get Stages] Loaded ${entities.length} stages');
       
-      final response = await dio.post(
-        'Services/Nobox/Dealpipelinetypes/List',
-        data: {
-          'Take': 100,
-          'Skip': 0,
-        },
-      );
-      
-      print('📋 [Get Stages] Response status: ${response.statusCode}');
-      
-      if (response.statusCode == 200 && response.data['Entities'] != null) {
-        final entities = response.data['Entities'] as List;
-        print('✅ [Get Stages] Loaded ${entities.length} stages');
-        return entities.cast<Map<String, dynamic>>();
+      // ✅ DEBUG: Print struktur data stage
+      if (entities.isNotEmpty) {
+        print('📋 [DEBUG] First stage keys: ${entities.first.keys.toList()}');
+        print('📋 [DEBUG] First stage data: ${entities.first}');
+        
+        // Print semua stages
+        print('📋 [DEBUG] All stages:');
+        for (var i = 0; i < entities.length; i++) {
+          final stage = entities[i];
+          print('   [$i] ID: ${stage['Id']}, Name: ${stage['Nm']}, PipelineId: ${stage['PipelineId']}, DealpipelineId: ${stage['DealpipelineId']}');
+        }
       }
       
-      print('❌ [Get Stages] Failed to load stages');
-      return [];
-    } catch (e) {
-      print('❌ [Get Stages] Error: $e');
-      throw Exception('Failed to load stages: $e');
+      return entities.cast<Map<String, dynamic>>();
     }
+    
+    print('❌ [Get Stages] Failed to load stages');
+    return [];
+  } catch (e) {
+    print('❌ [Get Stages] Error: $e');
+    throw Exception('Failed to load stages: $e');
   }
+}
 
   // Get deals
-  Future<List<Map<String, dynamic>>> getDeals() async {
-    try {
-      print('📋 [Get Deals] Loading deals...');
+Future<List<Map<String, dynamic>>> getDeals() async {
+  try {
+    print('📋 [Get Deals] Loading deals...');
+    
+    final response = await dio.post(
+      'Services/Nobox/Deals/List',
+      data: {
+        'Take': 100,
+        'Skip': 0,
+      },
+    );
+    
+    print('📋 [Get Deals] Response status: ${response.statusCode}');
+    
+    if (response.statusCode == 200 && response.data['Entities'] != null) {
+      final entities = response.data['Entities'] as List;
+      print('✅ [Get Deals] Loaded ${entities.length} deals');
       
-      final response = await dio.post(
-        'Services/Nobox/Deals/List',
-        data: {
-          'Take': 100,
-          'Skip': 0,
-        },
-      );
-      
-      print('📋 [Get Deals] Response status: ${response.statusCode}');
-      
-      if (response.statusCode == 200 && response.data['Entities'] != null) {
-        final entities = response.data['Entities'] as List;
-        print('✅ [Get Deals] Loaded ${entities.length} deals');
-        return entities.cast<Map<String, dynamic>>();
+      // ✅ DEBUG: Print struktur data deal
+      if (entities.isNotEmpty) {
+        print('📋 [DEBUG] First deal keys: ${entities.first.keys.toList()}');
+        print('📋 [DEBUG] First deal data: ${entities.first}');
+        
+        // Print semua deals
+        print('📋 [DEBUG] All deals:');
+        for (var i = 0; i < entities.length; i++) {
+          final deal = entities[i];
+          print('   [$i] ID: ${deal['Id']}, Name: ${deal['Name']}, Nm: ${deal['Nm']}, PipelineId: ${deal['PipelineId']}, StageId: ${deal['StageId']}, project_id: ${deal['project_id']}, stage_id: ${deal['stage_id']}');
+        }
       }
       
-      print('❌ [Get Deals] Failed to load deals');
-      return [];
-    } catch (e) {
-      print('❌ [Get Deals] Error: $e');
-      throw Exception('Failed to load deals: $e');
+      return entities.cast<Map<String, dynamic>>();
     }
+    
+    print('❌ [Get Deals] Failed to load deals');
+    return [];
+  } catch (e) {
+    print('❌ [Get Deals] Error: $e');
+    throw Exception('Failed to load deals: $e');
   }
+}
 
   // Get form templates
   Future<List<Map<String, dynamic>>> getFormTemplates() async {

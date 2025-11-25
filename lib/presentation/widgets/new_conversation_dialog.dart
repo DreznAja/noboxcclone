@@ -1,6 +1,7 @@
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/providers/new_conversation_cache_provider.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/new_conversation_service.dart';
@@ -53,80 +54,159 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
     _loadContacts();
   }
 
-  Future<void> _loadChannels() async {
-    setState(() => _isLoadingChannels = true);
-    try {
-      final channels = await _service.getChannels();
-      setState(() {
-        _channels = channels;
-        _isLoadingChannels = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingChannels = false);
-      _showError('Failed to load channels: $e');
-    }
+Future<void> _loadChannels() async {
+  final cache = ref.read(newConversationCacheProvider);
+  
+  // Cek cache channels
+  if (cache.channels.isNotEmpty && !ref.read(newConversationCacheProvider.notifier).shouldRefresh()) {
+    print('✅ Using cached channels');
+    setState(() {
+      _channels = cache.channels;
+      _isLoadingChannels = false;
+    });
+    return;
   }
+
+  // Load dari API jika cache kosong/expired
+  print('📡 Loading channels from API...');
+  setState(() => _isLoadingChannels = true);
+  try {
+    final channels = await _service.getChannels();
+    ref.read(newConversationCacheProvider.notifier).setChannels(channels);
+    setState(() {
+      _channels = channels;
+      _isLoadingChannels = false;
+    });
+  } catch (e) {
+    setState(() => _isLoadingChannels = false);
+    _showError('Failed to load channels: $e');
+  }
+}
 
   // FIXED: Pass channelId parameter to filter accounts by channel
-  Future<void> _loadAccounts() async {
-    if (_selectedChannelId == null) return;
-    
-    setState(() => _isLoadingAccounts = true);
-    try {
-      // FIXED: Parse channelId to int and pass it to getAccounts
-      final channelIdInt = int.tryParse(_selectedChannelId!);
-      final accounts = await _service.getAccounts(channelId: channelIdInt);
-      setState(() {
-        _accounts = accounts;
-        _isLoadingAccounts = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingAccounts = false);
-      _showError('Failed to load accounts: $e');
-    }
+Future<void> _loadAccounts() async {
+  if (_selectedChannelId == null) return;
+  
+  final cache = ref.read(newConversationCacheProvider);
+  
+  // Cek cache accounts untuk channel ini
+  final cachedAccounts = ref.read(newConversationCacheProvider.notifier)
+      .getAccountsForChannel(_selectedChannelId!);
+  
+  if (cachedAccounts != null && cachedAccounts.isNotEmpty && 
+      !ref.read(newConversationCacheProvider.notifier).shouldRefresh()) {
+    print('✅ Using cached accounts for channel $_selectedChannelId');
+    setState(() {
+      _accounts = cachedAccounts;
+      _isLoadingAccounts = false;
+    });
+    return;
   }
 
-  Future<void> _loadContacts() async {
-    setState(() => _isLoadingContacts = true);
-    try {
-      final contacts = await _service.getContacts();
-      setState(() {
-        _contacts = contacts;
-        _isLoadingContacts = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingContacts = false);
-      _showError('Failed to load contacts: $e');
-    }
+  // Load dari API jika cache kosong/expired
+  print('📡 Loading accounts from API for channel $_selectedChannelId...');
+  setState(() => _isLoadingAccounts = true);
+  try {
+    final channelIdInt = int.tryParse(_selectedChannelId!);
+    final accounts = await _service.getAccounts(channelId: channelIdInt);
+    ref.read(newConversationCacheProvider.notifier)
+        .setAccountsForChannel(_selectedChannelId!, accounts);
+    setState(() {
+      _accounts = accounts;
+      _isLoadingAccounts = false;
+    });
+  } catch (e) {
+    setState(() => _isLoadingAccounts = false);
+    _showError('Failed to load accounts: $e');
+  }
+}
+
+Future<void> _loadContacts() async {
+  final cache = ref.read(newConversationCacheProvider);
+  
+  // Cek cache contacts
+  if (cache.contacts.isNotEmpty && !ref.read(newConversationCacheProvider.notifier).shouldRefresh()) {
+    print('✅ Using cached contacts');
+    setState(() {
+      _contacts = cache.contacts;
+      _isLoadingContacts = false;
+    });
+    return;
   }
 
-  Future<void> _loadLinks() async {
-    setState(() => _isLoadingLinks = true);
-    try {
-      final links = await _service.getLinks();
-      setState(() {
-        _links = links;
-        _isLoadingLinks = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingLinks = false);
-      _showError('Failed to load links: $e');
-    }
+  // Load dari API jika cache kosong/expired
+  print('📡 Loading contacts from API...');
+  setState(() => _isLoadingContacts = true);
+  try {
+    final contacts = await _service.getContacts();
+    ref.read(newConversationCacheProvider.notifier).setContacts(contacts);
+    setState(() {
+      _contacts = contacts;
+      _isLoadingContacts = false;
+    });
+  } catch (e) {
+    setState(() => _isLoadingContacts = false);
+    _showError('Failed to load contacts: $e');
+  }
+}
+
+Future<void> _loadLinks() async {
+  final cache = ref.read(newConversationCacheProvider);
+  
+  // Cek cache links
+  if (cache.links.isNotEmpty && !ref.read(newConversationCacheProvider.notifier).shouldRefresh()) {
+    print('✅ Using cached links');
+    setState(() {
+      _links = cache.links;
+      _isLoadingLinks = false;
+    });
+    return;
   }
 
-  Future<void> _loadGroups() async {
-    setState(() => _isLoadingGroups = true);
-    try {
-      final groups = await _service.getGroups();
-      setState(() {
-        _groups = groups;
-        _isLoadingGroups = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingGroups = false);
-      _showError('Failed to load groups: $e');
-    }
+  // Load dari API jika cache kosong/expired
+  print('📡 Loading links from API...');
+  setState(() => _isLoadingLinks = true);
+  try {
+    final links = await _service.getLinks();
+    ref.read(newConversationCacheProvider.notifier).setLinks(links);
+    setState(() {
+      _links = links;
+      _isLoadingLinks = false;
+    });
+  } catch (e) {
+    setState(() => _isLoadingLinks = false);
+    _showError('Failed to load links: $e');
   }
+}
+
+Future<void> _loadGroups() async {
+  final cache = ref.read(newConversationCacheProvider);
+  
+  // Cek cache groups
+  if (cache.groups.isNotEmpty && !ref.read(newConversationCacheProvider.notifier).shouldRefresh()) {
+    print('✅ Using cached groups');
+    setState(() {
+      _groups = cache.groups;
+      _isLoadingGroups = false;
+    });
+    return;
+  }
+
+  // Load dari API jika cache kosong/expired
+  print('📡 Loading groups from API...');
+  setState(() => _isLoadingGroups = true);
+  try {
+    final groups = await _service.getGroups();
+    ref.read(newConversationCacheProvider.notifier).setGroups(groups);
+    setState(() {
+      _groups = groups;
+      _isLoadingGroups = false;
+    });
+  } catch (e) {
+    setState(() => _isLoadingGroups = false);
+    _showError('Failed to load groups: $e');
+  }
+}
 
   void _onChatTypeChanged(ChatType? value) {
     if (value != null) {

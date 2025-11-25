@@ -673,7 +673,7 @@ class _MessageBubbleWidgetState extends ConsumerState<MessageBubbleWidget>
       spans.add(TextSpan(
         text: url,
         style: TextStyle(
-          color: isMe ? Colors.purple.shade200 : Colors.blue,
+          color: isMe ? Colors.white : Colors.blue,
           fontSize: 16,
           height: 1.3,
           decoration: TextDecoration.underline,

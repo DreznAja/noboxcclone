@@ -63,409 +63,472 @@ class _DealSelectionDialogState extends ConsumerState<DealSelectionDialog> {
     }
   }
 
-  Future<void> _loadStages() async {
-    if (_selectedPipelineId == null) return;
+Future<void> _loadStages() async {
+  if (_selectedPipelineId == null) return;
+  
+  try {
+    setState(() {
+      _isLoadingStages = true;
+      _error = null;
+      _stages = [];
+      _deals = [];
+      _selectedStageId = null;
+      _selectedDealId = null;
+    });
+
+    final allStages = await _apiService.getDealPipelineTypes();
     
-    try {
-      setState(() {
-        _isLoadingStages = true;
-        _error = null;
-      });
-
-      final stages = await _apiService.getDealPipelineTypes();
+    print('🔍 [Filter Stages] Selected Pipeline ID: $_selectedPipelineId');
+    print('🔍 [Filter Stages] Total stages received: ${allStages.length}');
+    
+    // ✅ FILTER berdasarkan project_id (ini yang benar!)
+    final filteredStages = allStages.where((stage) {
+      final projectId = stage['project_id']?.toString();
       
-      setState(() {
-        _stages = stages;
-        _isLoadingStages = false;
-      });
-    } catch (e) {
-      print('❌ Error loading stages: $e');
-      setState(() {
-        _error = e.toString();
-        _isLoadingStages = false;
-      });
-    }
-  }
-
-  Future<void> _loadDeals() async {
-    try {
-      setState(() {
-        _isLoadingDeals = true;
-        _error = null;
-      });
-
-      final deals = await _apiService.getDeals();
+      print('   Stage ${stage['Name']}: project_id=$projectId');
       
-      setState(() {
-        _deals = deals;
-        _isLoadingDeals = false;
-      });
-    } catch (e) {
-      print('❌ Error loading deals: $e');
-      setState(() {
-        _error = e.toString();
-        _isLoadingDeals = false;
-      });
-    }
+      return projectId == _selectedPipelineId;
+    }).toList();
+    
+    setState(() {
+      _stages = filteredStages;
+      _isLoadingStages = false;
+    });
+    
+    print('✅ Loaded ${filteredStages.length} stages for pipeline $_selectedPipelineId');
+  } catch (e) {
+    print('❌ Error loading stages: $e');
+    setState(() {
+      _error = e.toString();
+      _isLoadingStages = false;
+    });
   }
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+Future<void> _loadDeals() async {
+  if (_selectedPipelineId == null || _selectedStageId == null) {
+    print('⚠️ Cannot load deals: Pipeline or Stage not selected');
+    return;
+  }
+  
+  try {
+    setState(() {
+      _isLoadingDeals = true;
+      _error = null;
+      _deals = [];
+      _selectedDealId = null;
+    });
 
-    return Dialog(
-      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
-        constraints: const BoxConstraints(maxHeight: 600),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDarkMode 
-                      ? const Color(0xFF1976D2).withOpacity(0.2)
-                      : const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.handshake,
-                    color: Color(0xFF1976D2),
-                    size: 24,
-                  ),
+    final allDeals = await _apiService.getDeals();
+    
+    print('🔍 [Filter Deals] Selected Pipeline ID: $_selectedPipelineId');
+    print('🔍 [Filter Deals] Selected Stage ID: $_selectedStageId');
+    print('🔍 [Filter Deals] Total deals received: ${allDeals.length}');
+    
+    // ✅ FILTER deals berdasarkan berbagai kemungkinan field
+    final filteredDeals = allDeals.where((deal) {
+      // Kemungkinan field untuk pipeline
+      final pipelineId = deal['PipelineId']?.toString();
+      final projectId = deal['project_id']?.toString();
+      
+      // Kemungkinan field untuk stage
+      final stageId = deal['StageId']?.toString();
+      final stageIdField = deal['stage_id']?.toString();
+      
+      print('   Deal ${deal['Name'] ?? deal['Nm']}: PipelineId=$pipelineId, project_id=$projectId, StageId=$stageId, stage_id=$stageIdField');
+      
+      final matchPipeline = pipelineId == _selectedPipelineId || projectId == _selectedPipelineId;
+      final matchStage = stageId == _selectedStageId || stageIdField == _selectedStageId;
+      
+      return matchPipeline && matchStage;
+    }).toList();
+    
+    setState(() {
+      _deals = filteredDeals;
+      _isLoadingDeals = false;
+    });
+    
+    print('✅ Loaded ${filteredDeals.length} deals for pipeline $_selectedPipelineId and stage $_selectedStageId');
+  } catch (e) {
+    print('❌ Error loading deals: $e');
+    setState(() {
+      _error = e.toString();
+      _isLoadingDeals = false;
+    });
+  }
+}
+
+@override
+Widget build(BuildContext context) {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
+  return Dialog(
+    backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: Container(
+      width: MediaQuery.of(context).size.width * 0.9,
+      constraints: const BoxConstraints(maxHeight: 600),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDarkMode 
+                    ? const Color(0xFF1976D2).withOpacity(0.2)
+                    : const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Select Deal',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                  ),
+                child: const Icon(
+                  Icons.handshake,
+                  color: Color(0xFF1976D2),
+                  size: 24,
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(
-                    Icons.close,
-                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black,
-                  ),
-                  onPressed: () => Navigator.of(context).pop(),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Select Deal',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                 ),
-              ],
-            ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: Icon(
+                  Icons.close,
+                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
 
-            const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Pipeline Dropdown
-                    Text(
-                      'Pipeline',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                      ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Pipeline Dropdown
+                  Text(
+                    'Pipeline',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? AppTheme.darkBackground : Colors.white,
-                        border: Border.all(
-                          color: isDarkMode 
-                            ? Colors.white.withOpacity(0.2)
-                            : Colors.grey.shade300,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                      border: Border.all(
+                        color: isDarkMode 
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.grey.shade300,
                       ),
-                      child: _isLoadingPipelines
-                          ? const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppTheme.primaryColor,
-                                ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _isLoadingPipelines
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryColor,
                               ),
-                            )
-                          : DropdownButton<String>(
-                              value: _selectedPipelineId,
-                              hint: Text(
-                                '--select--',
-                                style: TextStyle(
-                                  color: isDarkMode 
-                                    ? AppTheme.darkTextSecondary 
-                                    : Colors.grey,
-                                ),
-                              ),
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                            ),
+                          )
+                        : DropdownButton<String>(
+                            value: _selectedPipelineId,
+                            hint: Text(
+                              '--select--',
                               style: TextStyle(
-                                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : Colors.grey,
                               ),
-                              items: _pipelines.map((pipeline) {
-                                return DropdownMenuItem<String>(
-                                  value: pipeline['Id']?.toString(),
-                                  child: Text(pipeline['Name']?.toString() ?? 'Unnamed'),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedPipelineId = value;
-                                  _selectedStageId = null;
-                                  _stages = [];
-                                });
+                            ),
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                            style: TextStyle(
+                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            ),
+                            items: _pipelines.map((pipeline) {
+  return DropdownMenuItem<String>(
+    value: pipeline['Id']?.toString(),
+    child: Text(
+      pipeline['Nm']?.toString() ?? 
+      pipeline['Name']?.toString() ?? 
+      'Unnamed'
+    ),
+  );
+}).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedPipelineId = value;
+                                _selectedStageId = null;
+                                _selectedDealId = null;
+                                _stages = [];
+                                _deals = [];
+                              });
+                              if (value != null) {
                                 _loadStages();
-                              },
+                              }
+                            },
+                          ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Stage Dropdown
+                  Text(
+                    'Stage',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                      border: Border.all(
+                        color: isDarkMode 
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.grey.shade300,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _isLoadingStages
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryColor,
+                              ),
                             ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Stage Dropdown
-                    Text(
-                      'Stage',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? AppTheme.darkBackground : Colors.white,
-                        border: Border.all(
-                          color: isDarkMode 
-                            ? Colors.white.withOpacity(0.2)
-                            : Colors.grey.shade300,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: _isLoadingStages
-                          ? const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppTheme.primaryColor,
-                                ),
-                              ),
-                            )
-                          : DropdownButton<String>(
-                              value: _selectedStageId,
-                              hint: Text(
-                                '--select--',
-                                style: TextStyle(
-                                  color: isDarkMode 
-                                    ? AppTheme.darkTextSecondary 
-                                    : Colors.grey,
-                                ),
-                              ),
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                          )
+                        : DropdownButton<String>(
+                            value: _selectedStageId,
+                            hint: Text(
+                              _selectedPipelineId == null
+                                  ? '--select pipeline first--'
+                                  : _stages.isEmpty
+                                      ? '--no stages available--'
+                                      : '--select--',
                               style: TextStyle(
-                                color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : Colors.grey,
                               ),
-                              items: _stages.map((stage) {
-                                return DropdownMenuItem<String>(
-                                  value: stage['Id']?.toString(),
-                                  child: Text(stage['Name']?.toString() ?? 'Unnamed'),
-                                );
-                              }).toList(),
-                              onChanged: _selectedPipelineId == null
-                                  ? null
-                                  : (value) {
-                                      setState(() {
-                                        _selectedStageId = value;
-                                      });
-                                    },
                             ),
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                            style: TextStyle(
+                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            ),
+items: _stages.map((stage) {
+  return DropdownMenuItem<String>(
+    value: stage['Id']?.toString(),
+    child: Text(
+      stage['Name']?.toString() ?? 
+      stage['Nm']?.toString() ?? 
+      'Unnamed'
+    ),
+  );
+}).toList(),
+                            onChanged: _selectedPipelineId == null
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _selectedStageId = value;
+                                      _selectedDealId = null;
+                                      _deals = [];
+                                    });
+                                    if (value != null) {
+                                      _loadDeals();
+                                    }
+                                  },
+                          ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Deal Dropdown
+                  Text(
+                    'Deal',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                     ),
-
-                    const SizedBox(height: 16),
-
-                    // Deal Dropdown
-                    Text(
-                      'Deal',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                      border: Border.all(
+                        color: isDarkMode 
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.grey.shade300,
                       ),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 8),
+                    child: _isLoadingDeals
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                          )
+                        : DropdownButton<String>(
+                            value: _selectedDealId,
+                            hint: Text(
+                              _selectedPipelineId == null || _selectedStageId == null
+                                  ? '--select pipeline & stage first--'
+                                  : _deals.isEmpty
+                                      ? '--no deals available--'
+                                      : '--select--',
+                              style: TextStyle(
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextSecondary 
+                                  : Colors.grey,
+                              ),
+                            ),
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                            style: TextStyle(
+                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            ),
+                            items: _deals.map((deal) {
+                              return DropdownMenuItem<String>(
+                                value: deal['Id']?.toString(),
+                                child: Text(deal['Name']?.toString() ?? 'Unnamed'),
+                              );
+                            }).toList(),
+                            onChanged: _selectedPipelineId == null || _selectedStageId == null
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _selectedDealId = value;
+                                    });
+                                  },
+                          ),
+                  ),
+
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                        color: isDarkMode 
+                          ? Colors.red.shade900.withOpacity(0.3)
+                          : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isDarkMode 
-                            ? Colors.white.withOpacity(0.2)
-                            : Colors.grey.shade300,
+                            ? Colors.red.shade700
+                            : Colors.red.shade200,
                         ),
-                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
-                          Expanded(
-                            child: _isLoadingDeals
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12.0),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        color: AppTheme.primaryColor,
-                                      ),
-                                    ),
-                                  )
-                                : DropdownButton<String>(
-                                    value: _selectedDealId,
-                                    hint: Text(
-                                      '--select--',
-                                      style: TextStyle(
-                                        color: isDarkMode 
-                                          ? AppTheme.darkTextSecondary 
-                                          : Colors.grey,
-                                      ),
-                                    ),
-                                    isExpanded: true,
-                                    underline: const SizedBox(),
-                                    dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-                                    style: TextStyle(
-                                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                                    ),
-                                    items: _deals.map((deal) {
-                                      return DropdownMenuItem<String>(
-                                        value: deal['Id']?.toString(),
-                                        child: Text(deal['Name']?.toString() ?? 'Unnamed'),
-                                      );
-                                    }).toList(),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _selectedDealId = value;
-                                      });
-                                    },
-                                  ),
+                          Icon(
+                            Icons.error_outline,
+                            color: isDarkMode ? Colors.red.shade300 : Colors.red,
                           ),
-                          if (!_isLoadingDeals && _deals.isEmpty)
-                            TextButton.icon(
-                              onPressed: _loadDeals,
-                              icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Load'),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                foregroundColor: AppTheme.primaryColor,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.red.shade300 : Colors.red,
+                                fontSize: 12,
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
-
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isDarkMode 
-                            ? Colors.red.shade900.withOpacity(0.3)
-                            : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isDarkMode 
-                              ? Colors.red.shade700
-                              : Colors.red.shade200,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              color: isDarkMode ? Colors.red.shade300 : Colors.red,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _error!,
-                                style: TextStyle(
-                                  color: isDarkMode ? Colors.red.shade300 : Colors.red,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
+          ),
 
-            const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-            // Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: isDarkMode 
-                      ? AppTheme.darkTextSecondary 
-                      : Colors.grey.shade700,
-                  ),
-                  child: const Text('Cancel'),
+          // Actions
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: isDarkMode 
+                    ? AppTheme.darkTextSecondary 
+                    : Colors.grey.shade700,
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _selectedDealId == null
-                      ? null
-                      : () {
-                          final selectedDeal = _deals.firstWhere(
-                            (d) => d['Id']?.toString() == _selectedDealId,
-                          );
-                          final selectedPipeline = _pipelines.firstWhere(
-                            (p) => p['Id']?.toString() == _selectedPipelineId,
-                            orElse: () => {},
-                          );
-                          final selectedStage = _stages.firstWhere(
-                            (s) => s['Id']?.toString() == _selectedStageId,
-                            orElse: () => {},
-                          );
-                          
-                          widget.onDealSelected(
-                            _selectedDealId!,
-                            selectedDeal['Name']?.toString() ?? '',
-                            selectedPipeline['Name']?.toString(),
-                            selectedStage['Name']?.toString(),
-                          );
-                          Navigator.of(context).pop();
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
-          ],
-        ),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 12),
+ElevatedButton(
+  onPressed: _selectedDealId == null
+      ? null
+      : () {
+          final selectedDeal = _deals.firstWhere(
+            (d) => d['Id']?.toString() == _selectedDealId,
+          );
+          final selectedPipeline = _pipelines.firstWhere(
+            (p) => p['Id']?.toString() == _selectedPipelineId,
+            orElse: () => {},
+          );
+          final selectedStage = _stages.firstWhere(
+            (s) => s['Id']?.toString() == _selectedStageId,
+            orElse: () => {},
+          );
+          
+          widget.onDealSelected(
+            _selectedDealId!,
+            selectedDeal['Name']?.toString() ?? 
+            selectedDeal['Nm']?.toString() ?? '',
+            selectedPipeline['Nm']?.toString() ?? 
+            selectedPipeline['Name']?.toString(), // ✅ Cek Nm dulu
+            selectedStage['Name']?.toString() ?? 
+            selectedStage['Nm']?.toString(), // ✅ Cek Nm dulu
+          );
+          Navigator.of(context).pop();
+        },
+  style: ElevatedButton.styleFrom(
+    backgroundColor: AppTheme.primaryColor,
+    foregroundColor: Colors.white,
+  ),
+  child: const Text('Save'),
+),
+            ],
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
