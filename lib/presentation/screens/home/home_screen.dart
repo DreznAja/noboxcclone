@@ -962,7 +962,7 @@ Widget _buildNormalAppBar() {
             textInputAction: TextInputAction.search, // TAMBAHAN: Tampilkan tombol search di keyboard
             onSubmitted: (value) => _executeSearch(), // TAMBAHAN: Execute saat enter
             decoration: InputDecoration(
-              hintText: 'Search conversations...',
+              hintText: 'Search conversations',
               hintStyle: TextStyle(
                 color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey, 
                 fontSize: 16, 
