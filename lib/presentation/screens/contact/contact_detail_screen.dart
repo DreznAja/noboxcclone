@@ -3171,7 +3171,7 @@ void _showCampaignDialog() {
           return;
         }
         
-        // ✅ Save ke backend
+        // ✅ Save ke backend (ini sudah auto-update state)
         final success = await ref.read(contactDetailProvider.notifier)
             .assignCampaign(_currentRoomId!, campaignId);
         
@@ -3183,6 +3183,7 @@ void _showCampaignDialog() {
                 backgroundColor: AppTheme.successColor,
               ),
             );
+            // ✅ TIDAK PERLU reload manual, state sudah auto-update
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -3196,6 +3197,7 @@ void _showCampaignDialog() {
     ),
   );
 }
+
 void _showDealDialog() {
   showDialog(
     context: context,
@@ -3212,6 +3214,7 @@ void _showDealDialog() {
           return;
         }
         
+        // ✅ Save ke backend (auto-update state)
         final success = await ref.read(contactDetailProvider.notifier)
             .assignDeal(_currentRoomId!, dealId);
         
@@ -3223,6 +3226,7 @@ void _showDealDialog() {
                 backgroundColor: AppTheme.successColor,
               ),
             );
+            // ✅ TIDAK PERLU reload manual
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -3253,6 +3257,7 @@ void _showFormTemplateDialog() {
           return;
         }
         
+        // ✅ Save ke backend (auto-update state)
         final success = await ref.read(contactDetailProvider.notifier)
             .assignFormTemplate(_currentRoomId!, formTemplateId, formResultId);
         
@@ -3264,6 +3269,7 @@ void _showFormTemplateDialog() {
                 backgroundColor: AppTheme.successColor,
               ),
             );
+            // ✅ TIDAK PERLU reload manual
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(

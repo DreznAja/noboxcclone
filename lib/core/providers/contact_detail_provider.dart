@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/services/api_service.dart';
 import '../models/contact_detail_models.dart';
 import '../services/contact_detail_service.dart';
 
@@ -168,8 +169,42 @@ Future<bool> assignCampaign(String roomId, String campaignId) async {
   try {
     final success = await _service.assignCampaignToContact(roomId, campaignId);
     if (success) {
-      // Reload untuk update UI
-      await loadContactCampaign(roomId);
+      // ✅ UPDATE STATE LANGSUNG dengan data campaign yang dipilih
+      // Tidak perlu tunggu reload dari backend
+      if (campaignId == '0') {
+        // Remove campaign
+        if (mounted) {
+          state = state.copyWith(clearCampaign: true);
+          print('✅ Campaign removed from state');
+        }
+      } else {
+        // ✅ Fetch campaign detail untuk get nama dan status
+        try {
+          final apiService = ApiService();
+          final campaigns = await apiService.getCampaignsListActive();
+          final selectedCampaign = campaigns.firstWhere(
+            (c) => c['Id']?.toString() == campaignId,
+            orElse: () => {},
+          );
+          
+          if (selectedCampaign.isNotEmpty && mounted) {
+            state = state.copyWith(
+              campaign: ContactCampaign(
+                id: campaignId,
+                name: selectedCampaign['Name']?.toString() ?? 'Campaign #$campaignId',
+                status: selectedCampaign['Status'] ?? 1,
+                description: selectedCampaign['Description']?.toString(),
+              ),
+            );
+            print('✅ Campaign state updated immediately: ${selectedCampaign['Name']}');
+          }
+        } catch (e) {
+          print('⚠️ Failed to fetch campaign detail, will reload: $e');
+          // Fallback: reload dari backend
+          await loadContactCampaign(roomId);
+        }
+      }
+      
       return true;
     }
     return false;
@@ -183,7 +218,69 @@ Future<bool> assignDeal(String roomId, String dealId) async {
   try {
     final success = await _service.assignDealToContact(roomId, dealId);
     if (success) {
-      await loadContactDeal(roomId);
+      // ✅ UPDATE STATE LANGSUNG
+      if (dealId == '0') {
+        // Remove deal
+        if (mounted) {
+          state = state.copyWith(clearDeal: true);
+          print('✅ Deal removed from state');
+        }
+      } else {
+        // ✅ Fetch deal detail untuk get nama, pipeline, stage
+        try {
+          final apiService = ApiService();
+          final deals = await apiService.getDeals();
+          final pipelines = await apiService.getDealPipelines();
+          final stages = await apiService.getDealPipelineTypes();
+          
+          final selectedDeal = deals.firstWhere(
+            (d) => d['Id']?.toString() == dealId,
+            orElse: () => {},
+          );
+          
+          if (selectedDeal.isNotEmpty && mounted) {
+            // Get pipeline name
+            String? pipelineName;
+            final pipelineId = selectedDeal['PlId']?.toString();
+            if (pipelineId != null) {
+              final pipeline = pipelines.firstWhere(
+                (p) => p['Id']?.toString() == pipelineId,
+                orElse: () => {},
+              );
+              pipelineName = pipeline['Nm']?.toString() ?? pipeline['Name']?.toString();
+            }
+            
+            // Get stage name
+            String? stageName;
+            final stageId = selectedDeal['piplinetypes']?.toString();
+            if (stageId != null) {
+              final stage = stages.firstWhere(
+                (s) => s['Id']?.toString() == stageId,
+                orElse: () => {},
+              );
+              stageName = stage['Name']?.toString() ?? stage['Nm']?.toString();
+            }
+            
+            state = state.copyWith(
+              deal: ContactDeal(
+                id: dealId,
+                name: selectedDeal['Nm']?.toString() ?? 
+                      selectedDeal['Name']?.toString() ?? 
+                      'Deal #$dealId',
+                pipeline: pipelineName,
+                stage: stageName,
+                value: selectedDeal['Value']?.toDouble(),
+              ),
+            );
+            print('✅ Deal state updated immediately: ${selectedDeal['Nm']}');
+          }
+        } catch (e) {
+          print('⚠️ Failed to fetch deal detail, will reload: $e');
+          // Fallback: reload dari backend
+          await loadContactDeal(roomId);
+        }
+      }
+      
       return true;
     }
     return false;
@@ -197,10 +294,77 @@ Future<bool> assignFormTemplate(String roomId, String formTemplateId, String? fo
   try {
     final success = await _service.assignFormTemplateToContact(roomId, formTemplateId, formResultId);
     if (success) {
-      await loadContactFormTemplate(roomId);
-      if (formResultId != null) {
-        await loadContactFormResult(roomId);
+      // ✅ UPDATE STATE LANGSUNG
+      if (formTemplateId == '0') {
+        // Remove form template
+        if (mounted) {
+          state = state.copyWith(
+            clearFormTemplate: true,
+            clearFormResult: true,
+          );
+          print('✅ Form template removed from state');
+        }
+      } else {
+        // ✅ Fetch form template & result detail
+        try {
+          final apiService = ApiService();
+          final templates = await apiService.getFormTemplates();
+          
+          final selectedTemplate = templates.firstWhere(
+            (t) => t['Id']?.toString() == formTemplateId,
+            orElse: () => {},
+          );
+          
+          if (selectedTemplate.isNotEmpty && mounted) {
+            // Update form template
+            state = state.copyWith(
+              formTemplate: ContactFormTemplate(
+                id: formTemplateId,
+                name: selectedTemplate['Name']?.toString() ?? 'Form #$formTemplateId',
+                description: selectedTemplate['Description']?.toString(),
+              ),
+            );
+            print('✅ Form template state updated immediately: ${selectedTemplate['Name']}');
+            
+            // Update form result if provided
+            if (formResultId != null && formResultId != '0') {
+              final results = await apiService.getFormResults();
+              final selectedResult = results.firstWhere(
+                (r) => r['Id']?.toString() == formResultId,
+                orElse: () => {},
+              );
+              
+              if (selectedResult.isNotEmpty && mounted) {
+                state = state.copyWith(
+                  formResult: ContactFormResult(
+                    id: formResultId,
+                    senderName: selectedResult['SenderNm']?.toString() ?? 
+                                selectedResult['SenderName']?.toString() ?? 
+                                'Unknown',
+                    submittedAt: selectedResult['In'] != null 
+                        ? DateTime.parse(selectedResult['In']) 
+                        : null,
+                  ),
+                );
+                print('✅ Form result state updated immediately');
+              }
+            } else {
+              // Clear form result if not provided
+              if (mounted) {
+                state = state.copyWith(clearFormResult: true);
+              }
+            }
+          }
+        } catch (e) {
+          print('⚠️ Failed to fetch form detail, will reload: $e');
+          // Fallback: reload dari backend
+          await loadContactFormTemplate(roomId);
+          if (formResultId != null) {
+            await loadContactFormResult(roomId);
+          }
+        }
       }
+      
       return true;
     }
     return false;
