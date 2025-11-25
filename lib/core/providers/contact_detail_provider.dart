@@ -147,7 +147,53 @@ class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
     }
   }
 
-  // Tambahkan method baru
+Future<bool> assignCampaign(String roomId, String campaignId) async {
+  try {
+    final success = await _service.assignCampaignToContact(roomId, campaignId);
+    if (success) {
+      // Reload untuk update UI
+      await loadContactCampaign(roomId);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    print('❌ Error assigning campaign: $e');
+    return false;
+  }
+}
+
+Future<bool> assignDeal(String roomId, String dealId) async {
+  try {
+    final success = await _service.assignDealToContact(roomId, dealId);
+    if (success) {
+      await loadContactDeal(roomId);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    print('❌ Error assigning deal: $e');
+    return false;
+  }
+}
+
+Future<bool> assignFormTemplate(String roomId, String formTemplateId, String? formResultId) async {
+  try {
+    final success = await _service.assignFormTemplateToContact(roomId, formTemplateId, formResultId);
+    if (success) {
+      await loadContactFormTemplate(roomId);
+      if (formResultId != null) {
+        await loadContactFormResult(roomId);
+      }
+      return true;
+    }
+    return false;
+  } catch (e) {
+    print('❌ Error assigning form template: $e');
+    return false;
+  }
+}
+
+// Tambahkan method baru
 Future<void> loadRoomTags(String contactId) async {
   if (!mounted) return;
   

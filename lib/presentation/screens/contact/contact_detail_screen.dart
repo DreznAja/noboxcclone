@@ -3155,66 +3155,128 @@ Future<void> _toggleBlockContact(ContactDetail contact) async {
     }
   }
 
-  void _showCampaignDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => CampaignSelectionDialog(
-        contactId: widget.contactId,
-        onCampaignSelected: (campaignId, campaignName) {
-          print('📌 Selected campaign: $campaignName (ID: $campaignId)');
-          // TODO: Save campaign to contact
+void _showCampaignDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => CampaignSelectionDialog(
+      contactId: widget.contactId,
+      onCampaignSelected: (campaignId, campaignName) async {
+        if (_currentRoomId == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Campaign "$campaignName" selected'),
-              backgroundColor: AppTheme.successColor,
+            const SnackBar(
+              content: Text('Room ID not found'),
+              backgroundColor: AppTheme.errorColor,
             ),
           );
-        },
-      ),
-    );
-  }
-
-  void _showDealDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => DealSelectionDialog(
-        contactId: widget.contactId,
-        onDealSelected: (dealId, dealName, pipeline, stage) {
-          print('📌 Selected deal: $dealName (ID: $dealId)');
-          print('  Pipeline: $pipeline, Stage: $stage');
-          // TODO: Save deal to contact
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Deal "$dealName" selected'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _showFormTemplateDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => FormTemplateSelectionDialog(
-        contactId: widget.contactId,
-        onFormSelected: (formTemplateId, formTemplateName, formResultId) {
-          print('📌 Selected form template: $formTemplateName (ID: $formTemplateId)');
-          if (formResultId != null) {
-            print('  Form result ID: $formResultId');
+          return;
+        }
+        
+        // ✅ Save ke backend
+        final success = await ref.read(contactDetailProvider.notifier)
+            .assignCampaign(_currentRoomId!, campaignId);
+        
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Campaign "$campaignName" saved'),
+                backgroundColor: AppTheme.successColor,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to save campaign'),
+                backgroundColor: AppTheme.errorColor,
+              ),
+            );
           }
-          // TODO: Save form template to contact
+        }
+      },
+    ),
+  );
+}
+void _showDealDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => DealSelectionDialog(
+      contactId: widget.contactId,
+      onDealSelected: (dealId, dealName, pipeline, stage) async {
+        if (_currentRoomId == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Form template "$formTemplateName" selected'),
-              backgroundColor: AppTheme.successColor,
+            const SnackBar(
+              content: Text('Room ID not found'),
+              backgroundColor: AppTheme.errorColor,
             ),
           );
-        },
-      ),
-    );
-  }
+          return;
+        }
+        
+        final success = await ref.read(contactDetailProvider.notifier)
+            .assignDeal(_currentRoomId!, dealId);
+        
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Deal "$dealName" saved'),
+                backgroundColor: AppTheme.successColor,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to save deal'),
+                backgroundColor: AppTheme.errorColor,
+              ),
+            );
+          }
+        }
+      },
+    ),
+  );
+}
+
+void _showFormTemplateDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => FormTemplateSelectionDialog(
+      contactId: widget.contactId,
+      onFormSelected: (formTemplateId, formTemplateName, formResultId) async {
+        if (_currentRoomId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Room ID not found'),
+              backgroundColor: AppTheme.errorColor,
+            ),
+          );
+          return;
+        }
+        
+        final success = await ref.read(contactDetailProvider.notifier)
+            .assignFormTemplate(_currentRoomId!, formTemplateId, formResultId);
+        
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Form "$formTemplateName" saved'),
+                backgroundColor: AppTheme.successColor,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to save form'),
+                backgroundColor: AppTheme.errorColor,
+              ),
+            );
+          }
+        }
+      },
+    ),
+  );
+}
 
   Future<void> _handleNeedReplyToggle(bool newValue) async {
     if (_currentRoomId == null) {

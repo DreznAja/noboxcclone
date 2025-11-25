@@ -249,41 +249,43 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
             const SizedBox(height: 20),
 
             // Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: isDarkMode 
-                      ? AppTheme.darkTextSecondary 
-                      : Colors.grey.shade700,
-                  ),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _selectedCampaignId == null
-                      ? null
-                      : () {
-                          final selectedCampaign = _campaigns.firstWhere(
-                            (c) => c['Id']?.toString() == _selectedCampaignId,
-                          );
-                          
-                          widget.onCampaignSelected(
-                            _selectedCampaignId!,
-                            selectedCampaign['Name']?.toString() ?? '',
-                          );
-                          Navigator.of(context).pop();
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
+            // Actions
+Row(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    TextButton(
+      onPressed: () => Navigator.of(context).pop(),
+      style: TextButton.styleFrom(
+        foregroundColor: isDarkMode 
+          ? AppTheme.darkTextSecondary 
+          : Colors.grey.shade700,
+      ),
+      child: const Text('Cancel'),
+    ),
+    const SizedBox(width: 12),
+    ElevatedButton(
+      onPressed: _selectedCampaignId == null
+          ? null
+          : () async {
+              final selectedCampaign = _campaigns.firstWhere(
+                (c) => c['Id']?.toString() == _selectedCampaignId,
+              );
+              
+              // ✅ Panggil callback untuk save
+              widget.onCampaignSelected(
+                _selectedCampaignId!,
+                selectedCampaign['Name']?.toString() ?? '',
+              );
+              Navigator.of(context).pop();
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+      ),
+      child: const Text('Save'),
+    ),
+  ],
+),
           ],
         ),
       ),

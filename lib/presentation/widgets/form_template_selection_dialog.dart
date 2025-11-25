@@ -336,42 +336,44 @@ Widget build(BuildContext context) {
           const SizedBox(height: 20),
 
           // Actions
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: isDarkMode 
-                    ? AppTheme.darkTextSecondary 
-                    : Colors.grey.shade700,
-                ),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _selectedFormTemplateId == null
-                    ? null
-                    : () {
-                        final selectedTemplate = _formTemplates.firstWhere(
-                          (t) => t['Id']?.toString() == _selectedFormTemplateId,
-                        );
-                        
-                        widget.onFormSelected(
-                          _selectedFormTemplateId!,
-                          selectedTemplate['Name']?.toString() ?? '',
-                          _selectedFormResultId,
-                        );
-                        Navigator.of(context).pop();
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Save'),
-              ),
-            ],
-          ),
+// Actions
+Row(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    TextButton(
+      onPressed: () => Navigator.of(context).pop(),
+      style: TextButton.styleFrom(
+        foregroundColor: isDarkMode 
+          ? AppTheme.darkTextSecondary 
+          : Colors.grey.shade700,
+      ),
+      child: const Text('Cancel'),
+    ),
+    const SizedBox(width: 12),
+    ElevatedButton(
+      onPressed: _selectedFormTemplateId == null
+          ? null
+          : () async {
+              final selectedTemplate = _formTemplates.firstWhere(
+                (t) => t['Id']?.toString() == _selectedFormTemplateId,
+              );
+              
+              // ✅ Panggil callback untuk save
+              widget.onFormSelected(
+                _selectedFormTemplateId!,
+                selectedTemplate['Name']?.toString() ?? '',
+                _selectedFormResultId,
+              );
+              Navigator.of(context).pop();
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+      ),
+      child: const Text('Save'),
+    ),
+  ],
+),
         ],
       ),
     ),

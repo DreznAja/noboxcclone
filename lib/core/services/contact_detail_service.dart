@@ -70,6 +70,101 @@ class ContactDetailService {
   }
 }
 
+// Tambahkan di contact_detail_service.dart
+
+Future<bool> assignCampaignToContact(String roomId, String campaignId) async {
+  try {
+    print('📌 Assigning campaign $campaignId to room $roomId');
+    
+    final requestData = {
+      'EntityId': roomId,
+      'Entity': {
+        'CampaignId': campaignId == '0' ? null : int.tryParse(campaignId),
+      },
+    };
+    
+    final response = await _dio.post(
+      'Services/Chat/Chatrooms/Update',
+      data: requestData,
+    );
+    
+    if (response.statusCode == 200 && response.data['Error'] == null) {
+      print('✅ Campaign assigned successfully');
+      return true;
+    }
+    
+    print('❌ Failed to assign campaign: ${response.data}');
+    return false;
+  } catch (e) {
+    print('❌ Error assigning campaign: $e');
+    return false;
+  }
+}
+
+Future<bool> assignDealToContact(String roomId, String dealId) async {
+  try {
+    print('📌 Assigning deal $dealId to room $roomId');
+    
+    final requestData = {
+      'EntityId': roomId,
+      'Entity': {
+        'DealId': dealId == '0' ? null : int.tryParse(dealId),
+      },
+    };
+    
+    final response = await _dio.post(
+      'Services/Chat/Chatrooms/Update',
+      data: requestData,
+    );
+    
+    if (response.statusCode == 200 && response.data['Error'] == null) {
+      print('✅ Deal assigned successfully');
+      return true;
+    }
+    
+    print('❌ Failed to assign deal: ${response.data}');
+    return false;
+  } catch (e) {
+    print('❌ Error assigning deal: $e');
+    return false;
+  }
+}
+
+Future<bool> assignFormTemplateToContact(String roomId, String formTemplateId, String? formResultId) async {
+  try {
+    print('📌 Assigning form template $formTemplateId to room $roomId');
+    
+    final entity = <String, dynamic>{
+      'FormTemplateId': formTemplateId == '0' ? null : int.tryParse(formTemplateId),
+    };
+    
+    if (formResultId != null && formResultId != '0') {
+      entity['FormResultId'] = int.tryParse(formResultId);
+    }
+    
+    final requestData = {
+      'EntityId': roomId,
+      'Entity': entity,
+    };
+    
+    final response = await _dio.post(
+      'Services/Chat/Chatrooms/Update',
+      data: requestData,
+    );
+    
+    if (response.statusCode == 200 && response.data['Error'] == null) {
+      print('✅ Form template assigned successfully');
+      return true;
+    }
+    
+    print('❌ Failed to assign form template: ${response.data}');
+    return false;
+  } catch (e) {
+    print('❌ Error assigning form template: $e');
+    return false;
+  }
+}
+
 // Tambahkan method ini di ContactDetailService class
 
 Future<List<Map<String, dynamic>>> getRoomTags(String roomId) async {

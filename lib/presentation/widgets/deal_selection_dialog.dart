@@ -474,54 +474,56 @@ items: _deals.map((deal) {
           const SizedBox(height: 20),
 
           // Actions
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: isDarkMode 
-                    ? AppTheme.darkTextSecondary 
-                    : Colors.grey.shade700,
-                ),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 12),
-ElevatedButton(
-  onPressed: _selectedDealId == null
-      ? null
-      : () {
-          final selectedDeal = _deals.firstWhere(
-            (d) => d['Id']?.toString() == _selectedDealId,
-          );
-          final selectedPipeline = _pipelines.firstWhere(
-            (p) => p['Id']?.toString() == _selectedPipelineId,
-            orElse: () => {},
-          );
-          final selectedStage = _stages.firstWhere(
-            (s) => s['Id']?.toString() == _selectedStageId,
-            orElse: () => {},
-          );
-          
-          widget.onDealSelected(
-            _selectedDealId!,
-            selectedDeal['Nm']?.toString() ?? 
-            selectedDeal['Name']?.toString() ?? '',
-            selectedPipeline['Nm']?.toString() ?? 
-            selectedPipeline['Name']?.toString(), // ✅ Cek Nm dulu
-            selectedStage['Name']?.toString() ?? 
-            selectedStage['Nm']?.toString(), // ✅ Cek Nm dulu
-          );
-          Navigator.of(context).pop();
-        },
-  style: ElevatedButton.styleFrom(
-    backgroundColor: AppTheme.primaryColor,
-    foregroundColor: Colors.white,
-  ),
-  child: const Text('Save'),
+// Actions
+Row(
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    TextButton(
+      onPressed: () => Navigator.of(context).pop(),
+      style: TextButton.styleFrom(
+        foregroundColor: isDarkMode 
+          ? AppTheme.darkTextSecondary 
+          : Colors.grey.shade700,
+      ),
+      child: const Text('Cancel'),
+    ),
+    const SizedBox(width: 12),
+    ElevatedButton(
+      onPressed: _selectedDealId == null
+          ? null
+          : () async {
+              final selectedDeal = _deals.firstWhere(
+                (d) => d['Id']?.toString() == _selectedDealId,
+              );
+              final selectedPipeline = _pipelines.firstWhere(
+                (p) => p['Id']?.toString() == _selectedPipelineId,
+                orElse: () => {},
+              );
+              final selectedStage = _stages.firstWhere(
+                (s) => s['Id']?.toString() == _selectedStageId,
+                orElse: () => {},
+              );
+              
+              // ✅ Panggil callback untuk save
+              widget.onDealSelected(
+                _selectedDealId!,
+                selectedDeal['Nm']?.toString() ?? 
+                selectedDeal['Name']?.toString() ?? '',
+                selectedPipeline['Nm']?.toString() ?? 
+                selectedPipeline['Name']?.toString(),
+                selectedStage['Name']?.toString() ?? 
+                selectedStage['Nm']?.toString(),
+              );
+              Navigator.of(context).pop();
+            },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+      ),
+      child: const Text('Save'),
+    ),
+  ],
 ),
-            ],
-          ),
         ],
       ),
     ),
