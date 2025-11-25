@@ -44,6 +44,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   StreamSubscription<String>? _connectionSubscription;
   StreamSubscription<void>? _sessionExpiredSubscription;
 
+  // Debounce timer untuk search
+  Timer? _searchDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _searchFocusNode.dispose();
     _cancelRealtimeListeners();
     _sessionExpiredSubscription?.cancel();
+    _searchDebounce?.cancel(); // Cancel debounce timer
     super.dispose();
   }
 
@@ -320,7 +324,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   void _handleSearch(String query) {
-    _applyFilters(searchQuery: query);
+    _searchDebounce?.cancel();
+    // _applyFilters(searchQuery: query);
+  }
+
+  void _executeSearch() {
+    final query = _searchController.text.trim();
+    _applyFilters(searchQuery: query.isNotEmpty ? query : null);
   }
 
 Future<void> _handleLogout() async {
@@ -930,7 +940,7 @@ Widget _buildNormalAppBar() {
     );
   }
 
- Widget _buildSearchAppBar() {
+  Widget _buildSearchAppBar() {
     final isDarkMode = ref.watch(themeProvider).isDarkMode;
     
     return Container(
@@ -949,6 +959,8 @@ Widget _buildNormalAppBar() {
             focusNode: _searchFocusNode,
             autofocus: true,
             textAlignVertical: TextAlignVertical.center,
+            textInputAction: TextInputAction.search, // TAMBAHAN: Tampilkan tombol search di keyboard
+            onSubmitted: (value) => _executeSearch(), // TAMBAHAN: Execute saat enter
             decoration: InputDecoration(
               hintText: 'Search conversations...',
               hintStyle: TextStyle(
@@ -958,8 +970,8 @@ Widget _buildNormalAppBar() {
               ),
               border: InputBorder.none,
               isDense: true,
-              filled: true, // TAMBAHKAN INI - FORCE FILL
-              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN INI
+              filled: true,
+              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
               prefixIcon: IconButton(
                 onPressed: () {
                   setState(() {
@@ -974,22 +986,45 @@ Widget _buildNormalAppBar() {
                   size: 24
                 ),
               ),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      onPressed: () { _searchController.clear(); _applyFilters(); }, 
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // TAMBAHAN: Tombol clear (hanya muncul jika ada text)
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                        _applyFilters(); // Clear search results
+                      },
                       icon: Icon(
-                        Icons.clear, 
-                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey
-                      )
-                    )
-                  : null,
+                        Icons.clear,
+                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                        size: 20,
+                      ),
+                    ),
+                  // TAMBAHAN: Tombol search/enter
+                  IconButton(
+                    onPressed: _executeSearch,
+                    icon: Icon(
+                      Icons.search,
+                      color: isDarkMode ? Colors.white70 : AppTheme.primaryColor,
+                      size: 24,
+                    ),
+                    tooltip: 'Search',
+                  ),
+                ],
+              ),
             ),
             style: TextStyle(
               fontSize: 16, 
               fontFamily: 'Poppins', 
               color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black
             ),
-            onChanged: _handleSearch,
+            onChanged: (value) {
+              setState(() {}); // Update UI untuk show/hide clear button
+              _handleSearch(value); // Optional debounce handling
+            },
           ),
         ),
       ),
