@@ -125,22 +125,14 @@ Future<void> _loadDeals() async {
     print('🔍 [Filter Deals] Selected Stage ID: $_selectedStageId');
     print('🔍 [Filter Deals] Total deals received: ${allDeals.length}');
     
-    // ✅ FILTER deals berdasarkan berbagai kemungkinan field
+    // ✅ FILTER deals berdasarkan PlId dan piplinetypes (field yang benar!)
     final filteredDeals = allDeals.where((deal) {
-      // Kemungkinan field untuk pipeline
-      final pipelineId = deal['PipelineId']?.toString();
-      final projectId = deal['project_id']?.toString();
+      final plId = deal['PlId']?.toString();
+      final pipelineTypes = deal['piplinetypes']?.toString();
       
-      // Kemungkinan field untuk stage
-      final stageId = deal['StageId']?.toString();
-      final stageIdField = deal['stage_id']?.toString();
+      print('   Deal ${deal['Nm']}: PlId=$plId, piplinetypes=$pipelineTypes');
       
-      print('   Deal ${deal['Name'] ?? deal['Nm']}: PipelineId=$pipelineId, project_id=$projectId, StageId=$stageId, stage_id=$stageIdField');
-      
-      final matchPipeline = pipelineId == _selectedPipelineId || projectId == _selectedPipelineId;
-      final matchStage = stageId == _selectedStageId || stageIdField == _selectedStageId;
-      
-      return matchPipeline && matchStage;
+      return plId == _selectedPipelineId && pipelineTypes == _selectedStageId;
     }).toList();
     
     setState(() {
@@ -419,12 +411,16 @@ items: _stages.map((stage) {
                             style: TextStyle(
                               color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                             ),
-                            items: _deals.map((deal) {
-                              return DropdownMenuItem<String>(
-                                value: deal['Id']?.toString(),
-                                child: Text(deal['Name']?.toString() ?? 'Unnamed'),
-                              );
-                            }).toList(),
+items: _deals.map((deal) {
+  return DropdownMenuItem<String>(
+    value: deal['Id']?.toString(),
+    child: Text(
+      deal['Nm']?.toString() ?? 
+      deal['Name']?.toString() ?? 
+      'Unnamed'
+    ),
+  );
+}).toList(),
                             onChanged: _selectedPipelineId == null || _selectedStageId == null
                                 ? null
                                 : (value) {
@@ -509,8 +505,8 @@ ElevatedButton(
           
           widget.onDealSelected(
             _selectedDealId!,
-            selectedDeal['Name']?.toString() ?? 
-            selectedDeal['Nm']?.toString() ?? '',
+            selectedDeal['Nm']?.toString() ?? 
+            selectedDeal['Name']?.toString() ?? '',
             selectedPipeline['Nm']?.toString() ?? 
             selectedPipeline['Name']?.toString(), // ✅ Cek Nm dulu
             selectedStage['Name']?.toString() ?? 
