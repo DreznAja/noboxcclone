@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
+import 'package:nobox_chat/core/services/agent_cache_service.dart';
 import 'package:nobox_chat/core/services/signalr_service.dart';
 import '../../../core/services/account_service.dart';
 import '../../../core/services/api_service.dart';
@@ -162,6 +163,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   }
 
   void _loadInitialData() async {
+
+      // ✅ TAMBAHKAN: Refresh agent cache
+  try {
+    print('🔄 Refreshing agent cache...');
+    await AgentCacheService().refreshCache();
+    print('✅ Agent cache refreshed');
+  } catch (e) {
+    print('⚠️ Failed to refresh agent cache: $e');
+  }
+
+
     // Refresh AccountService to get latest account names from backend
     try {
       print('🔄 Refreshing account mappings...');

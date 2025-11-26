@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:nobox_chat/core/background/signalr_background_handler.dart';
+import 'package:nobox_chat/core/services/agent_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -47,6 +48,11 @@ void main() async {
 
   // Initialize AccountService (singleton pattern, no async init needed)
   AccountService();
+
+    // ✅ TAMBAHKAN INI - Initialize dan load agent cache
+  final agentCache = AgentCacheService();
+  await agentCache.initialize();
+  print('✅ Agent cache initialized at app startup');
 
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(

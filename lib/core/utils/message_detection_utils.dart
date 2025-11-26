@@ -220,11 +220,13 @@ class MessageDetectionUtils {
         print('   targetAgentId: $targetAgentId');
         print('   assignerAgentId: $assignerAgentId');
         
-        final targetAgentName = _resolveAgentName(agentCache, targetAgentId) ?? targetAgentId ?? 'Agent';
-        final byAgentName = _resolveAgentName(agentCache, assignerAgentId);
+  final targetAgentName = _resolveAgentName(agentCache, targetAgentId);
+  final byAgentName = _resolveAgentName(agentCache, assignerAgentId);
         
         print('   targetAgentName resolved: $targetAgentName');
         print('   byAgentName resolved: $byAgentName');
+
+        final displayTargetName = targetAgentName ?? 'Agent';
         
         if (byAgentName != null) {
           return '$targetAgentName has been assigned to this conversation by $byAgentName';
@@ -232,15 +234,28 @@ class MessageDetectionUtils {
           return '$targetAgentName has been assigned to this conversation';
         }
       } else if (msg.contains('AgentOutBy') || msg.contains('HasRemove')) {
-        final removedAgentName = _resolveAgentName(agentCache, userId ?? agentId) ?? user ?? 'Agent';
-        final byAgentName = _resolveAgentName(agentCache, byUserId);
-        
-        if (byAgentName != null) {
-          return '$removedAgentName has been removed from this conversation by $byAgentName';
-        } else {
-          return '$removedAgentName has been removed from this conversation';
-        }
-      } else if (msg.contains('MuteBot')) {
+  print('🔍 [Remove Agent Message Debug]');
+  print('   userId: $userId');
+  print('   byUserId: $byUserId');
+  print('   agentId: $agentId');
+  print('   user: $user');
+  
+  // ✅ PERBAIKAN: Resolve nama untuk agent yang di-remove
+  final removedAgentName = _resolveAgentName(agentCache, userId ?? agentId);
+  final byAgentName = _resolveAgentName(agentCache, byUserId);
+  
+  print('   removedAgentName resolved: $removedAgentName');
+  print('   byAgentName resolved: $byAgentName');
+  
+  // ✅ GUNAKAN NAMA ATAU "Agent" - JANGAN GUNAKAN ID
+  final displayRemovedName = removedAgentName ?? 'Agent';
+  
+  if (byAgentName != null) {
+    return '$displayRemovedName has been removed from this conversation by $byAgentName';
+  } else {
+    return '$displayRemovedName has been removed from this conversation';
+  }
+} else if (msg.contains('MuteBot')) {
         final agentName = _resolveAgentName(agentCache, byUserId ?? userId ?? agentId) ?? user ?? 'Agent';
         return '$agentName muted the bot for this conversation';
       } else if (msg.contains('UnmuteBot')) {
@@ -258,10 +273,22 @@ class MessageDetectionUtils {
   }
   
   /// Helper to resolve agent ID to agent name
-  static String? _resolveAgentName(AgentCacheService agentCache, String? agentId) {
-    if (agentId == null || agentId.isEmpty) return null;
-    return agentCache.getAgentNameSync(agentId);
+/// Helper to resolve agent ID to agent name
+static String? _resolveAgentName(AgentCacheService agentCache, String? agentId) {
+  if (agentId == null || agentId.isEmpty) return null;
+  
+  // ✅ PERBAIKAN: Coba get nama dari cache
+  final agentName = agentCache.getAgentNameSync(agentId);
+  
+  if (agentName != null && agentName.isNotEmpty) {
+    print('✅ Resolved agent ID $agentId to name: $agentName');
+    return agentName;
   }
+  
+  // ❌ Jika tidak ketemu, return null (JANGAN return ID)
+  print('⚠️ Could not resolve agent name for ID: $agentId');
+  return null;
+}
   
   /// Helper to safely try parse JSON
   static Map<String, dynamic>? _tryParseJson(String str) {
