@@ -70,14 +70,12 @@ class _FormTemplateSelectionDialogState extends ConsumerState<FormTemplateSelect
       setState(() {
         _isLoadingResults = true;
         _error = null;
-        // ✅ RESET form results saat template berubah
         _formResults = [];
         _selectedFormResultId = null;
       });
 
       final allResults = await _apiService.getFormResults();
       
-      // ✅ FILTER form results berdasarkan template yang dipilih
       final filteredResults = allResults.where((result) {
         return result['FormId']?.toString() == _selectedFormTemplateId;
       }).toList();
@@ -97,286 +95,369 @@ class _FormTemplateSelectionDialogState extends ConsumerState<FormTemplateSelect
     }
   }
 
-@override
-Widget build(BuildContext context) {
-  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
-  return Dialog(
-    backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    child: Container(
-      width: MediaQuery.of(context).size.width * 0.9,
-      constraints: const BoxConstraints(maxHeight: 500),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDarkMode 
-                    ? const Color(0xFF1976D2).withOpacity(0.2)
-                    : const Color(0xFFE3F2FD),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.description,
-                  color: Color(0xFF1976D2),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Form Template',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: Icon(
-                  Icons.close,
-                  color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Form Template Dropdown
-                  Text(
-                    'Form Template',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                    ),
+    return Dialog(
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        constraints: const BoxConstraints(maxHeight: 500),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDarkMode 
+                      ? const Color(0xFF1976D2).withOpacity(0.2)
+                      : const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? AppTheme.darkBackground : Colors.white,
-                      border: Border.all(
-                        color: isDarkMode 
-                          ? Colors.white.withOpacity(0.2)
-                          : Colors.grey.shade300,
+                  child: const Icon(
+                    Icons.description,
+                    color: Color(0xFF1976D2),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Form Template',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    Icons.close,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Form Template Dropdown
+                    Text(
+                      'Form Template',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                       ),
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: _isLoadingTemplates
-                        ? const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          )
-                        : DropdownButton<String>(
-                            value: _selectedFormTemplateId,
-                            hint: Text(
-                              '--select--',
-                              style: TextStyle(
-                                color: isDarkMode 
-                                  ? AppTheme.darkTextSecondary 
-                                  : Colors.grey,
-                              ),
-                            ),
-                            isExpanded: true,
-                            underline: const SizedBox(),
-                            dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-                            style: TextStyle(
-                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                            ),
-                            items: _formTemplates.map((template) {
-                              return DropdownMenuItem<String>(
-                                value: template['Id']?.toString(),
-                                child: Text(template['Name']?.toString() ?? 'Unnamed'),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedFormTemplateId = value;
-                                _selectedFormResultId = null;
-                                _formResults = [];
-                              });
-                              if (value != null) {
-                                _loadFormResults();
-                              }
-                            },
-                          ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Form Result Dropdown
-                  Text(
-                    'Form Result',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? AppTheme.darkBackground : Colors.white,
-                      border: Border.all(
-                        color: isDarkMode 
-                          ? Colors.white.withOpacity(0.2)
-                          : Colors.grey.shade300,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: _isLoadingResults
-                        ? const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          )
-                        : DropdownButton<String>(
-                            value: _selectedFormResultId,
-                            hint: Text(
-                              _selectedFormTemplateId == null
-                                  ? '--select template first--'
-                                  : _formResults.isEmpty
-                                      ? '--no results available--'
-                                      : '--select--',
-                              style: TextStyle(
-                                color: isDarkMode 
-                                  ? AppTheme.darkTextSecondary 
-                                  : Colors.grey,
-                              ),
-                            ),
-                            isExpanded: true,
-                            underline: const SizedBox(),
-                            dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-                            style: TextStyle(
-                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
-                            ),
-                            items: _formResults.map((result) {
-                              return DropdownMenuItem<String>(
-                                value: result['Id']?.toString(),
-                                child: Text(result['SenderNm']?.toString() ?? 
-                                           result['SenderName']?.toString() ?? 
-                                           'Unnamed'),
-                              );
-                            }).toList(),
-                            onChanged: _selectedFormTemplateId == null
-                                ? null
-                                : (value) {
-                                    setState(() {
-                                      _selectedFormResultId = value;
-                                    });
-                                  },
-                          ),
-                  ),
-
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: isDarkMode 
-                          ? Colors.red.shade900.withOpacity(0.3)
-                          : Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
+                        color: isDarkMode ? AppTheme.darkSurface : Colors.white,
                         border: Border.all(
                           color: isDarkMode 
-                            ? Colors.red.shade700
-                            : Colors.red.shade200,
+                            ? Colors.grey.shade700
+                            : Colors.grey.shade300,
                         ),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: isDarkMode ? Colors.red.shade300 : Colors.red,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: TextStyle(
-                                color: isDarkMode ? Colors.red.shade300 : Colors.red,
-                                fontSize: 12,
+                      child: _isLoadingTemplates
+                          ? Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextPrimary 
+                                        : AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Loading templates...',
+                                    style: TextStyle(
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextSecondary 
+                                        : Colors.grey,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
                               ),
+                            )
+                          : DropdownButton<String>(
+                              value: _selectedFormTemplateId,
+                              hint: Text(
+                                '--select--',
+                                style: TextStyle(
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                              icon: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextPrimary 
+                                  : Colors.grey.shade600,
+                              ),
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white : Colors.black,
+                                fontSize: 14,
+                              ),
+                              items: _formTemplates.map((template) {
+                                return DropdownMenuItem<String>(
+                                  value: template['Id']?.toString(),
+                                  child: Text(
+                                    template['Name']?.toString() ?? 'Unnamed',
+                                    style: TextStyle(
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextPrimary 
+                                        : AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedFormTemplateId = value;
+                                  _selectedFormResultId = null;
+                                  _formResults = [];
+                                });
+                                if (value != null) {
+                                  _loadFormResults();
+                                }
+                              },
                             ),
-                          ),
-                        ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Form Result Dropdown
+                    Text(
+                      'Form Result',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                        border: Border.all(
+                          color: isDarkMode 
+                            ? Colors.grey.shade700
+                            : Colors.grey.shade300,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: _isLoadingResults
+                          ? Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextPrimary 
+                                        : AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Loading results...',
+                                    style: TextStyle(
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextSecondary 
+                                        : Colors.grey,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : DropdownButton<String>(
+                              value: _selectedFormResultId,
+                              hint: Text(
+                                _selectedFormTemplateId == null
+                                    ? '--select template first--'
+                                    : _formResults.isEmpty
+                                        ? '--no results available--'
+                                        : '--select--',
+                                style: TextStyle(
+                                  color: isDarkMode 
+                                    ? AppTheme.darkTextSecondary 
+                                    : Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                              icon: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: isDarkMode 
+                                  ? AppTheme.darkTextPrimary 
+                                  : Colors.grey.shade600,
+                              ),
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white : Colors.black,
+                                fontSize: 14,
+                              ),
+                              items: _formResults.map((result) {
+                                return DropdownMenuItem<String>(
+                                  value: result['Id']?.toString(),
+                                  child: Text(
+                                    result['SenderNm']?.toString() ?? 
+                                    result['SenderName']?.toString() ?? 
+                                    'Unnamed',
+                                    style: TextStyle(
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextPrimary 
+                                        : AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: _selectedFormTemplateId == null
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        _selectedFormResultId = value;
+                                      });
+                                    },
+                            ),
+                    ),
+
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDarkMode 
+                            ? Colors.red.shade900.withOpacity(0.3)
+                            : Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isDarkMode 
+                              ? Colors.red.shade700
+                              : Colors.red.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: isDarkMode 
+                                ? Colors.red.shade300 
+                                : Colors.red.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: TextStyle(
+                                  color: isDarkMode 
+                                    ? Colors.red.shade300 
+                                    : Colors.red.shade700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // Actions
-// Actions
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    TextButton(
-      onPressed: () => Navigator.of(context).pop(),
-      style: TextButton.styleFrom(
-        foregroundColor: isDarkMode 
-          ? AppTheme.darkTextSecondary 
-          : Colors.grey.shade700,
+            // Actions
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _selectedFormTemplateId == null
+                      ? null
+                      : () async {
+                          final selectedTemplate = _formTemplates.firstWhere(
+                            (t) => t['Id']?.toString() == _selectedFormTemplateId,
+                          );
+                          
+                          widget.onFormSelected(
+                            _selectedFormTemplateId!,
+                            selectedTemplate['Name']?.toString() ?? '',
+                            _selectedFormResultId,
+                          );
+                          Navigator.of(context).pop();
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: isDarkMode 
+                      ? Colors.grey.shade800 
+                      : Colors.grey.shade300,
+                    disabledForegroundColor: isDarkMode 
+                      ? Colors.grey.shade600 
+                      : Colors.grey.shade500,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    elevation: 0,
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      child: const Text('Cancel'),
-    ),
-    const SizedBox(width: 12),
-    ElevatedButton(
-      onPressed: _selectedFormTemplateId == null
-          ? null
-          : () async {
-              final selectedTemplate = _formTemplates.firstWhere(
-                (t) => t['Id']?.toString() == _selectedFormTemplateId,
-              );
-              
-              // ✅ Panggil callback untuk save
-              widget.onFormSelected(
-                _selectedFormTemplateId!,
-                selectedTemplate['Name']?.toString() ?? '',
-                _selectedFormResultId,
-              );
-              Navigator.of(context).pop();
-            },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-      ),
-      child: const Text('Save'),
-    ),
-  ],
-),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 }

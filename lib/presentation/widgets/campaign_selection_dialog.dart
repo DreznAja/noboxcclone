@@ -58,7 +58,7 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
     final isDarkMode = ref.watch(themeProvider).isDarkMode;
 
     return Dialog(
-      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
@@ -90,14 +90,18 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor,
                   ),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: Icon(
                     Icons.close,
-                    color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black,
+                    color: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor,
                   ),
                   onPressed: () => Navigator.of(context).pop(),
                   padding: EdgeInsets.zero,
@@ -114,7 +118,7 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Campaign Dropdown
+                    // Campaign Label
                     Text(
                       'Campaign',
                       style: TextStyle(
@@ -124,24 +128,46 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                       ),
                     ),
                     const SizedBox(height: 8),
+                    
+                    // Campaign Dropdown Container
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: isDarkMode ? AppTheme.darkBackground : Colors.white,
+                        color: isDarkMode ? AppTheme.darkSurface : Colors.white,
                         border: Border.all(
                           color: isDarkMode 
-                            ? Colors.white.withOpacity(0.2)
+                            ? Colors.grey.shade700
                             : Colors.grey.shade300,
+                          width: 1,
                         ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: _isLoading
-                          ? const Padding(
-                              padding: EdgeInsets.all(12.0),
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppTheme.primaryColor,
-                                ),
+                          ? Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextPrimary 
+                                        : AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Loading campaigns...',
+                                    style: TextStyle(
+                                      color: isDarkMode 
+                                        ? AppTheme.darkTextSecondary 
+                                        : Colors.grey,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           : _error != null
@@ -151,22 +177,28 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                                     children: [
                                       Icon(
                                         Icons.error_outline,
-                                        color: isDarkMode ? Colors.red.shade300 : Colors.red,
+                                        color: isDarkMode 
+                                          ? Colors.red.shade300 
+                                          : Colors.red.shade700,
+                                        size: 32,
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Failed to load',
+                                        'Failed to load campaigns',
                                         style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDarkMode ? Colors.red.shade300 : Colors.red,
+                                          fontSize: 13,
+                                          color: isDarkMode 
+                                            ? Colors.red.shade300 
+                                            : Colors.red.shade700,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
+                                      const SizedBox(height: 4),
                                       TextButton.icon(
                                         onPressed: _loadCampaigns,
-                                        icon: const Icon(Icons.refresh, size: 16),
+                                        icon: const Icon(Icons.refresh, size: 18),
                                         label: const Text('Retry'),
                                         style: TextButton.styleFrom(
-                                          padding: EdgeInsets.zero,
                                           foregroundColor: AppTheme.primaryColor,
                                         ),
                                       ),
@@ -175,14 +207,28 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                                 )
                               : _campaigns.isEmpty
                                   ? Padding(
-                                      padding: const EdgeInsets.all(12.0),
+                                      padding: const EdgeInsets.all(16.0),
                                       child: Center(
-                                        child: Text(
-                                          'No campaigns available',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                                          ),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              Icons.inbox_outlined,
+                                              size: 40,
+                                              color: isDarkMode 
+                                                ? AppTheme.darkTextSecondary 
+                                                : Colors.grey.shade400,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'No campaigns available',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: isDarkMode 
+                                                  ? AppTheme.darkTextSecondary 
+                                                  : Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     )
@@ -194,13 +240,23 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                                           color: isDarkMode 
                                             ? AppTheme.darkTextSecondary 
                                             : Colors.grey,
+                                          fontSize: 14,
                                         ),
                                       ),
                                       isExpanded: true,
                                       underline: const SizedBox(),
                                       dropdownColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+                                      icon: Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: isDarkMode 
+                                          ? AppTheme.darkTextPrimary 
+                                          : Colors.grey.shade600,
+                                      ),
                                       style: TextStyle(
-                                        color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                                        color: isDarkMode 
+                                          ? Colors.white 
+                                          : Colors.black,
+                                        fontSize: 14,
                                       ),
                                       items: _campaigns.map((campaign) {
                                         return DropdownMenuItem<String>(
@@ -211,8 +267,12 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                                             children: [
                                               Text(
                                                 campaign['Name']?.toString() ?? 'Unnamed Campaign',
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontWeight: FontWeight.w500,
+                                                  fontSize: 14,
+                                                  color: isDarkMode 
+                                                    ? AppTheme.darkTextPrimary 
+                                                    : AppTheme.textPrimary,
                                                 ),
                                               ),
                                               if (campaign['Description'] != null &&
@@ -224,7 +284,7 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
                                                     fontSize: 11,
                                                     color: isDarkMode 
                                                       ? AppTheme.darkTextSecondary 
-                                                      : Colors.grey,
+                                                      : AppTheme.textSecondary,
                                                   ),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
@@ -249,43 +309,50 @@ class _CampaignSelectionDialogState extends ConsumerState<CampaignSelectionDialo
             const SizedBox(height: 20),
 
             // Actions
-            // Actions
-Row(
-  mainAxisAlignment: MainAxisAlignment.end,
-  children: [
-    TextButton(
-      onPressed: () => Navigator.of(context).pop(),
-      style: TextButton.styleFrom(
-        foregroundColor: isDarkMode 
-          ? AppTheme.darkTextSecondary 
-          : Colors.grey.shade700,
-      ),
-      child: const Text('Cancel'),
-    ),
-    const SizedBox(width: 12),
-    ElevatedButton(
-      onPressed: _selectedCampaignId == null
-          ? null
-          : () async {
-              final selectedCampaign = _campaigns.firstWhere(
-                (c) => c['Id']?.toString() == _selectedCampaignId,
-              );
-              
-              // ✅ Panggil callback untuk save
-              widget.onCampaignSelected(
-                _selectedCampaignId!,
-                selectedCampaign['Name']?.toString() ?? '',
-              );
-              Navigator.of(context).pop();
-            },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-      ),
-      child: const Text('Save'),
-    ),
-  ],
-),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDarkMode 
+                      ? AppTheme.darkTextPrimary 
+                      : AppTheme.primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _selectedCampaignId == null
+                      ? null
+                      : () async {
+                          final selectedCampaign = _campaigns.firstWhere(
+                            (c) => c['Id']?.toString() == _selectedCampaignId,
+                          );
+                          
+                          widget.onCampaignSelected(
+                            _selectedCampaignId!,
+                            selectedCampaign['Name']?.toString() ?? '',
+                          );
+                          Navigator.of(context).pop();
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: isDarkMode 
+                      ? Colors.grey.shade800 
+                      : Colors.grey.shade300,
+                    disabledForegroundColor: isDarkMode 
+                      ? Colors.grey.shade600 
+                      : Colors.grey.shade500,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    elevation: 0,
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
