@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -351,63 +352,91 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  void _handleDelete() {
-    if (_selectedMessage != null) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete Message'),
-          content: const Text('Are you sure you want to delete this message?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _exitSelectionMode();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                
-                final messageId = _selectedMessage!.id;
-                print('🗑️ Attempting to delete message: $messageId');
-                
-                // Call provider to delete message
-                final success = await ref.read(chatProvider.notifier).deleteMessage(messageId);
-                
-                _exitSelectionMode();
-                
-                if (mounted) {
-                  if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Message deleted successfully'),
-                        backgroundColor: AppTheme.successColor,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to delete message'),
-                        backgroundColor: AppTheme.errorColor,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.errorColor,
-              ),
-              child: const Text('Delete'),
-            ),
-          ],
+void _handleDelete() {
+  if (_selectedMessage != null) {
+    final isDarkMode = ref.watch(themeProvider).isDarkMode;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
-      );
-    }
+        title: Text(
+          'Delete Message',
+          style: TextStyle(
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete this message?',
+          style: TextStyle(
+            color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black87,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _exitSelectionMode();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              
+              final messageId = _selectedMessage!.id;
+              print('🗑️ Attempting to delete message: $messageId');
+              
+              // Call provider to delete message
+              final success = await ref.read(chatProvider.notifier).deleteMessage(messageId);
+              
+              _exitSelectionMode();
+              
+              if (mounted) {
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Message deleted successfully'),
+                      backgroundColor: AppTheme.successColor,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to delete message'),
+                      backgroundColor: AppTheme.errorColor,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.errorColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
 
   void _cancelReply() {
     setState(() {
@@ -967,14 +996,19 @@ PreferredSizeWidget _buildNormalAppBar() {
     ),
     actions: [
       // Contact/Group Detail Icon - untuk individual dan group
-      if ((!widget.room.isGroup && (widget.room.ctId != null || widget.room.ctRealId != null)) ||
+  if ((!widget.room.isGroup && (widget.room.ctId != null || widget.room.ctRealId != null)) ||
           (widget.room.isGroup && widget.room.grpId != null))
         IconButton(
-          icon: Icon(
-            LucideIcons.columns, 
-            color: (_isResolvedStatus() || widget.isArchived) 
-              ? Colors.white.withOpacity(0.3) 
-              : Colors.white,
+          icon: SvgPicture.asset(
+            'assets/icons/sidebarflip.svg',
+            width: 29,
+            height: 29,
+            colorFilter: ColorFilter.mode(
+              (_isResolvedStatus() || widget.isArchived) 
+                ? Colors.white.withOpacity(0.3) 
+                : Colors.white,
+              BlendMode.srcIn,
+            ),
           ),
           onPressed: (_isResolvedStatus() || widget.isArchived) 
             ? null 

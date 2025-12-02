@@ -6,13 +6,13 @@ class MessageShimmerWidget extends StatelessWidget {
 
   const MessageShimmerWidget({
     super.key,
-    this.itemCount = 10,
+    this.itemCount = 5
   });
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      reverse: true, // Messages start from bottom
+      reverse: false, // Messages start from bottom
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       itemCount: itemCount,
       itemBuilder: (context, index) {

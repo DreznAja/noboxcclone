@@ -346,59 +346,59 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
               top: 16,
               bottom: MediaQuery.of(context).padding.bottom + 16,
             ),
-            child: Column(
+            child: Column(  
               children: [
-                // Caption Input - FIXED: Gunakan border di InputDecoration
-                TextField(
-                  controller: _captionController,
-                  focusNode: _captionFocusNode,
-                  maxLines: 4,
-                  minLines: 1,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: isDarkMode 
-                      ? AppTheme.darkTextPrimary 
-                      : AppTheme.textPrimary, // UPDATE
-                  ),
-                  decoration: InputDecoration(
-                    hintText: widget.mediaType == 'document' 
-                        ? 'Add a message...'
-                        : 'Add a caption...',
-                    hintStyle: TextStyle(
-                      color: isDarkMode 
-                        ? AppTheme.darkTextSecondary 
-                        : AppTheme.textSecondary, // UPDATE
-                      fontSize: 16,
-                    ),
-                    filled: true,
-                    fillColor: isDarkMode 
-                      ? AppTheme.darkSurface 
-                      : Color(0xFFF1F5F9), // UPDATE
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: isDarkMode 
-                          ? Colors.white.withOpacity(0.1) 
-                          : Colors.grey.shade300, // UPDATE
-                        width: 1,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide(
-                        color: AppTheme.primaryColor,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  textInputAction: TextInputAction.newline,
-                ),
+                // // Caption Input - FIXED: Gunakan border di InputDecoration
+                // TextField(
+                //   controller: _captionController,
+                //   focusNode: _captionFocusNode,
+                //   maxLines: 4,
+                //   minLines: 1,
+                //   style: TextStyle(
+                //     fontSize: 16,
+                //     color: isDarkMode 
+                //       ? AppTheme.darkTextPrimary 
+                //       : AppTheme.textPrimary, // UPDATE
+                //   ),
+                //   decoration: InputDecoration(
+                //     hintText: widget.mediaType == 'document' 
+                //         ? 'Add a message...'
+                //         : 'Add a caption...',
+                //     hintStyle: TextStyle(
+                //       color: isDarkMode 
+                //         ? AppTheme.darkTextSecondary 
+                //         : AppTheme.textSecondary, // UPDATE
+                //       fontSize: 16,
+                //     ),
+                //     filled: true,
+                //     fillColor: isDarkMode 
+                //       ? AppTheme.darkSurface 
+                //       : Color(0xFFF1F5F9), // UPDATE
+                //     contentPadding: EdgeInsets.symmetric(
+                //       horizontal: 20,
+                //       vertical: 14,
+                //     ),
+                //     enabledBorder: OutlineInputBorder(
+                //       borderRadius: BorderRadius.circular(24),
+                //       borderSide: BorderSide(
+                //         color: isDarkMode 
+                //           ? Colors.white.withOpacity(0.1) 
+                //           : Colors.grey.shade300, // UPDATE
+                //         width: 1,
+                //       ),
+                //     ),
+                //     focusedBorder: OutlineInputBorder(
+                //       borderRadius: BorderRadius.circular(24),
+                //       borderSide: BorderSide(
+                //         color: AppTheme.primaryColor,
+                //         width: 2,
+                //       ),
+                //     ),
+                //   ),
+                //   textInputAction: TextInputAction.newline,
+                // ),
                 
-                SizedBox(height: 16),
+                // SizedBox(height: 16),
                 
                 // Send Button
                 SizedBox(
