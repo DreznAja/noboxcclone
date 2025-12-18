@@ -88,97 +88,167 @@ class ContactDetailState {
   }
 }
 
+// Cache management
+class ContactDetailCache {
+  final ContactDetailState state;
+  final DateTime timestamp;
+
+  ContactDetailCache({
+    required this.state,
+    required this.timestamp,
+  });
+
+  bool get isExpired {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+    return difference.inMinutes >= 5; // Cache expires after 5 minutes
+  }
+}
+
 class ContactDetailNotifier extends StateNotifier<ContactDetailState> {
   ContactDetailNotifier() : super(ContactDetailState());
 
   final ContactDetailService _service = ContactDetailService();
+
+  final Map<String, ContactDetailCache> _cache = {};
   
   bool get mounted => !state.isLoading || state.contact != null;
 
-  void setContact(ContactDetail contact) {
-    state = state.copyWith(
-      contact: contact,
-      isLoading: false,
-      clearError: true,
-    );
+  void clearCache(String contactId) {
+    _cache.remove(contactId);
+    print('🗑️ Cache cleared for contact: $contactId');
   }
 
-Future<void> loadContactDetail(String contactId) async {
-  state = state.copyWith(isLoading: true, clearError: true, clearFunnel: true);
-
-  print('Loading contact detail for ID: $contactId');
-
-  try {
-    final contact = await _service.getContactDetail(contactId);
-    
-    if (contact != null) {
-      print('Contact detail loaded successfully: ${contact.name}');
-      state = state.copyWith(
-        contact: contact,
-        isLoading: false,
-      );
-
-      try {
-        // ✅ PERBAIKAN: Load data dengan getContactDetailWithRelations dulu
-        final detailData = await _service.getContactDetailWithRelations(contactId);
-        
-        await Future.wait([
-          loadConversationHistory(contactId),
-          loadContactNotesFromRoom(contactId),
-          loadContactFunnel(contactId),
-          loadAvailableFunnels(),
-          // ✅ HANYA load jika ada datanya di backend
-          if (detailData?['Campaign'] != null) loadContactCampaign(contactId),
-          if (detailData?['Deal'] != null) loadContactDeal(contactId),
-          if (detailData?['FormR'] != null) ...[
-            loadContactFormTemplate(contactId),
-            loadContactFormResult(contactId),
-          ],
-          loadRoomTags(contactId),
-          loadRoomHumanAgents(contactId),
-        ]);
-        
-        // ✅ CLEAR state untuk yang tidak ada datanya
-        if (detailData?['Campaign'] == null) {
-          state = state.copyWith(clearCampaign: true);
-        }
-        if (detailData?['Deal'] == null) {
-          state = state.copyWith(clearDeal: true);
-        }
-        if (detailData?['FormR'] == null) {
-          state = state.copyWith(clearFormTemplate: true, clearFormResult: true);
-        }
-      } catch (additionalDataError) {
-        print('Some additional data failed to load: $additionalDataError');
+    void clearExpiredCaches() {
+    final now = DateTime.now();
+    _cache.removeWhere((key, cache) {
+      if (cache.isExpired) {
+        print('🗑️ Expired cache removed for contact: $key');
+        return true;
       }
-    } else {
-      print('Contact not found for ID: $contactId');
+      return false;
+    });
+  }
+
+  void setLoading(bool loading) {
+  state = state.copyWith(isLoading: loading);
+}
+
+
+  void _updateCache(String contactId) {
+  if (_cache.containsKey(contactId)) {
+    _cache[contactId] = ContactDetailCache(
+      state: state,
+      timestamp: DateTime.now(),
+    );
+    print('💾 Cache updated for contact: $contactId');
+  }
+}
+
+void setContact(ContactDetail contact) {
+  state = state.copyWith(
+    contact: contact,
+    isLoading: false,
+    clearError: true,
+  );
+  _updateCache(contact.id); // ✅ TAMBAH INI
+  print('💾 Cache updated after setContact');
+}
+
+  Future<void> loadContactDetail(String contactId, {bool forceRefresh = false}) async {
+    // Clean up expired caches first
+    clearExpiredCaches();
+
+    // ✅ Check cache first (unless force refresh)
+    if (!forceRefresh && _cache.containsKey(contactId)) {
+      final cachedData = _cache[contactId]!;
+      if (!cachedData.isExpired) {
+        print('✅ Using cached data for contact: $contactId');
+        print('⏰ Cache age: ${DateTime.now().difference(cachedData.timestamp).inSeconds}s');
+        state = cachedData.state;
+        return;
+      } else {
+        print('⏰ Cache expired for contact: $contactId, fetching fresh data');
+        _cache.remove(contactId);
+      }
+    }
+
+    // ✅ If no valid cache, fetch from API
+    print('🌐 Fetching fresh data for contact: $contactId');
+    state = state.copyWith(isLoading: true, clearError: true, clearFunnel: true);
+
+    try {
+      final contact = await _service.getContactDetail(contactId);
+      
+      if (contact != null) {
+        print('Contact detail loaded successfully: ${contact.name}');
+        state = state.copyWith(
+          contact: contact,
+          isLoading: false,
+        );
+
+        try {
+          final detailData = await _service.getContactDetailWithRelations(contactId);
+          
+          await Future.wait([
+            loadConversationHistory(contactId),
+            loadContactNotesFromRoom(contactId),
+            loadContactFunnel(contactId),
+            loadAvailableFunnels(),
+            if (detailData?['Campaign'] != null) loadContactCampaign(contactId),
+            if (detailData?['Deal'] != null) loadContactDeal(contactId),
+            if (detailData?['FormR'] != null) ...[
+              loadContactFormTemplate(contactId),
+              loadContactFormResult(contactId),
+            ],
+            loadRoomTags(contactId),
+            loadRoomHumanAgents(contactId),
+          ]);
+          
+          if (detailData?['Campaign'] == null) {
+            state = state.copyWith(clearCampaign: true);
+          }
+          if (detailData?['Deal'] == null) {
+            state = state.copyWith(clearDeal: true);
+          }
+          if (detailData?['FormR'] == null) {
+            state = state.copyWith(clearFormTemplate: true, clearFormResult: true);
+          }
+
+          // ✅ Store in cache after successful load
+          _cache[contactId] = ContactDetailCache(
+            state: state,
+            timestamp: DateTime.now(),
+          );
+          print('💾 Data cached for contact: $contactId');
+        } catch (additionalDataError) {
+          print('Some additional data failed to load: $additionalDataError');
+        }
+      } else {
+        print('Contact not found for ID: $contactId');
+        state = state.copyWith(
+          isLoading: false,
+        );
+      }
+    } catch (e) {
+      print('Exception loading contact detail for ID $contactId: $e');
       state = state.copyWith(
         isLoading: false,
       );
     }
-  } catch (e) {
-    print('Exception loading contact detail for ID $contactId: $e');
-    state = state.copyWith(
-      isLoading: false,
-    );
   }
-}
 
 Future<bool> assignCampaign(String roomId, String campaignId) async {
   try {
     final success = await _service.assignCampaignToContact(roomId, campaignId);
     if (success) {
-      // ✅ UPDATE STATE LANGSUNG dengan data campaign yang dipilih
-      // Tidak perlu tunggu reload dari backend
       if (campaignId == '0') {
-        // Remove campaign
         if (mounted) {
           state = state.copyWith(clearCampaign: true);
+          _updateCache(roomId); // ✅ TAMBAH INI
           print('✅ Campaign removed from state');
         }
       } else {
-        // ✅ Fetch campaign detail untuk get nama dan status
         try {
           final apiService = ApiService();
           final campaigns = await apiService.getCampaignsListActive();
@@ -196,11 +266,11 @@ Future<bool> assignCampaign(String roomId, String campaignId) async {
                 description: selectedCampaign['Description']?.toString(),
               ),
             );
+            _updateCache(roomId); // ✅ TAMBAH INI
             print('✅ Campaign state updated immediately: ${selectedCampaign['Name']}');
           }
         } catch (e) {
           print('⚠️ Failed to fetch campaign detail, will reload: $e');
-          // Fallback: reload dari backend
           await loadContactCampaign(roomId);
         }
       }
@@ -218,15 +288,13 @@ Future<bool> assignDeal(String roomId, String dealId) async {
   try {
     final success = await _service.assignDealToContact(roomId, dealId);
     if (success) {
-      // ✅ UPDATE STATE LANGSUNG
       if (dealId == '0') {
-        // Remove deal
         if (mounted) {
           state = state.copyWith(clearDeal: true);
+          _updateCache(roomId); // ✅ TAMBAH INI
           print('✅ Deal removed from state');
         }
       } else {
-        // ✅ Fetch deal detail untuk get nama, pipeline, stage
         try {
           final apiService = ApiService();
           final deals = await apiService.getDeals();
@@ -239,7 +307,6 @@ Future<bool> assignDeal(String roomId, String dealId) async {
           );
           
           if (selectedDeal.isNotEmpty && mounted) {
-            // Get pipeline name
             String? pipelineName;
             final pipelineId = selectedDeal['PlId']?.toString();
             if (pipelineId != null) {
@@ -250,7 +317,6 @@ Future<bool> assignDeal(String roomId, String dealId) async {
               pipelineName = pipeline['Nm']?.toString() ?? pipeline['Name']?.toString();
             }
             
-            // Get stage name
             String? stageName;
             final stageId = selectedDeal['piplinetypes']?.toString();
             if (stageId != null) {
@@ -272,11 +338,11 @@ Future<bool> assignDeal(String roomId, String dealId) async {
                 value: selectedDeal['Value']?.toDouble(),
               ),
             );
+            _updateCache(roomId); // ✅ TAMBAH INI
             print('✅ Deal state updated immediately: ${selectedDeal['Nm']}');
           }
         } catch (e) {
           print('⚠️ Failed to fetch deal detail, will reload: $e');
-          // Fallback: reload dari backend
           await loadContactDeal(roomId);
         }
       }
@@ -294,18 +360,16 @@ Future<bool> assignFormTemplate(String roomId, String formTemplateId, String? fo
   try {
     final success = await _service.assignFormTemplateToContact(roomId, formTemplateId, formResultId);
     if (success) {
-      // ✅ UPDATE STATE LANGSUNG
       if (formTemplateId == '0') {
-        // Remove form template
         if (mounted) {
           state = state.copyWith(
             clearFormTemplate: true,
             clearFormResult: true,
           );
+          _updateCache(roomId); // ✅ TAMBAH INI
           print('✅ Form template removed from state');
         }
       } else {
-        // ✅ Fetch form template & result detail
         try {
           final apiService = ApiService();
           final templates = await apiService.getFormTemplates();
@@ -316,7 +380,6 @@ Future<bool> assignFormTemplate(String roomId, String formTemplateId, String? fo
           );
           
           if (selectedTemplate.isNotEmpty && mounted) {
-            // Update form template
             state = state.copyWith(
               formTemplate: ContactFormTemplate(
                 id: formTemplateId,
@@ -324,9 +387,7 @@ Future<bool> assignFormTemplate(String roomId, String formTemplateId, String? fo
                 description: selectedTemplate['Description']?.toString(),
               ),
             );
-            print('✅ Form template state updated immediately: ${selectedTemplate['Name']}');
             
-            // Update form result if provided
             if (formResultId != null && formResultId != '0') {
               final results = await apiService.getFormResults();
               final selectedResult = results.firstWhere(
@@ -346,18 +407,18 @@ Future<bool> assignFormTemplate(String roomId, String formTemplateId, String? fo
                         : null,
                   ),
                 );
-                print('✅ Form result state updated immediately');
               }
             } else {
-              // Clear form result if not provided
               if (mounted) {
                 state = state.copyWith(clearFormResult: true);
               }
             }
+            
+            _updateCache(roomId); // ✅ TAMBAH INI
+            print('✅ Form template state updated immediately: ${selectedTemplate['Name']}');
           }
         } catch (e) {
           print('⚠️ Failed to fetch form detail, will reload: $e');
-          // Fallback: reload dari backend
           await loadContactFormTemplate(roomId);
           if (formResultId != null) {
             await loadContactFormResult(roomId);
@@ -560,15 +621,14 @@ Future<bool> assignFunnel(String roomId, String funnelId) async {
   try {
     final success = await _service.assignFunnelToContact(roomId, funnelId);
     if (success) {
-      // ✅ PERBAIKAN: Cari funnel dari availableFunnels dan set langsung
       final assignedFunnel = state.availableFunnels.firstWhere(
         (f) => f.id == funnelId,
-        orElse: () => ContactFunnel(id: funnelId, name: ''), // Fallback jika tidak ketemu
+        orElse: () => ContactFunnel(id: funnelId, name: ''),
       );
       
       if (mounted && assignedFunnel.name.isNotEmpty) {
-        // ✅ Update state dengan funnel object yang lengkap
         state = state.copyWith(funnel: assignedFunnel);
+        _updateCache(roomId); // ✅ TAMBAH INI
         print('✅ Provider: Funnel state updated to: ${assignedFunnel.name} (${assignedFunnel.id})');
       }
       
@@ -583,24 +643,26 @@ Future<bool> assignFunnel(String roomId, String funnelId) async {
   }
 }
 
-  Future<bool> removeFunnel(String roomId) async {
-    try {
-      final success = await _service.assignFunnelToContact(roomId, '0');
-      if (success) {
-        if (mounted) {
-          state = state.copyWith(clearFunnel: true);
-          print('✅ Funnel removed from state');
-        }
-        return true;
-      } else {
-        state = state.copyWith(error: 'Failed to remove funnel');
-        return false;
+
+Future<bool> removeFunnel(String roomId) async {
+  try {
+    final success = await _service.assignFunnelToContact(roomId, '0');
+    if (success) {
+      if (mounted) {
+        state = state.copyWith(clearFunnel: true);
+        _updateCache(roomId); // ✅ TAMBAH INI
+        print('✅ Funnel removed from state');
       }
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to remove funnel: $e');
+      return true;
+    } else {
+      state = state.copyWith(error: 'Failed to remove funnel');
       return false;
     }
+  } catch (e) {
+    state = state.copyWith(error: 'Failed to remove funnel: $e');
+    return false;
   }
+}
 
 Future<void> loadContactCampaign(String contactId) async {
   if (!mounted) return;
@@ -743,44 +805,48 @@ Future<void> loadContactFormResult(String contactId) async {
   }
 }
 
-  Future<void> addNote(String roomId, String content) async {
-    try {
-      final success = await _service.addContactNote(roomId, content);
-      if (success) {
-        await loadContactNotes(roomId);
-      } else {
-        state = state.copyWith(error: 'Failed to add note');
-      }
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to add note: $e');
+Future<void> addNote(String roomId, String content) async {
+  try {
+    final success = await _service.addContactNote(roomId, content);
+    if (success) {
+      await loadContactNotes(roomId);
+      _updateCache(roomId); // ✅ TAMBAH INI setelah reload notes
+    } else {
+      state = state.copyWith(error: 'Failed to add note');
     }
+  } catch (e) {
+    state = state.copyWith(error: 'Failed to add note: $e');
   }
+}
 
-  Future<void> updateNote(String noteId, String content, String contactId) async {
-    try {
-      final success = await _service.updateContactNote(noteId, content);
-      if (success) {
-        await loadContactNotes(contactId);
-      } else {
-        state = state.copyWith(error: 'Failed to update note');
-      }
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to update note: $e');
-    }
-  }
 
-  Future<void> deleteNote(String noteId, String contactId) async {
-    try {
-      final success = await _service.deleteContactNote(noteId);
-      if (success) {
-        await loadContactNotes(contactId);
-      } else {
-        state = state.copyWith(error: 'Failed to delete note');
-      }
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to delete note: $e');
+Future<void> updateNote(String noteId, String content, String contactId) async {
+  try {
+    final success = await _service.updateContactNote(noteId, content);
+    if (success) {
+      await loadContactNotes(contactId);
+      _updateCache(contactId); // ✅ TAMBAH INI setelah reload notes
+    } else {
+      state = state.copyWith(error: 'Failed to update note');
     }
+  } catch (e) {
+    state = state.copyWith(error: 'Failed to update note: $e');
   }
+}
+
+Future<void> deleteNote(String noteId, String contactId) async {
+  try {
+    final success = await _service.deleteContactNote(noteId);
+    if (success) {
+      await loadContactNotes(contactId);
+      _updateCache(contactId); // ✅ TAMBAH INI setelah reload notes
+    } else {
+      state = state.copyWith(error: 'Failed to delete note');
+    }
+  } catch (e) {
+    state = state.copyWith(error: 'Failed to delete note: $e');
+  }
+}
 
   Future<bool> updateNeedReply(String roomId, bool needReply) async {
     try {
@@ -843,47 +909,48 @@ Future<bool> updateContact({
     
     if (success) {
       print('Contact updated successfully, reloading contact detail...');
-      await loadContactDetail(contactId);
+      await loadContactDetail(contactId, forceRefresh: true); // ✅ Force refresh untuk get data terbaru
+      _updateCache(contactId); // ✅ Cache akan di-update otomatis di loadContactDetail
       return true;
     } else {
-      // ✅ FIX: Ganti jadi gini
       this.state = this.state.copyWith(error: 'Failed to update contact');
       return false;
     }
   } catch (e) {
-    // ✅ FIX: Ganti jadi gini
     this.state = this.state.copyWith(error: 'Failed to update contact: $e');
     return false;
   }
 }
 
-  Future<bool> removeAgentFromConversation({
-    required String chatroomAgentId,
-    required String roomId,
-    required int currentUserId,
-    required String contactId,
-  }) async {
-    try {
-      print('Removing chatroomagent ID $chatroomAgentId from conversation');
-      final success = await _service.removeAgentFromConversation(
-        chatroomAgentId: chatroomAgentId,
-        roomId: roomId,
-        currentUserId: currentUserId,
-      );
-      
-      if (success) {
-        print('Agent removed successfully, reloading contact detail...');
-        await loadContactDetail(contactId);
-        return true;
-      } else {
-        this.state = this.state.copyWith(error: 'Failed to remove agent from conversation');
-        return false;
-      }
-    } catch (e) {
-      this.state = this.state.copyWith(error: 'Failed to remove agent: $e');
+Future<bool> removeAgentFromConversation({
+  required String chatroomAgentId,
+  required String roomId,
+  required int currentUserId,
+  required String contactId,
+}) async {
+  try {
+    print('Removing chatroomagent ID $chatroomAgentId from conversation');
+    final success = await _service.removeAgentFromConversation(
+      chatroomAgentId: chatroomAgentId,
+      roomId: roomId,
+      currentUserId: currentUserId,
+    );
+    
+    if (success) {
+      print('Agent removed successfully, reloading contact detail...');
+      await loadContactDetail(contactId, forceRefresh: true); // ✅ Force refresh
+      _updateCache(contactId); // ✅ Cache akan di-update otomatis
+      return true;
+    } else {
+      this.state = this.state.copyWith(error: 'Failed to remove agent from conversation');
       return false;
     }
+  } catch (e) {
+    this.state = this.state.copyWith(error: 'Failed to remove agent: $e');
+    return false;
   }
+}
+
 
   void clearError() {
     state = state.copyWith(clearError: true);

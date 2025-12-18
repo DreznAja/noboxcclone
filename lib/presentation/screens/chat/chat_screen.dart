@@ -925,78 +925,81 @@ void _handleDelete() {
   // Update the _buildNormalAppBar() method in chat_screen.dart
 
 PreferredSizeWidget _buildNormalAppBar() {
-  final isDarkMode = ref.watch(themeProvider).isDarkMode; // TAMBAHKAN INI
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
   return AppBar(
     backgroundColor: AppTheme.primaryColor,
     foregroundColor: Colors.white,
     elevation: 0,
-    titleSpacing: 0, // Mengurangi jarak dari back button ke title
+    titleSpacing: 0, // Ini sudah 0, tapi kita akan override dengan negative margin
     leading: IconButton(
       icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
       onPressed: () => Navigator.of(context).pop(),
     ),
-    title: Row(
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundImage: _isValidImageUrl(widget.room.contactImage ?? widget.room.linkImage)
-              ? CachedNetworkImageProvider(
-                  widget.room.contactImage ?? widget.room.linkImage!,
-                  headers: _getAuthHeaders(),
-                )
-              : null,
-          backgroundColor: Colors.white.withOpacity(0.2),
-          child: !_isValidImageUrl(widget.room.contactImage ?? widget.room.linkImage)
-              ? Icon(
-                  widget.room.isGroup ? Icons.group : Icons.person,
-                  color: Colors.white,
-                  size: 20,
-                )
-              : null,
-        ),
-        
-        const SizedBox(width: 8), // Dikurangi dari 12 ke 8
-        
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.room.name.isNotEmpty 
-                    ? widget.room.name 
-                    : (widget.room.accountName ?? widget.room.botName ?? widget.room.channelName),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              
-              Row(
-                children: [
-                  _getChannelIcon(widget.room.channelId),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      widget.room.accountName ?? widget.room.botName ?? widget.room.channelName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white70,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+    title: Transform.translate(
+      offset: const Offset(-8, 0), // Geser ke kiri 8px
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundImage: _isValidImageUrl(widget.room.contactImage ?? widget.room.linkImage)
+                ? CachedNetworkImageProvider(
+                    widget.room.contactImage ?? widget.room.linkImage!,
+                    headers: _getAuthHeaders(),
+                  )
+                : null,
+            backgroundColor: Colors.white.withOpacity(0.2),
+            child: !_isValidImageUrl(widget.room.contactImage ?? widget.room.linkImage)
+                ? Icon(
+                    widget.room.isGroup ? Icons.group : Icons.person,
+                    color: Colors.white,
+                    size: 20,
+                  )
+                : null,
           ),
-        ),
-      ],
+          
+          const SizedBox(width: 10), // Spacing antara foto dan nama
+          
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.room.name.isNotEmpty 
+                      ? widget.room.name 
+                      : (widget.room.accountName ?? widget.room.botName ?? widget.room.channelName),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                
+                Row(
+                  children: [
+                    _getChannelIcon(widget.room.channelId),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        widget.room.accountName ?? widget.room.botName ?? widget.room.channelName,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
     actions: [
-      // Contact/Group Detail Icon - untuk individual dan group
-  if ((!widget.room.isGroup && (widget.room.ctId != null || widget.room.ctRealId != null)) ||
+      // Contact/Group Detail Icon
+      if ((!widget.room.isGroup && (widget.room.ctId != null || widget.room.ctRealId != null)) ||
           (widget.room.isGroup && widget.room.grpId != null))
         IconButton(
           icon: SvgPicture.asset(
@@ -1016,122 +1019,87 @@ PreferredSizeWidget _buildNormalAppBar() {
           tooltip: widget.room.isGroup ? 'Group Info' : 'Contact Info',
         ),
       
-      // REPLACE bagian PopupMenuButton di _buildNormalAppBar dengan ini:
-
-if (!widget.isArchived)
-  PopupMenuButton<String>(
-    icon: const Icon(Icons.more_vert, color: Colors.white),
-    color: isDarkMode ? AppTheme.darkSurface : Colors.white,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
-    ),
-    onSelected: (String value) {
-      switch (value) {
-        case 'add_agent':
-          _handleAddAgent();
-          break;
-        case 'resolve':
-          _handleResolve();
-          break;
-        case 'archive':
-          _handleArchive();
-          break;
-        case 'add_note':
-          _handleAddNote();
-          break;
-        case 'help':
-          _handleHelp();
-          break;
-      }
-    },
-    itemBuilder: (BuildContext context) {
-      // Jika conversation sudah resolved, hanya tampilkan Help
-      if (_isResolvedStatus()) {
-        return [
-          PopupMenuItem(
-            value: 'help',
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.help_outline, 
-                  size: 20, 
-                  color: Colors.red, // ← MERAH
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Help',
-                  style: TextStyle(
-                    color: Colors.red, // ← MERAH JUGA
+      // Menu (3 dots)
+      if (!widget.isArchived)
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white),
+          color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          onSelected: (String value) {
+            switch (value) {
+              case 'add_agent':
+                _handleAddAgent();
+                break;
+              case 'resolve':
+                _handleResolve();
+                break;
+              case 'archive':
+                _handleArchive();
+                break;
+              case 'add_note':
+                _handleAddNote();
+                break;
+              case 'help':
+                _handleHelp();
+                break;
+            }
+          },
+          itemBuilder: (BuildContext context) {
+            if (_isResolvedStatus()) {
+              return [
+                PopupMenuItem(
+                  value: 'help',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.help_outline, size: 20, color: Colors.red),
+                      const SizedBox(width: 12),
+                      const Text('Help', style: TextStyle(color: Colors.red)),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-        ];
-      }
-      
-      // Jika belum resolved, tampilkan semua menu
-      return [
-        PopupMenuItem(
-          value: 'add_agent',
-          child: Row(
-            children: [
-              Icon(
-                Icons.person_add_outlined, 
-                size: 20, 
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Add Human Agent',
-                style: TextStyle(
-                  color: isDarkMode ? Colors.white : Colors.black,
+              ];
+            }
+            
+            return [
+              PopupMenuItem(
+                value: 'add_agent',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add_outlined, size: 20, 
+                      color: isDarkMode ? Colors.white : Colors.black),
+                    const SizedBox(width: 12),
+                    Text('Add Human Agent',
+                      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black)),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'resolve',
-          child: Row(
-            children: [
-              Icon(
-                Icons.check_circle_outline, 
-                size: 20, 
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Mark as Resolved',
-                style: TextStyle(
-                  color: isDarkMode ? Colors.white : Colors.black,
+              PopupMenuItem(
+                value: 'resolve',
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 20,
+                      color: isDarkMode ? Colors.white : Colors.black),
+                    const SizedBox(width: 12),
+                    Text('Mark as Resolved',
+                      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black)),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'help',
-          child: Row(
-            children: [
-              const Icon(
-                Icons.help_outline, 
-                size: 20, 
-                color: Colors.red, // ← MERAH
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Help',
-                style: TextStyle(
-                  color: Colors.red, // ← MERAH JUGA
+              PopupMenuItem(
+                value: 'help',
+                child: Row(
+                  children: [
+                    const Icon(Icons.help_outline, size: 20, color: Colors.red),
+                    const SizedBox(width: 12),
+                    const Text('Help', style: TextStyle(color: Colors.red)),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ];
+          },
         ),
-      ];
-    },
-  ),
     ],
   );
 }
@@ -1309,30 +1277,83 @@ void _openContactDetailSlidePanel() {
     });
   }
 
-  void _handleResolve() async {
-    final ok = await ref.read(chatProvider.notifier).markActiveRoomResolved();
-    if (ok) {
-      setState(() {
-        _isResolved = true; // Update local state immediately
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Conversation marked as resolved'),
-          backgroundColor: AppTheme.successColor,
-          duration: Duration(seconds: 2),
+void _handleResolve() async {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Text(
+        'Mark as Resolved',
+        style: TextStyle(
+          color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+          fontWeight: FontWeight.w600,
         ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to mark as resolved'),
-          backgroundColor: AppTheme.errorColor,
-          duration: Duration(seconds: 2),
+      ),
+      content: Text(
+        'Are you sure you want to mark this conversation as resolved? You won\'t be able to send messages after this.',
+        style: TextStyle(
+          color: isDarkMode ? AppTheme.darkTextSecondary : Colors.black87,
         ),
-      );
-    }
-  }
-
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: AppTheme.primaryColor, // Selalu biru
+          ),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            
+            final ok = await ref.read(chatProvider.notifier).markActiveRoomResolved();
+            
+            if (mounted) {
+              if (ok) {
+                setState(() {
+                  _isResolved = true;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Conversation marked as resolved'),
+                    backgroundColor: AppTheme.successColor,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to mark as resolved'),
+                    backgroundColor: AppTheme.errorColor,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.successColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: const Text(
+            'Mark as Resolved',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
+}
   // Helper method to check if conversation is resolved
   bool _isResolvedStatus() {
     return widget.room.status == 3 || _isResolved;

@@ -321,6 +321,8 @@ onError: (error, handler) async {
     }
   }
 
+  
+
   // Get messages for a room
   static Future<ApiResponse<List<ChatMessage>>> getMessages({
     required String roomId,
@@ -336,6 +338,14 @@ onError: (error, handler) async {
           'RoomId': int.tryParse(roomId) ?? roomId,
         },
         'Sort': ['In DESC', 'Type DESC'],
+        // Request reply fields from server
+        'IncludeColumns': [
+          'Id', 'IdAlias', 'RoomId', 'Ack', 'From', 'To', 'AgentId', 
+          'IsNobox', 'Type', 'Msg', 'Files', 'Note', 'In', 'InBy', 'Up', 'UpBy',
+          // Reply fields - CRITICAL for showing reply box
+          'ReplyId', 'ReplyType', 'ReplyFrom', 'ReplyMsg', 'ReplyFiles', 'ReplyGrpMember'
+        ],
+        'ColumnSelection': 1,
       };
 
       print('📨 API Request for messages - RoomId: $roomId, Take: $take, Skip: $skip');
@@ -404,13 +414,6 @@ onError: (error, handler) async {
         );
       }
       
-      // CRITICAL FIX: Remove ReplyId from API requests entirely
-      // Backend confirmed that reply feature only works via WebSocket, not API
-      if (messageData.containsKey('ReplyId')) {
-        print('⚠️ Removing ReplyId from API request - reply only supported via WebSocket');
-        messageData.remove('ReplyId');
-      }
-      
       // Ensure proper data types for Inbox API
       final inboxData = {
         'LinkId': messageData['LinkId'] is int ? messageData['LinkId'] : int.tryParse(messageData['LinkId']?.toString() ?? '0') ?? 0,
@@ -420,6 +423,23 @@ onError: (error, handler) async {
         'Body': messageData['Body']?.toString() ?? messageData['Msg']?.toString() ?? '',
         'Attachment': messageData['Attachment']?.toString() ?? messageData['File']?.toString() ?? '',
       };
+
+      // Add ReplyId only if it exists (for reply messages)
+      // For normal messages, don't include ReplyId at all
+      if (messageData.containsKey('ReplyId') && messageData['ReplyId'] != null) {
+        final replyId = messageData['ReplyId'];
+        if (replyId is int) {
+          inboxData['ReplyId'] = replyId;
+        } else if (replyId is String && replyId.isNotEmpty) {
+          final parsedReplyId = int.tryParse(replyId);
+          if (parsedReplyId != null) {
+            inboxData['ReplyId'] = parsedReplyId;
+          }
+        }
+        print('📨 Sending message with ReplyId: ${inboxData['ReplyId']}');
+      } else {
+        print('📨 Sending normal message (no reply)');
+      }
 
       // Ensure LinkId is not 0 (which causes the error)
       if (inboxData['LinkId'] == 0) {

@@ -60,37 +60,35 @@ class _ContactDetailScreenState extends ConsumerState<ContactDetailScreen> {
   bool _isUpdatingMuteBot = false;
   bool _isRefreshing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-
-    // ✅ TAMBAHKAN delay kecil untuk memastikan data ter-sync
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // ✅ Set loading state dulu
+    if (!widget.isGroup) {
+      // Set loading state ke true
+      ref.read(contactDetailProvider.notifier).setLoading(true);
+    }
+    
     await Future.delayed(const Duration(milliseconds: 100));
     
-    // ✅ Load dengan order yang benar
     await ref.read(contactDetailProvider.notifier).loadAvailableFunnels();
-      // Don't auto-refresh rooms to avoid disrupting new conversations
-      // Room will be refreshed automatically after first message is sent
-      // print('🔄 Contact screen opened - refreshing rooms to get latest data');
-      // await ref.read(chatProvider.notifier).loadRooms();
-      
-      // For groups, skip loading contact detail from API as it doesn't exist
-      // We'll use Room data directly
-      if (!widget.isGroup) {
-        ref.read(contactDetailProvider.notifier).loadContactDetail(widget.contactId);
-      } else {
-        // For groups, create a dummy contact from Room data
-        _createContactFromRoom();
-      }
-      
-      ref.read(tagProvider.notifier).loadAvailableTags();
-      // Load room tags using the actual room ID, not contact ID
-      _loadRoomTagsForContact();
-      // Load initial needReply status from refreshed data
-      _loadNeedReplyStatus();
-    });
-  }
+    
+    if (!widget.isGroup) {
+      // Load dengan cache
+      await ref.read(contactDetailProvider.notifier).loadContactDetail(
+        widget.contactId,
+        forceRefresh: false,
+      );
+    } else {
+      _createContactFromRoom();
+    }
+    
+    ref.read(tagProvider.notifier).loadAvailableTags();
+    _loadRoomTagsForContact();
+    _loadNeedReplyStatus();
+  });
+}
 
   // Tambahkan method refresh
 Future<void> _handleRefresh() async {
@@ -101,10 +99,19 @@ Future<void> _handleRefresh() async {
   });
 
   try {
-    // Reload data secara parallel
+    // ✅ PERBAIKAN: Force refresh dengan clear cache
+    print('🔄 Force refreshing contact detail...');
+    
+    // Clear cache untuk contact ini
+    ref.read(contactDetailProvider.notifier).clearCache(widget.contactId);
+    
+    // Reload data secara parallel dengan force refresh
     await Future.wait([
       if (!widget.isGroup)
-        ref.read(contactDetailProvider.notifier).loadContactDetail(widget.contactId),
+        ref.read(contactDetailProvider.notifier).loadContactDetail(
+          widget.contactId,
+          forceRefresh: true, // ← Force refresh dari API
+        ),
       ref.read(tagProvider.notifier).loadAvailableTags(),
       _loadRoomTagsForContact(),
     ]);
@@ -393,7 +400,7 @@ body: RefreshIndicator(
   onRefresh: _handleRefresh,
   color: AppTheme.primaryColor,
   backgroundColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-  child: contactState.isLoading
+  child: contactState.isLoading && contactState.contact == null // ✅ Kondisi lebih ketat
       ? _buildSkeletonLoader()
       : contactState.contact == null
           ? SingleChildScrollView(
@@ -432,7 +439,7 @@ body: RefreshIndicator(
                         label: const Text('Retry'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white, // Selalu putih untuk kontras
+                          foregroundColor: Colors.white,
                         ),
                       ),
                     ],

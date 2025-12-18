@@ -501,76 +501,66 @@ Future<void> _handleLogout() async {
     );
   }
 
-  void _navigateToChat(room) async {
-    // No need to leave rooms - we stay joined to all rooms for realtime
-    // selectRoom in ChatProvider will handle the JoinConversation properly
+void _navigateToChat(room) async {
+  try {
+    print('🔍 Fetching complete room data for roomId: ${room.id}');
     
-    // Fetch complete room data before navigating, like notification does
-    try {
-      print('🔍 Fetching complete room data for roomId: ${room.id}');
-      
-      final response = await ApiService.dio.post(
-        'Services/Chat/Chatrooms/DetailRoom',
-        data: {
-          'EntityId': room.id,
-        },
-      );
-      
-      Room roomToNavigate = room; // Fallback to current room
-      
-      if (response.statusCode == 200 && 
-          response.data['IsError'] != true && 
-          response.data['Data'] != null) {
-        final roomData = response.data['Data']['Room'];
-        roomToNavigate = Room.fromJson(roomData);
-        print('✅ Got complete room data: ${roomToNavigate.name}, AccountName: ${roomToNavigate.accountName}, BotName: ${roomToNavigate.botName}');
-      } else {
-        print('⚠️ Failed to fetch complete room data, using list data');
-      }
-      
-      if (!mounted) return;
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ChatScreen(room: roomToNavigate),
-        ),
-      ).then((_) {
-        // Refresh data when returning from chat screen
-        print('🔄 Returned from chat, refreshing data');
-        _handleRefresh();
-        
-        // No need to re-join rooms - we stay joined to all rooms
-      });
-    } catch (e) {
-      print('❌ Error fetching complete room data: $e');
-      
-      // Fallback to using the list data if API fails
-      if (!mounted) return;
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ChatScreen(room: room),
-        ),
-      ).then((_) {
-        print('🔄 Returned from chat, refreshing data');
-        _handleRefresh();
-        
-        // No need to re-join rooms - we stay joined to all rooms
-      });
+    final response = await ApiService.dio.post(
+      'Services/Chat/Chatrooms/DetailRoom',
+      data: {
+        'EntityId': room.id,
+      },
+    );
+    
+    Room roomToNavigate = room;
+    
+    if (response.statusCode == 200 && 
+        response.data['IsError'] != true && 
+        response.data['Data'] != null) {
+      final roomData = response.data['Data']['Room'];
+      roomToNavigate = Room.fromJson(roomData);
+      print('✅ Got complete room data: ${roomToNavigate.name}');
     }
-  }
-
-  void _navigateToArchive() {
-    Navigator.of(context).push(
+    
+    if (!mounted) return;
+    
+    // UBAH BAGIAN INI - HAPUS .then() dan _handleRefresh()
+    await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const ArsipContactScreen(),
+        builder: (context) => ChatScreen(room: roomToNavigate),
       ),
-    ).then((_) {
-      // Refresh when returning from archive
-      print('🔄 Returned from archive, refreshing data');
-      _handleRefresh();
-    });
+    );
+    
+    // TIDAK PERLU REFRESH - realtime sudah handle update otomatis
+    print('🔄 Returned from chat (no refresh needed - realtime active)');
+    
+  } catch (e) {
+    print('❌ Error fetching complete room data: $e');
+    
+    if (!mounted) return;
+    
+    // UBAH BAGIAN INI juga
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(room: room),
+      ),
+    );
+    
+    print('🔄 Returned from chat (no refresh needed - realtime active)');
   }
+}
+
+
+void _navigateToArchive() async {
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => const ArsipContactScreen(),
+    ),
+  );
+  
+  // TIDAK PERLU REFRESH - data sudah di-cache
+  print('🔄 Returned from archive (no refresh needed)');
+}
 
   void _enterSelectionMode(String roomId) {
     setState(() {
@@ -952,96 +942,95 @@ Widget _buildNormalAppBar() {
     );
   }
 
-  Widget _buildSearchAppBar() {
-    final isDarkMode = ref.watch(themeProvider).isDarkMode;
-    
-    return Container(
-      color: AppTheme.primaryColor,
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-      child: SizedBox(
-        height: 60,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: isDarkMode ? AppTheme.darkSurface : Colors.white, 
-            borderRadius: BorderRadius.circular(12)
-          ),
-          child: TextField(
-            controller: _searchController,
-            focusNode: _searchFocusNode,
-            autofocus: true,
-            textAlignVertical: TextAlignVertical.center,
-            textInputAction: TextInputAction.search, // TAMBAHAN: Tampilkan tombol search di keyboard
-            onSubmitted: (value) => _executeSearch(), // TAMBAHAN: Execute saat enter
-            decoration: InputDecoration(
-              hintText: 'Search conversations',
-              hintStyle: TextStyle(
-                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey, 
-                fontSize: 16, 
-                fontFamily: 'Poppins'
-              ),
-              border: InputBorder.none,
-              isDense: true,
-              filled: true,
-              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
-              prefixIcon: IconButton(
-                onPressed: () {
-                  setState(() {
-                    _isSearchMode = false;
-                    _searchController.clear();
-                  });
-                  _applyFilters();
-                },
-                icon: Icon(
-                  Icons.arrow_back_ios_new, 
-                  color: isDarkMode ? Colors.white : AppTheme.primaryColor, 
-                  size: 24
-                ),
-              ),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // TAMBAHAN: Tombol clear (hanya muncul jika ada text)
-                  if (_searchController.text.isNotEmpty)
-                    IconButton(
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {});
-                        _applyFilters(); // Clear search results
-                      },
-                      icon: Icon(
-                        Icons.clear,
-                        color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
-                        size: 20,
-                      ),
-                    ),
-                  // TAMBAHAN: Tombol search/enter
-                  IconButton(
-                    onPressed: _executeSearch,
-                    icon: Icon(
-                      Icons.search,
-                      color: isDarkMode ? Colors.white70 : AppTheme.primaryColor,
-                      size: 24,
-                    ),
-                    tooltip: 'Search',
-                  ),
-                ],
-              ),
-            ),
-            style: TextStyle(
+Widget _buildSearchAppBar() {
+  final isDarkMode = ref.watch(themeProvider).isDarkMode;
+  
+  return Container(
+    color: AppTheme.primaryColor,
+    padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+    child: SizedBox(
+      height: 60,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDarkMode ? AppTheme.darkSurface : Colors.white, 
+          borderRadius: BorderRadius.circular(12)
+        ),
+        child: TextField(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+          autofocus: true,
+          textAlignVertical: TextAlignVertical.center,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (value) => _executeSearch(),
+          decoration: InputDecoration(
+            hintText: 'Search conversations',
+            hintStyle: TextStyle(
+              color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey, 
               fontSize: 16, 
-              fontFamily: 'Poppins', 
-              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black
+              fontFamily: 'Poppins'
             ),
-            onChanged: (value) {
-              setState(() {}); // Update UI untuk show/hide clear button
-              _handleSearch(value); // Optional debounce handling
-            },
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.zero, // PERBAIKAN: Hilangkan padding default
+            isDense: true,
+            filled: true,
+            fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+            prefixIcon: IconButton(
+              onPressed: () {
+                setState(() {
+                  _isSearchMode = false;
+                  _searchController.clear();
+                });
+                _applyFilters();
+              },
+              icon: Icon(
+                Icons.arrow_back_ios_new, 
+                color: isDarkMode ? Colors.white : AppTheme.primaryColor, 
+                size: 24
+              ),
+            ),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_searchController.text.isNotEmpty)
+                  IconButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {});
+                      _applyFilters();
+                    },
+                    icon: Icon(
+                      Icons.clear,
+                      color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                      size: 20,
+                    ),
+                  ),
+                IconButton(
+                  onPressed: _executeSearch,
+                  icon: Icon(
+                    Icons.search,
+                    color: isDarkMode ? Colors.white70 : AppTheme.primaryColor,
+                    size: 24,
+                  ),
+                  tooltip: 'Search',
+                ),
+              ],
+            ),
           ),
+          style: TextStyle(
+            fontSize: 16, 
+            fontFamily: 'Poppins', 
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black
+          ),
+          onChanged: (value) {
+            setState(() {});
+            _handleSearch(value);
+          },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
 Widget _buildTab(String value, String label) {
   final isSelected = _selectedTab == value;

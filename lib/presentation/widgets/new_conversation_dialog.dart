@@ -1,18 +1,22 @@
+import 'package:dio/dio.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nobox_chat/core/app_config.dart';
 import 'package:nobox_chat/core/providers/new_conversation_cache_provider.dart';
 import 'package:nobox_chat/core/providers/theme_provider.dart';
+import 'package:nobox_chat/core/services/new_conversation_rest_service.dart';
+import 'package:nobox_chat/core/services/storage_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/services/new_conversation_service.dart';
-import '../../core/services/api_service.dart';
+import '../../core/services/new_conversation_service.dart' hide NewConversationService;
+import '../../core/services/signalr_service.dart';
 import '../../core/models/new_conversation_models.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/models/chat_models.dart';
 import '../screens/chat/chat_screen.dart';
 
 enum ChatType { private, group }
-enum ToType { contact, link }
+enum ToType { contact, link, manual }
 
 class NewConversationDialog extends ConsumerStatefulWidget {
   const NewConversationDialog({super.key});
@@ -30,6 +34,10 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
   String? _selectedContactId;
   String? _selectedLinkId;
   String? _selectedGroupId;
+
+
+  String _manualNumber = '';
+  final TextEditingController _manualController = TextEditingController();
   
   bool _isLoading = false;
   bool _isLoadingChannels = true;
@@ -54,14 +62,21 @@ class _NewConversationDialogState extends ConsumerState<NewConversationDialog> {
     _loadContacts();
   }
 
+  @override
+void dispose() {
+  _manualController.dispose();
+  super.dispose();
+}
+
 Future<void> _loadChannels() async {
-  final cache = ref.read(newConversationCacheProvider);
+  final cacheNotifier = ref.read(newConversationCacheProvider.notifier);
+  final cachedChannels = ref.read(newConversationCacheProvider).channels;
   
   // Cek cache channels
-  if (cache.channels.isNotEmpty && !ref.read(newConversationCacheProvider.notifier).shouldRefresh()) {
+  if (cachedChannels.isNotEmpty && !cacheNotifier.shouldRefresh()) {
     print('✅ Using cached channels');
     setState(() {
-      _channels = cache.channels;
+      _channels = cachedChannels;
       _isLoadingChannels = false;
     });
     return;
@@ -72,7 +87,7 @@ Future<void> _loadChannels() async {
   setState(() => _isLoadingChannels = true);
   try {
     final channels = await _service.getChannels();
-    ref.read(newConversationCacheProvider.notifier).setChannels(channels);
+    cacheNotifier.setChannels(channels);
     setState(() {
       _channels = channels;
       _isLoadingChannels = false;
@@ -245,265 +260,344 @@ Future<void> _loadGroups() async {
     }
   }
 
-  void _onToTypeChanged(ToType? value) {
-    if (value != null) {
-      setState(() {
-        _selectedToType = value;
-        _selectedContactId = null;
-        _selectedLinkId = null;
-      });
-      
-      if (value == ToType.contact) {
-        // FIXED: Only load contacts if not already loaded
-        if (_contacts.isEmpty && !_isLoadingContacts) {
-          _loadContacts();
-        }
-      } else {
-        _loadLinks();
+void _onToTypeChanged(ToType? value) {
+  if (value != null) {
+    setState(() {
+      _selectedToType = value;
+      _selectedContactId = null;
+      _selectedLinkId = null;
+      _manualNumber = ''; // Reset manual number
+      _manualController.clear(); // Clear controller
+    });
+    
+    if (value == ToType.contact) {
+      if (_contacts.isEmpty && !_isLoadingContacts) {
+        _loadContacts();
       }
+    } else if (value == ToType.link) {
+      _loadLinks();
     }
+    // ToType.manual tidak perlu load data
   }
+}
 
-  Future<void> _createConversation() async {
-    if (!_validateForm()) return;
+Future<void> _createConversation() async {
+  if (!_validateForm()) return;
+
+  setState(() => _isLoading = true);
+
+  try {
+    String? targetId;
+    String targetName = '';
+    bool isPrivateChat = _selectedChatType == ChatType.private;
+    bool isContact = _selectedToType == ToType.contact;
+    bool isLink = _selectedToType == ToType.link;
+    bool isManual = _selectedToType == ToType.manual; // TAMBAHKAN
+
+    // --- STEP 1: Tentukan target & nama ---
+    if (isPrivateChat) {
+      if (isContact) {
+        targetId = _selectedContactId;
+        final contact = _contacts.firstWhere((c) => c.id == _selectedContactId);
+        targetName = contact.name;
+      } else if (isLink) { // UBAH DARI else JADI else if
+        targetId = _selectedLinkId;
+        final link = _links.firstWhere((l) => l.id == _selectedLinkId);
+        targetName = link.name;
+      } else if (isManual) { // TAMBAHKAN LOGIKA MANUAL
+        targetId = null; // Manual tidak punya ID
+        targetName = _manualNumber.trim();
+      }
+    } else {
+      targetId = _selectedGroupId;
+      final group = _groups.firstWhere((g) => g.id == _selectedGroupId);
+      targetName = group.name;
+    }
+
+    // HAPUS VALIDASI INI KARENA MANUAL TIDAK PUNYA targetId
+    // if (targetId == null) {
+    //   _showError('Please select a target for the conversation');
+    //   setState(() => _isLoading = false);
+    //   return;
+    // }
+
+    print('📞 Creating new room...');
+    print('  - Chat Type: ${isPrivateChat ? 'Private' : 'Group'}');
+    print('  - To Type: ${isContact ? 'Contact' : isLink ? 'Link' : 'Manual'}'); // UPDATE
+    print('  - Target ID: $targetId');
+    print('  - Target Name: $targetName');
+    print('  - Channel ID: $_selectedChannelId');
+    print('  - Account ID: $_selectedAccountId');
+
+    // --- STEP 2: Create new room menggunakan endpoint CreateNewRoom ---
+    print('🚀 Calling CreateNewRoom API...');
     
-    setState(() => _isLoading = true);
+    // Parse IDs ke integer jika memungkinkan
+    final accountIdInt = int.tryParse(_selectedAccountId ?? '') ?? 0;
+    final channelIdInt = int.tryParse(_selectedChannelId ?? '') ?? 1;
+    final targetIdInt = int.tryParse(targetId ?? '') ?? 0;
     
-    try {
-      String? targetId;
-      String targetName = '';
-      
-      // Get target information
-      if (_selectedChatType == ChatType.private) {
-        if (_selectedToType == ToType.contact) {
-          targetId = _selectedContactId;
-          final contact = _contacts.firstWhere((c) => c.id == _selectedContactId);
-          targetName = contact.name;
-        } else {
-          targetId = _selectedLinkId;
-          final link = _links.firstWhere((l) => l.id == _selectedLinkId);
-          targetName = link.name;
-        }
-      } else {
-        targetId = _selectedGroupId;
-        final group = _groups.firstWhere((g) => g.id == _selectedGroupId);
-        targetName = group.name;
+    // Siapkan data sesuai dengan contoh dari teman Anda
+    final requestData = {
+      "AccId": accountIdInt,
+      "ChId": channelIdInt,
+      "LinkId": null,
+      "GrpId": null,
+      "Chat": 0,
+      "CtId": null,
+      "Manual": "", // Default kosong
+      "To": 1
+    };
+
+    // Sesuaikan field berdasarkan tipe chat
+    if (isPrivateChat) {
+      if (isContact) {
+        // Private chat dengan contact
+        requestData["CtId"] = targetIdInt;
+        requestData["To"] = 1; // To contact
+      } else if (isLink) {
+        // Private chat dengan link
+        requestData["LinkId"] = targetIdInt;
+        requestData["To"] = 2; // To link
+      } else if (isManual) {
+        // TAMBAHKAN LOGIKA MANUAL
+        requestData["Manual"] = _manualNumber.trim(); // Isi nomor manual
+        requestData["To"] = 3; // To manual
+        requestData["CtId"] = null; // CtId null
       }
+    } else {
+      // Group chat
+      requestData["GrpId"] = targetIdInt;
+      requestData["Chat"] = 1; // Group chat
+      requestData["To"] = 3; // To group (mungkin perlu disesuaikan)
+    }
+
+    print('📤 Request data: $requestData');
+
+    // Panggil API CreateNewRoom
+    final result = await _createNewRoomApi(requestData);
+
+    print('✅ CreateNewRoom API response: $result');
+
+    if (result != null && result['success'] == true) {
+      // ✅ Success - refresh rooms dan cari room yang baru dibuat
+      await Future.delayed(const Duration(seconds: 1));
+      await ref.read(chatProvider.notifier).loadRooms();
       
-      if (targetId == null) {
-        _showError('Please select a target for the conversation');
-        setState(() => _isLoading = false);
-        return;
-      }
+      // Cari room yang baru dibuat
+      final chatState = ref.read(chatProvider);
+      Room? newRoom;
       
-      print('Creating conversation with targetId: $targetId');
-      
-      // FIXED: Try to get existing room details first
-      // But if resolved (status = 3), treat as new conversation
-      Room? existingRoom;
-      try {
-        print('Checking for existing room with targetId: $targetId');
-        
-        // Try to find existing room in current room list first
-        final chatState = ref.read(chatProvider);
-        existingRoom = chatState.rooms.firstWhere(
-          (room) {
-            // Check if this room matches the target
-            if (_selectedChatType == ChatType.group) {
-              return room.grpId == targetId;
-            } else if (_selectedToType == ToType.contact) {
-              return room.ctId == targetId || room.ctRealId == targetId;
-            } else {
-              // For links, the room ID might be the same as targetId
-              return room.id == targetId;
-            }
-          },
-          orElse: () => Room(
-            id: '',
-            name: '',
-            status: 0,
-            channelId: 0,
-            channelName: '',
-          ),
-        );
-        
-        // FIXED: If room exists but is resolved (status = 3), treat as new conversation
-        if (existingRoom.id.isNotEmpty) {
-          if (existingRoom.status == 3) {
-            print('Found resolved room: ${existingRoom.id} - Creating new conversation instead');
-            existingRoom = null; // Force create new conversation
-          } else {
-            print('Found existing active room: ${existingRoom.id} - ${existingRoom.name} (status: ${existingRoom.status})');
-          }
-        } else {
-          existingRoom = null;
-        }
-      } catch (e) {
-        print('No existing room found in memory: $e');
-        existingRoom = null;
-      }
-      
-      // If no existing room found, create a new room object
-      if (existingRoom == null) {
-        print('Creating new room object for targetId: $targetId');
-        
-        // Create room with proper structure for new conversations
-        existingRoom = Room(
-          id: targetId, // Use targetId as room ID for new conversations
-          ctId: _selectedChatType == ChatType.private && _selectedToType == ToType.contact ? targetId : null,
-          ctRealId: _selectedChatType == ChatType.private && _selectedToType == ToType.contact ? targetId : null,
-          grpId: _selectedChatType == ChatType.group ? targetId : null,
-          name: targetName.isNotEmpty ? targetName : 'New Conversation',
-          lastMessage: null,
-          lastMessageTime: DateTime.now(),
-          unreadCount: 0,
-          status: 1, // Unassigned
-          channelId: int.tryParse(_selectedChannelId!) ?? 1,
-          channelName: _channels.firstWhere((c) => c.id == _selectedChannelId).name,
-          contactImage: null,
-          linkImage: null,
-          isGroup: _selectedChatType == ChatType.group,
-          isPinned: false,
-          isBlocked: false,
-          isMuteBot: false,
-          tags: [],
-          funnel: null,
-        );
-        
-        print('Created new room object: ${existingRoom.id} - ${existingRoom.name}');
-      }
-      
-      // IMPORTANT: For truly new conversations, create the room at server immediately
-      // by sending an empty message
-      if (existingRoom != null && existingRoom!.status == 1 && 
-          (existingRoom!.lastMessage == null || existingRoom!.lastMessage!.isEmpty)) {
-        print('🆕 Creating NEW conversation at server by sending empty message');
-        
+      // Method 1: Cari berdasarkan roomId dari response
+      if (result['roomId'] != null) {
+        final roomId = result['roomId'].toString();
         try {
-          // Send empty message to create room at server
-          final createRoomData = {
-            'LinkId': int.tryParse(targetId!),
-            'ChannelId': int.tryParse(_selectedChannelId!) ?? 1,
-            'AccountIds': _selectedAccountId!,
-            'BodyType': 1, // Text message
-            'Body': '', // Empty body to just create the room
-            'Attachment': '',
-          };
-          
-          print('📤 Creating room at server: LinkId=${targetId}, ChannelId=${_selectedChannelId}, AccountId=${_selectedAccountId}');
-          
-          final response = await ApiService.sendMessage(createRoomData);
-          
-          if (response.isError) {
-            print('❌ Failed to create room at server: ${response.error}');
-            // Don't return - continue with local room, user can send message manually
-          } else {
-            print('✅ Room created successfully at server');
-          }
-          
-          // Wait a bit for server to process
-          await Future.delayed(const Duration(milliseconds: 800));
-          
-          // Refresh room list to get the newly created room from server
-          print('🔄 Refreshing room list to get new room from server');
-          await ref.read(chatProvider.notifier).loadRooms();
-          
-          // Try to find the created room in the refreshed list
-          final chatState = ref.read(chatProvider);
-          final createdRoom = chatState.rooms.firstWhere(
-            (room) {
-              if (_selectedChatType == ChatType.group) {
-                return room.grpId == targetId;
-              } else if (_selectedToType == ToType.contact) {
-                return room.ctId == targetId || room.ctRealId == targetId;
-              } else {
-                return room.id == targetId;
-              }
-            },
-            orElse: () => existingRoom!, // Fallback to local room object
-          );
-          
-          print('✅ Found created room: ${createdRoom.id} - ${createdRoom.name} (status: ${createdRoom.status})');
-          
-          // Use the room from server (which has proper room ID and data)
-          existingRoom = createdRoom as Room?;
+          newRoom = chatState.rooms.firstWhere((room) => room.id == roomId);
         } catch (e) {
-          print('❌ Exception creating room at server: $e');
-          // Don't fail - just continue with local room
+          print('⚠️ Room with ID $roomId not found: $e');
         }
       }
       
+      // Method 2: Cari berdasarkan target ID (fallback) - SKIP UNTUK MANUAL
+      if (newRoom == null && chatState.rooms.isNotEmpty && !isManual) {
+        try {
+          newRoom = chatState.rooms.firstWhere(
+            (room) {
+              if (isPrivateChat) {
+                if (isContact) {
+                  return room.ctId == targetId || room.ctRealId == targetId;
+                } else if (isLink) {
+                  return room.id == targetId;
+                }
+              } else {
+                return room.grpId == targetId;
+              }
+              return false;
+            },
+          );
+        } catch (e) {
+          print('⚠️ Room with target ID $targetId not found: $e');
+        }
+      }
+      
+      // Method 3: Cari berdasarkan nama (fallback)
+      if (newRoom == null && chatState.rooms.isNotEmpty) {
+        try {
+          newRoom = chatState.rooms.firstWhere(
+            (room) => room.name.contains(targetName),
+            orElse: () => chatState.rooms.first,
+          );
+        } catch (e) {
+          print('⚠️ Room with name $targetName not found: $e');
+          newRoom = chatState.rooms.isNotEmpty ? chatState.rooms.first : null;
+        }
+      }
+
       if (mounted) {
-        // Close dialog
         Navigator.of(context).pop();
-        
-        // Show success message
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Conversation created: ${targetName}'),
+            content: Text('Conversation created: $targetName'),
             backgroundColor: AppTheme.successColor,
             duration: const Duration(seconds: 2),
           ),
         );
-        
-        // Navigate to ChatScreen with the created room
-        print('Navigating to ChatScreen with room: ${existingRoom?.id}');
-        
-        final isNewConversation = existingRoom?.status == 1 && (existingRoom?.lastMessage == null || existingRoom?.lastMessage?.isEmpty == true);
-        
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              room: existingRoom!,
-              isNewConversation: isNewConversation,
-            ),
-          ),
-        );
-      }
-      
-    } catch (e) {
-      print('Error creating conversation: $e');
-      _showError('Failed to create conversation: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
 
-  bool _validateForm() {
-    if (_selectedChannelId == null) {
-      _showError('Please select a channel');
-      return false;
-    }
-    
-    // FIXED: Don't require account selection if no accounts are available for the selected channel
-    if (_accounts.isEmpty) {
-      _showError('No accounts available for the selected channel');
-      return false;
-    }
-    
-    if (_selectedAccountId == null) {
-      _showError('Please select an account');
-      return false;
-    }
-    
-    if (_selectedChatType == ChatType.private) {
-      if (_selectedToType == ToType.contact && _selectedContactId == null) {
-        _showError('Please select a contact');
-        return false;
-      }
-      if (_selectedToType == ToType.link && _selectedLinkId == null) {
-        _showError('Please select a link');
-        return false;
+        // Navigate to chat jika room ditemukan
+        if (newRoom != null) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                room: newRoom!,
+                isNewConversation: true,
+              ),
+            ),
+          );
+        } else {
+          print('⚠️ No room found after creation');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Conversation created but not found in list'),
+              backgroundColor: AppTheme.warningColor,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } else {
-      if (_selectedGroupId == null) {
-        _showError('Please select a group');
-        return false;
+      final errorMsg = result?['error'] ?? 'Failed to create conversation';
+      _showError('Failed to create conversation: $errorMsg');
+      setState(() => _isLoading = false);
+    }
+
+  } catch (e) {
+    print('❌ Error creating conversation: $e');
+    _showError('Failed to create conversation: ${e.toString()}');
+    setState(() => _isLoading = false);
+  }
+}
+
+// Alternatif: Gunakan endpoint langsung dari contoh teman
+Future<Map<String, dynamic>?> _createNewRoomApi(Map<String, dynamic> data) async {
+  try {
+    final dio = Dio();
+    final token = await StorageService.getToken();
+    
+    if (token == null) {
+      print('❌ No token found');
+      return {'success': false, 'error': 'No authentication token'};
+    }
+
+    // Gunakan endpoint langsung dari contoh teman
+    final url = "https://id.nobox.ai/Inbox/CreateNewRoom";
+    
+    print('🌐 Calling CreateNewRoom API: $url');
+    print('🔑 Using token: ${token.length > 20 ? token.substring(0, 20) + "..." : token}');
+
+    final response = await dio.post(
+      url,
+      data: data,
+      options: Options(
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      ),
+    );
+
+    print('📥 Response status: ${response.statusCode}');
+    print('📥 Response data: ${response.data}');
+
+    if (response.statusCode == 200) {
+      final responseData = response.data;
+      
+      if (responseData is Map) {
+        final result = Map<String, dynamic>.from(responseData);
+        
+        if (result['IsError'] == true) {
+          return {
+            'success': false,
+            'error': result['ErrorMessage'] ?? result['Error'] ?? 'API error'
+          };
+        }
+        
+        return {
+          'success': true,
+          'roomId': result['Data']?['Id'] ?? result['Data']?['RoomId'] ?? result['Id'],
+          'data': result['Data']
+        };
       }
+      return {'success': true, 'data': responseData};
     }
     
-    return true;
+    return {
+      'success': false,
+      'error': 'HTTP ${response.statusCode}: ${response.statusMessage}'
+    };
+    
+  } catch (e) {
+    print('❌ API Error: $e');
+    
+    if (e is DioException) {
+      print('📡 Dio Error Type: ${e.type}');
+      print('📡 Dio Error Message: ${e.message}');
+      print('📡 Dio Response Status: ${e.response?.statusCode}');
+      print('📡 Dio Response Data: ${e.response?.data}');
+      print('📡 Dio Request URL: ${e.requestOptions.uri}');
+      
+      // Debug: Print full request untuk diperiksa
+      print('🔍 Full Request Details:');
+      print('  URL: ${e.requestOptions.uri}');
+      print('  Headers: ${e.requestOptions.headers}');
+      print('  Data: ${e.requestOptions.data}');
+      
+      return {
+        'success': false,
+        'error': 'API Error: ${e.message}',
+        'statusCode': e.response?.statusCode,
+        'url': e.requestOptions.uri.toString(),
+      };
+    }
+    
+    return {'success': false, 'error': e.toString()};
   }
+}
+
+ bool _validateForm() {
+  if (_selectedChannelId == null) {
+    _showError('Please select a channel');
+    return false;
+  }
+  
+  if (_selectedAccountId == null) {
+    _showError('Please select an account');
+    return false;
+  }
+  
+  if (_selectedChatType == ChatType.private) {
+    if (_selectedToType == ToType.contact && _selectedContactId == null) {
+      _showError('Please select a contact');
+      return false;
+    }
+    if (_selectedToType == ToType.link && _selectedLinkId == null) {
+      _showError('Please select a link');
+      return false;
+    }
+    // TAMBAHKAN VALIDASI MANUAL
+    if (_selectedToType == ToType.manual && _manualNumber.trim().isEmpty) {
+      _showError('Please enter a phone number');
+      return false;
+    }
+  } else {
+    if (_selectedGroupId == null) {
+      _showError('Please select a group');
+      return false;
+    }
+  }
+  
+  return true;
+}
 
   void _showError(String message) {
     if (mounted) {
@@ -596,9 +690,11 @@ return Dialog(
                     const SizedBox(height: 16),
                     
                     if (_selectedToType == ToType.contact)
-                      _buildContactDropdown(isDarkMode) // TAMBAHKAN PARAMETER
-                    else
-                      _buildLinkDropdown(isDarkMode), // TAMBAHKAN PARAMETER
+                      _buildContactDropdown(isDarkMode)
+                    else if (_selectedToType == ToType.link)
+                      _buildLinkDropdown(isDarkMode)
+                    else if (_selectedToType == ToType.manual)
+                      _buildManualInput(isDarkMode),
                   ],
                   
                   if (_selectedChatType == ChatType.group) ...[
@@ -825,6 +921,67 @@ Widget _buildDropdownField(
     ),
   );
 },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildManualInput(bool isDarkMode) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            'Manual',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+            ),
+          ),
+        ),
+        Expanded(
+          child: TextField(
+            controller: _manualController,
+            onChanged: (value) => setState(() => _manualNumber = value),
+            keyboardType: TextInputType.phone,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+            ),
+            decoration: InputDecoration(
+              hintText: '62xx',
+              hintStyle: TextStyle(
+                color: isDarkMode ? AppTheme.darkTextSecondary : Colors.grey,
+                fontSize: 14,
+              ),
+              filled: true,
+              fillColor: isDarkMode ? AppTheme.darkSurface : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: AppTheme.primaryColor,
+                  width: 2,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
           ),
         ),
       ],
@@ -1227,8 +1384,9 @@ Widget _buildAccountDropdown(bool isDarkMode) {
   );
 }
 
-Widget _buildRadioField(bool isDarkMode) { // TAMBAHKAN PARAMETER
+Widget _buildRadioField(bool isDarkMode) {
   return Row(
+    crossAxisAlignment: CrossAxisAlignment.start, // TAMBAHKAN INI
     children: [
       SizedBox(
         width: 80,
@@ -1237,7 +1395,7 @@ Widget _buildRadioField(bool isDarkMode) { // TAMBAHKAN PARAMETER
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black, // UPDATE
+            color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
           ),
         ),
       ),
@@ -1248,53 +1406,84 @@ Widget _buildRadioField(bool isDarkMode) { // TAMBAHKAN PARAMETER
             border: Border.all(
               color: isDarkMode 
                 ? Colors.grey.shade700 
-                : Colors.grey.shade300, // UPDATE
+                : Colors.grey.shade300,
             ),
             borderRadius: BorderRadius.circular(8),
-            color: isDarkMode ? AppTheme.darkSurface : Colors.white, // TAMBAHKAN
+            color: isDarkMode ? AppTheme.darkSurface : Colors.white,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
+          child: Column( // GANTI ROW JADI COLUMN
+            crossAxisAlignment: CrossAxisAlignment.start, // TAMBAHKAN
             children: [
+              // Baris 1: Contact dan Link
               Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  Radio<ToType>(
-                    value: ToType.contact,
-                    groupValue: _selectedToType,
-                    onChanged: _onToTypeChanged,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                    activeColor: AppTheme.primaryColor, // Tetap biru
+                  // Contact Radio
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Radio<ToType>(
+                        value: ToType.contact,
+                        groupValue: _selectedToType,
+                        onChanged: _onToTypeChanged,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                        activeColor: AppTheme.primaryColor,
+                      ),
+                      Text(
+                        'Contact',
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Contact',
-                    style: TextStyle(
-                      color: isDarkMode 
-                        ? AppTheme.darkTextPrimary 
-                        : Colors.black, // UPDATE
-                    ),
+                  const SizedBox(width: 16),
+                  // Link Radio
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Radio<ToType>(
+                        value: ToType.link,
+                        groupValue: _selectedToType,
+                        onChanged: _onToTypeChanged,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                        activeColor: AppTheme.primaryColor,
+                      ),
+                      Text(
+                        'Link',
+                        style: TextStyle(
+                          color: isDarkMode 
+                            ? AppTheme.darkTextPrimary 
+                            : Colors.black,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(width: 16),
+              
+              // Baris 2: Manual (DI BAWAH)
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Radio<ToType>(
-                    value: ToType.link,
+                    value: ToType.manual,
                     groupValue: _selectedToType,
                     onChanged: _onToTypeChanged,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
-                    activeColor: AppTheme.primaryColor, // Tetap biru
+                    activeColor: AppTheme.primaryColor,
                   ),
                   Text(
-                    'Link',
+                    'Manual',
                     style: TextStyle(
                       color: isDarkMode 
                         ? AppTheme.darkTextPrimary 
-                        : Colors.black, // UPDATE
+                        : Colors.black,
                     ),
                   ),
                 ],

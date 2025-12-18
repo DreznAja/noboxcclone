@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nobox_chat/core/services/media_service.dart';
@@ -1679,13 +1681,9 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
     // Add optimistic message first
     final tempId = _addOptimisticMessage(locationText, replyId: replyId);
 
-    // CRITICAL FIX: For location with reply, use SignalR only
-    if (replyId != null && replyId.isNotEmpty) {
-      await _sendLocationViaSignalR(locationText, tempId: tempId, replyId: replyId);
-    } else {
-      // Send via API as text message (type 1) with location content
-      await _sendMessageViaAPI(locationText, tempId: tempId, replyId: replyId);
-    }
+    // Send via API as text message (type 1) with location content
+    // This works for both regular and reply messages
+    await _sendMessageViaAPI(locationText, tempId: tempId, replyId: replyId);
   }
   
   Future<void> _sendLocationViaSignalR(String locationText, {required String tempId, String? replyId}) async {
@@ -1811,122 +1809,8 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
       
       print('Room channelId: ${activeRoom.channelId}, Effective channelId: $channelId');
       
-      // CRITICAL FIX: For reply messages, use SignalR only (no API)
-      // Backend confirmed that reply feature only works via WebSocket
-      if (replyId != null && replyId.isNotEmpty) {
-        print('🔄 Reply message detected, using SignalR only (API does not support reply)');
-        
-        // Enhanced ReplyId validation for SignalR
-        String? validatedReplyId;
-        
-        // Find the reply message in our local message list
-        final replyMessage = state.messages.firstWhere(
-          (msg) => msg.id == replyId,
-          orElse: () => ChatMessage(
-            id: '',
-            roomId: '',
-            from: '',
-            agentId: 0,
-            type: 1,
-            timestamp: DateTime.now(),
-          ),
-        );
-        
-        if (replyMessage.id.isEmpty) {
-          print('⚠️ Reply message not found in local messages, removing ReplyId');
-        } else {
-          // Validate ReplyId format - must be numeric and positive
-          final numericReplyId = int.tryParse(replyId);
-          if (numericReplyId != null && numericReplyId > 0) {
-            validatedReplyId = numericReplyId.toString();
-            print('✅ Using validated ReplyId for SignalR: $validatedReplyId');
-          } else {
-            print('⚠️ Invalid ReplyId format for SignalR: $replyId');
-          }
-        }
-        
-        // Send ONLY via SignalR for reply messages
-        if (SignalRService.isConnected && validatedReplyId != null) {
-          try {
-            // Build Room data - only include IdGroup for group chats
-            // CRITICAL: IdLink and IdRoom must be integers, not strings
-            final roomData = <String, Object>{
-              'IdLink': int.tryParse(linkId) ?? linkId,
-              'IdAccount': int.tryParse(accountId) ?? 1,
-              'IdRoom': int.tryParse(activeRoom.id) ?? activeRoom.id,
-            };
-            
-            // Add IdGroup only for group chats
-            final grpId = activeRoom.grpId;
-            if (activeRoom.isGroup && grpId != null) {
-              roomData['IdGroup'] = int.tryParse(grpId) ?? grpId;
-            }
-            
-            // Get the message being replied to
-            ChatMessage? replyMessageData;
-            try {
-              replyMessageData = state.messages.firstWhere((m) => m.id == validatedReplyId);
-            } catch (e) {
-              print('⚠️ Reply message not found: $validatedReplyId');
-            }
-            
-            final msgData = <String, dynamic>{
-              'Type': '1',
-              'Msg': text.trim(),
-              'File': '',
-              'Files': '',
-              'ReplyId': validatedReplyId,
-            };
-            
-            // Add complete reply info like web does
-            // CRITICAL FIX: Never send null values - server might reject!
-            if (replyMessageData != null) {
-              msgData['ReplyFrom'] = replyMessageData.from ?? '';
-              msgData['ReplyType'] = replyMessageData.type.toString();
-              msgData['ReplyMsg'] = replyMessageData.message ?? '';
-              msgData['ReplyFiles'] = replyMessageData.files ?? replyMessageData.file ?? '';
-            }
-            
-            final signalRData = {
-              'Room': roomData,
-              'Msg': msgData,
-            };
-            
-            print('Sending reply message via SignalR with complete reply data: ${jsonEncode(signalRData)}');
-            print('🔄 BEFORE SignalRService.sendMessage call...');
-            
-            final sendSuccess = await SignalRService.sendMessage(signalRData);
-            
-            print('🔄 AFTER SignalRService.sendMessage call, result: $sendSuccess');
-            
-            if (!sendSuccess) {
-              print('❌ Send failed, updating to error status');
-              _updateOptimisticMessage(tempId, 4); // Mark as failed if send failed
-              state = state.copyWith(error: 'Failed to send reply message');
-              return;
-            }
-            
-            print('🔄 BEFORE _updateOptimisticMessage to status 2...');
-            // Update to sent immediately (SignalR confirmed message sent)
-            // If TerimaAck arrives later, it will update with real ID and possibly higher status
-            _updateOptimisticMessage(tempId, 2);
-            print('✅ Reply message sent via SignalR and updated to sent status');
-            
-            return; // Exit early for reply messages
-          } catch (signalRError) {
-            _updateOptimisticMessage(tempId, 4); // Mark as failed
-            print('❌ SignalR reply failed: $signalRError');
-            state = state.copyWith(error: 'Failed to send reply message. Reply feature requires active connection.');
-            return;
-          }
-        } else {
-          _updateOptimisticMessage(tempId, 4); // Mark as failed
-          state = state.copyWith(error: 'Cannot send reply message. Connection not available or invalid reply ID.');
-          return;
-        }
-      }
       
-      // For non-reply messages, use API as primary method
+      // For all messages (including reply), use API as primary method
       final apiMessageData = {
         'LinkId': int.tryParse(linkId),
         'ChannelId': channelId,
@@ -1935,7 +1819,57 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
         'Body': text.trim(),
         'Attachment': '',
       };
+
+      // Add ReplyId and other reply fields if this is a reply message
+      if (replyId != null && replyId.isNotEmpty) {
+        final numericReplyId = int.tryParse(replyId);
+        if (numericReplyId != null && numericReplyId > 0) {
+          apiMessageData['ReplyId'] = numericReplyId;
+          
+          // Get the message being replied to for complete reply data
+          try {
+            final replyToMessage = state.messages.firstWhere((m) => m.id == replyId);
+            
+            // Add all reply fields like web does
+            apiMessageData['ReplyType'] = replyToMessage.type.toString();
+            apiMessageData['ReplyMsg'] = replyToMessage.message ?? '';
+            
+            // ReplyFrom should be the sender of the original message
+            if (replyToMessage.from != null && replyToMessage.from!.isNotEmpty) {
+              final replyFromInt = int.tryParse(replyToMessage.from!);
+              if (replyFromInt != null) {
+                apiMessageData['ReplyFrom'] = replyFromInt;
+              } else {
+                apiMessageData['ReplyFrom'] = replyToMessage.from;
+              }
+            }
+            
+            // ReplyFiles if the replied message has files
+            if (replyToMessage.files != null && replyToMessage.files!.isNotEmpty) {
+              apiMessageData['ReplyFiles'] = replyToMessage.files;
+            } else if (replyToMessage.file != null && replyToMessage.file!.isNotEmpty) {
+              apiMessageData['ReplyFiles'] = replyToMessage.file;
+            }
+            
+            // ReplyGrpMember if replying to customer message
+            if (replyToMessage.agentId <= 0) {
+              apiMessageData['ReplyGrpMember'] = 'Customer';
+            }
+            
+            print('📨 Sending reply message via API with complete reply data:');
+            print('   ReplyId: $numericReplyId');
+            print('   ReplyType: ${apiMessageData['ReplyType']}');
+            print('   ReplyFrom: ${apiMessageData['ReplyFrom']}');
+            print('   ReplyMsg: ${apiMessageData['ReplyMsg']}');
+          } catch (e) {
+            print('⚠️ Could not find reply message, sending with ReplyId only: $e');
+          }
+        } else {
+          print('⚠️ Invalid ReplyId format: $replyId, sending as regular message');
+        }
+      }
       
+
       // Validate required fields
       if (apiMessageData['LinkId'] == null || apiMessageData['LinkId'] == 0) {
         _updateOptimisticMessage(tempId, 4); // Mark as failed
@@ -2050,13 +1984,6 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
     final activeRoom = state.activeRoom;
     if (activeRoom == null) return;
 
-    // CRITICAL FIX: For media messages with reply, use SignalR only
-    if (replyId != null && replyId.isNotEmpty) {
-      print('🔄 Media reply message detected, using SignalR only (API does not support reply)');
-      await _sendMediaReplyViaSignalR(type, caption, uploadedFile, replyId: replyId, tempId: tempId);
-      return;
-    }
-
     try {
       // Get the agent account ID using the correct channel mapping
       final effectiveChannelId = _getEffectiveChannelId(activeRoom.channelId);
@@ -2098,6 +2025,55 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
         'Body': bodyText,
         'Attachment': attachmentData,
       };
+
+      // Add ReplyId and other reply fields if this is a reply message
+      if (replyId != null && replyId.isNotEmpty) {
+        final numericReplyId = int.tryParse(replyId);
+        if (numericReplyId != null && numericReplyId > 0) {
+          apiMessageData['ReplyId'] = numericReplyId;
+          
+          // Get the message being replied to for complete reply data
+          try {
+            final replyToMessage = state.messages.firstWhere((m) => m.id == replyId);
+            
+            // Add all reply fields like web does
+            apiMessageData['ReplyType'] = replyToMessage.type.toString();
+            apiMessageData['ReplyMsg'] = replyToMessage.message ?? '';
+            
+            // ReplyFrom should be the sender of the original message
+            if (replyToMessage.from != null && replyToMessage.from!.isNotEmpty) {
+              final replyFromInt = int.tryParse(replyToMessage.from!);
+              if (replyFromInt != null) {
+                apiMessageData['ReplyFrom'] = replyFromInt;
+              } else {
+                apiMessageData['ReplyFrom'] = replyToMessage.from;
+              }
+            }
+            
+            // ReplyFiles if the replied message has files
+            if (replyToMessage.files != null && replyToMessage.files!.isNotEmpty) {
+              apiMessageData['ReplyFiles'] = replyToMessage.files;
+            } else if (replyToMessage.file != null && replyToMessage.file!.isNotEmpty) {
+              apiMessageData['ReplyFiles'] = replyToMessage.file;
+            }
+            
+            // ReplyGrpMember if replying to customer message
+            if (replyToMessage.agentId <= 0) {
+              apiMessageData['ReplyGrpMember'] = 'Customer';
+            }
+            
+            print('📨 Sending media reply via API with complete reply data:');
+            print('   ReplyId: $numericReplyId');
+            print('   ReplyType: ${apiMessageData['ReplyType']}');
+            print('   ReplyFrom: ${apiMessageData['ReplyFrom']}');
+            print('   ReplyMsg: ${apiMessageData['ReplyMsg']}');
+          } catch (e) {
+            print('⚠️ Could not find reply message for media, sending with ReplyId only: $e');
+          }
+        } else {
+          print('⚠️ Invalid ReplyId format for media: $replyId, sending as regular media message');
+        }
+      }
       
       print('Sending media message via API: ${jsonEncode(apiMessageData)}');
       
@@ -2428,6 +2404,12 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
  void _addMessage(ChatMessage message) {
   print('📨 New message received: ${message.id} for room ${message.roomId}');
   print('📨 Message details: type=${message.type}, text="${message.message}", ack=${message.ack}, replyId=${message.replyId}');
+  print('📨 Reply data from server:');
+  print('   - replyId: ${message.replyId}');
+  print('   - replyMessage: ${message.replyMessage}');
+  print('   - replyType: ${message.replyType}');
+  print('   - replyFrom: ${message.replyFrom}');
+  print('   - Has complete reply data: ${message.replyId != null && message.replyMessage != null && message.replyMessage!.isNotEmpty}');
   
   // ALWAYS update room list metadata
   _updateRoomWithNewMessage(message);
@@ -2500,8 +2482,54 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
       });
       
       if (optimisticIndex != -1) {
-        print('🔄 Replaced optimistic message ${messages[optimisticIndex].id} with server message ${message.id} (ack=${message.ack})');
-        messages[optimisticIndex] = message;
+        print('🔄 Replacing optimistic message ${messages[optimisticIndex].id} with server message ${message.id} (ack=${message.ack})');
+        
+        // CRITICAL FIX: Preserve reply data from optimistic message if server message doesn't have it
+        // This prevents reply box from disappearing when message gets ack update
+        final optimisticMsg = messages[optimisticIndex];
+        final hasReplyData = optimisticMsg.replyId != null;
+        final serverHasReplyData = message.replyId != null && 
+                                   message.replyMessage != null && 
+                                   message.replyMessage!.isNotEmpty;
+        
+        ChatMessage finalMessage;
+        if (hasReplyData && !serverHasReplyData) {
+          print('⚠️ Server message missing reply data, preserving from optimistic message');
+          print('   Optimistic replyId: ${optimisticMsg.replyId}');
+          print('   Optimistic replyMessage: ${optimisticMsg.replyMessage}');
+          
+          // Create new message with server data but preserve reply info from optimistic
+          finalMessage = ChatMessage(
+            id: message.id,
+            roomId: message.roomId,
+            from: message.from,
+            to: message.to,
+            agentId: message.agentId,
+            type: message.type,
+            message: message.message,
+            file: message.file,
+            files: message.files,
+            timestamp: message.timestamp,
+            ack: message.ack,
+            // Preserve reply data from optimistic message
+            replyId: optimisticMsg.replyId,
+            replyType: optimisticMsg.replyType,
+            replyFrom: optimisticMsg.replyFrom,
+            replyMessage: optimisticMsg.replyMessage,
+            replyFiles: optimisticMsg.replyFiles,
+            replyGrpMember: optimisticMsg.replyGrpMember,
+            isEdited: message.isEdited,
+            note: message.note,
+          );
+          print('✅ Reply data preserved in final message');
+        } else {
+          finalMessage = message;
+          if (serverHasReplyData) {
+            print('✅ Server message has reply data, using it');
+          }
+        }
+        
+        messages[optimisticIndex] = finalMessage;
       } else {
         print('➕ No optimistic message found, adding as new message');
         messages.add(message);
@@ -2512,9 +2540,50 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
       // CRITICAL: ONLY update messages, nothing else
       state = state.copyWith(messages: messages);
     } else if (messages[existingIndex].id.startsWith('temp_')) {
-      messages[existingIndex] = message;
+      print('🔄 Updating existing optimistic message');
+      
+      // CRITICAL FIX: Also preserve reply data here
+      final existingMsg = messages[existingIndex];
+      final hasReplyData = existingMsg.replyId != null;
+      final serverHasReplyData = message.replyId != null && 
+                                 message.replyMessage != null && 
+                                 message.replyMessage!.isNotEmpty;
+      
+      ChatMessage finalMessage;
+      if (hasReplyData && !serverHasReplyData) {
+        print('⚠️ Server message missing reply data, preserving from existing message');
+        
+        // Preserve reply data from existing message
+        finalMessage = ChatMessage(
+          id: message.id,
+          roomId: message.roomId,
+          from: message.from,
+          to: message.to,
+          agentId: message.agentId,
+          type: message.type,
+          message: message.message,
+          file: message.file,
+          files: message.files,
+          timestamp: message.timestamp,
+          ack: message.ack,
+          // Preserve reply data
+          replyId: existingMsg.replyId,
+          replyType: existingMsg.replyType,
+          replyFrom: existingMsg.replyFrom,
+          replyMessage: existingMsg.replyMessage,
+          replyFiles: existingMsg.replyFiles,
+          replyGrpMember: existingMsg.replyGrpMember,
+          isEdited: message.isEdited,
+          note: message.note,
+        );
+        print('✅ Reply data preserved: replyId=${finalMessage.replyId}');
+      } else {
+        finalMessage = message;
+      }
+      
+      messages[existingIndex] = finalMessage;
       state = state.copyWith(messages: messages);
-      print('🔄 Updated optimistic message');
+      print('🔄 Updated optimistic message with reply data preserved');
     }
   } else {
     print('📨 Message for different room, room list already updated');
@@ -2813,124 +2882,67 @@ if (filters != null && filters.containsKey('LinkIdFilter')) {
   }
 
   void _updateMessageAck(Map<String, dynamic> ackData) {
-    // Check if this is a NeedReply update
-    if (ackData['type'] == 'needReply') {
-      _handleNeedReplyUpdate(ackData);
-      return;
-    }
-
-    // CRITICAL FIX: Don't check activeRoom - update messages even if user left chat
-    // This ensures TerimaAck updates are not lost when user navigates away
-    final roomId = ackData['roomId'] as String;
+     print('🔔 _updateMessageAck CALLED with data: $ackData');
+  
+  // Cek apakah ini ack untuk reply message
+  final isReplyAck = ackData['isReply'] == true;
+  
+  if (isReplyAck) {
+    print('🔄 This is a SPECIAL ack for reply message');
+    print('   Note: Server does not send real TerimaAck for replies');
     
-    // Only update if this is the active room's messages
-    if (state.activeRoom?.id == roomId) {
-      final messages = List<ChatMessage>.from(state.messages);
-      final messageIdFromServer = ackData['messageId'] as String;
+    // Cari pesan reply terbaru yang masih berstatus 1 (pending)
+    final messages = List<ChatMessage>.from(state.messages);
+    final now = DateTime.now();
+    
+    // Cari pesan reply yang dikirim dalam 5 detik terakhir
+    final recentReplyIndex = messages.lastIndexWhere((m) {
+      if (!m.id.startsWith('temp_')) return false;
+      if (m.replyId == null) return false;
       
-      // Try to find by real message ID first
-      int index = messages.indexWhere((m) => m.id == messageIdFromServer);
+      final timeDiff = now.difference(m.timestamp).abs();
+      if (timeDiff.inSeconds > 5) return false;
       
-      // CRITICAL FIX: If not found by real ID, search by other criteria
-      if (index == -1) {
-        print('⚠️ Real message ID $messageIdFromServer not found, searching for matching message...');
-        final now = DateTime.now();
-        
-        // DEBUG: List all messages to understand what we have
-        print('   📋 Current messages in room (${messages.length} total):');
-        for (int i = messages.length - 1; i >= 0 && i >= messages.length - 5; i--) {
-          final m = messages[i];
-          final age = now.difference(m.timestamp).abs();
-          print('      [$i] ${m.id} - "${m.message}" (age: ${age.inSeconds}s, ack: ${m.ack})');
-        }
-        
-        // Strategy 1: Find temp message (if not yet replaced by server)
-        index = messages.lastIndexWhere((m) {
-          if (!m.id.startsWith('temp_')) return false;
-          final timeDiff = now.difference(m.timestamp).abs();
-          if (timeDiff.inSeconds > 30) return false;
-          print('   🔍 Found temp message: ${m.id}, age: ${timeDiff.inSeconds}s');
-          return true;
-        });
-        
-        // Strategy 2: If no temp found, find recent message with ack=1 or ack=2
-        // (means it was already replaced by TerimaPesan but needs status update)
-        if (index == -1) {
-          print('   ⚠️ No temp message found, searching for recent message with low ack status...');
-          index = messages.lastIndexWhere((m) {
-            // Skip if already delivered/read
-            if (m.ack >= 3) return false;
-            
-            final timeDiff = now.difference(m.timestamp).abs();
-            // Look for messages sent in last 30 seconds
-            if (timeDiff.inSeconds > 30) return false;
-            
-            // Must be from agent (not customer)
-            if (m.agentId <= 0) return false;
-            
-            print('   🔍 Found recent sent message: ${m.id}, age: ${timeDiff.inSeconds}s, ack: ${m.ack}');
-            return true;
-          });
-        }
-        
-        if (index != -1) {
-          print('   ✅ Using message ${messages[index].id} (ack=${messages[index].ack}) for ack update');
-        } else {
-          print('   ❌ No matching message found in last 30 seconds');
-        }
-      }
-
-      if (index != -1) {
-        final status = ackData['status'] as int;
-        final error = ackData['error'] as String?;
-        final currentMessage = messages[index];
-        
-        print('✅ Received TerimaAck for message $messageIdFromServer: status=$status, error=$error');
-        
-        // Determine if we need to update the ID (only if current ID is temp)
-        final needsIdUpdate = currentMessage.id.startsWith('temp_');
-        final finalId = needsIdUpdate ? messageIdFromServer : currentMessage.id;
-        
-        // Update message with real ID (if needed) AND new ack status
-        final updatedMessage = ChatMessage(
-          id: finalId,
-          roomId: currentMessage.roomId,
-          from: currentMessage.from,
-          to: currentMessage.to,
-          agentId: currentMessage.agentId,
-          type: currentMessage.type,
-          message: currentMessage.message,
-          file: currentMessage.file,
-          files: currentMessage.files,
-          timestamp: currentMessage.timestamp,
-          ack: status, // Update ack status from server
-          replyId: currentMessage.replyId,
-          replyType: currentMessage.replyType,
-          replyFrom: currentMessage.replyFrom,
-          replyMessage: currentMessage.replyMessage,
-          replyFiles: currentMessage.replyFiles,
-          replyGrpMember: currentMessage.replyGrpMember,
-          isEdited: currentMessage.isEdited,
-          note: currentMessage.note,
-        );
-        
-        messages[index] = updatedMessage;
-        state = state.copyWith(messages: messages);
-        
-        if (error != null) {
-          print('❌ Message acknowledgment with error: $error');
-        } else {
-          print('✅ Message status updated: ${currentMessage.ack} → $status (1=sending, 2=sent, 3=delivered, 4=failed)');
-          if (needsIdUpdate) {
-            print('✅ Message ID updated: ${currentMessage.id} → $messageIdFromServer');
-          }
-        }
-      } else {
-        print('⚠️ Message $messageIdFromServer not found in current messages for ack update');
-      }
+      return m.ack == 1 || m.ack == 2; // Masih pending atau sent
+    });
+    
+    if (recentReplyIndex != -1) {
+      print('✅ Found recent reply message to update: ${messages[recentReplyIndex].id}');
+      print('   Current ack: ${messages[recentReplyIndex].ack}');
+      
+      // Update ke status 2 (sent) - karena server sudah menerima
+      final updatedMessage = ChatMessage(
+        id: messages[recentReplyIndex].id, // Tetap temp ID
+        roomId: messages[recentReplyIndex].roomId,
+        from: messages[recentReplyIndex].from,
+        to: messages[recentReplyIndex].to,
+        agentId: messages[recentReplyIndex].agentId,
+        type: messages[recentReplyIndex].type,
+        message: messages[recentReplyIndex].message,
+        file: messages[recentReplyIndex].file,
+        files: messages[recentReplyIndex].files,
+        timestamp: messages[recentReplyIndex].timestamp,
+        ack: 2, // Update to sent status
+        replyId: messages[recentReplyIndex].replyId,
+        replyType: messages[recentReplyIndex].replyType,
+        replyFrom: messages[recentReplyIndex].replyFrom,
+        replyMessage: messages[recentReplyIndex].replyMessage,
+        replyFiles: messages[recentReplyIndex].replyFiles,
+        replyGrpMember: messages[recentReplyIndex].replyGrpMember,
+        isEdited: messages[recentReplyIndex].isEdited,
+        note: messages[recentReplyIndex].note,
+      );
+      
+      messages[recentReplyIndex] = updatedMessage;
+      state = state.copyWith(messages: messages);
+      
+      print('✅ Reply message status updated to sent (2)');
+      return;
     } else {
-      print('⚠️ Ack for different room: $roomId (current: ${state.activeRoom?.id}), ignoring');
+      print('⚠️ No recent reply message found for ack update');
     }
+    return;
+  }
   }
 
   void _handleNeedReplyUpdate(Map<String, dynamic> data) {

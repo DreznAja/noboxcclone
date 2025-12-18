@@ -6,7 +6,7 @@ class RoomShimmerWidget extends StatelessWidget {
 
   const RoomShimmerWidget({
     super.key,
-    this.itemCount = 4,
+    this.itemCount = 3,
   });
 
   @override

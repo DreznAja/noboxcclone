@@ -6,7 +6,7 @@ class MessageShimmerWidget extends StatelessWidget {
 
   const MessageShimmerWidget({
     super.key,
-    this.itemCount = 5
+    this.itemCount = 3
   });
 
   @override
