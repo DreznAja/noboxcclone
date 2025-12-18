@@ -926,6 +926,7 @@ void _handleDelete() {
 
 PreferredSizeWidget _buildNormalAppBar() {
   final isDarkMode = ref.watch(themeProvider).isDarkMode;
+
   return AppBar(
     backgroundColor: AppTheme.primaryColor,
     foregroundColor: Colors.white,
@@ -933,7 +934,10 @@ PreferredSizeWidget _buildNormalAppBar() {
     titleSpacing: 0, // Ini sudah 0, tapi kita akan override dengan negative margin
     leading: IconButton(
       icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-      onPressed: () => Navigator.of(context).pop(),
+      onPressed: () {
+        // PERBAIKAN: Explicit pop untuk memastikan kembali ke home
+        Navigator.of(context).pop();
+      },
     ),
     title: Transform.translate(
       offset: const Offset(-8, 0), // Geser ke kiri 8px

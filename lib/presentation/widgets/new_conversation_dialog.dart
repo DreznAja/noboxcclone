@@ -280,6 +280,9 @@ void _onToTypeChanged(ToType? value) {
     // ToType.manual tidak perlu load data
   }
 }
+// GANTI SELURUH METHOD _createConversation() di new_conversation_dialog.dart
+
+// GANTI SELURUH METHOD _createConversation() di new_conversation_dialog.dart
 
 Future<void> _createConversation() async {
   if (!_validateForm()) return;
@@ -292,7 +295,7 @@ Future<void> _createConversation() async {
     bool isPrivateChat = _selectedChatType == ChatType.private;
     bool isContact = _selectedToType == ToType.contact;
     bool isLink = _selectedToType == ToType.link;
-    bool isManual = _selectedToType == ToType.manual; // TAMBAHKAN
+    bool isManual = _selectedToType == ToType.manual;
 
     // --- STEP 1: Tentukan target & nama ---
     if (isPrivateChat) {
@@ -300,12 +303,12 @@ Future<void> _createConversation() async {
         targetId = _selectedContactId;
         final contact = _contacts.firstWhere((c) => c.id == _selectedContactId);
         targetName = contact.name;
-      } else if (isLink) { // UBAH DARI else JADI else if
+      } else if (isLink) {
         targetId = _selectedLinkId;
         final link = _links.firstWhere((l) => l.id == _selectedLinkId);
         targetName = link.name;
-      } else if (isManual) { // TAMBAHKAN LOGIKA MANUAL
-        targetId = null; // Manual tidak punya ID
+      } else if (isManual) {
+        targetId = null;
         targetName = _manualNumber.trim();
       }
     } else {
@@ -314,30 +317,21 @@ Future<void> _createConversation() async {
       targetName = group.name;
     }
 
-    // HAPUS VALIDASI INI KARENA MANUAL TIDAK PUNYA targetId
-    // if (targetId == null) {
-    //   _showError('Please select a target for the conversation');
-    //   setState(() => _isLoading = false);
-    //   return;
-    // }
-
     print('📞 Creating new room...');
     print('  - Chat Type: ${isPrivateChat ? 'Private' : 'Group'}');
-    print('  - To Type: ${isContact ? 'Contact' : isLink ? 'Link' : 'Manual'}'); // UPDATE
+    print('  - To Type: ${isContact ? 'Contact' : isLink ? 'Link' : 'Manual'}');
     print('  - Target ID: $targetId');
     print('  - Target Name: $targetName');
     print('  - Channel ID: $_selectedChannelId');
     print('  - Account ID: $_selectedAccountId');
 
-    // --- STEP 2: Create new room menggunakan endpoint CreateNewRoom ---
+    // --- STEP 2: Create new room ---
     print('🚀 Calling CreateNewRoom API...');
     
-    // Parse IDs ke integer jika memungkinkan
     final accountIdInt = int.tryParse(_selectedAccountId ?? '') ?? 0;
     final channelIdInt = int.tryParse(_selectedChannelId ?? '') ?? 1;
     final targetIdInt = int.tryParse(targetId ?? '') ?? 0;
     
-    // Siapkan data sesuai dengan contoh dari teman Anda
     final requestData = {
       "AccId": accountIdInt,
       "ChId": channelIdInt,
@@ -345,108 +339,232 @@ Future<void> _createConversation() async {
       "GrpId": null,
       "Chat": 0,
       "CtId": null,
-      "Manual": "", // Default kosong
+      "Manual": "",
       "To": 1
     };
 
-    // Sesuaikan field berdasarkan tipe chat
     if (isPrivateChat) {
       if (isContact) {
-        // Private chat dengan contact
         requestData["CtId"] = targetIdInt;
-        requestData["To"] = 1; // To contact
+        requestData["To"] = 1;
       } else if (isLink) {
-        // Private chat dengan link
         requestData["LinkId"] = targetIdInt;
-        requestData["To"] = 2; // To link
+        requestData["To"] = 2;
       } else if (isManual) {
-        // TAMBAHKAN LOGIKA MANUAL
-        requestData["Manual"] = _manualNumber.trim(); // Isi nomor manual
-        requestData["To"] = 3; // To manual
-        requestData["CtId"] = null; // CtId null
+        requestData["Manual"] = _manualNumber.trim();
+        requestData["To"] = 3;
+        requestData["CtId"] = null;
       }
     } else {
-      // Group chat
       requestData["GrpId"] = targetIdInt;
-      requestData["Chat"] = 1; // Group chat
-      requestData["To"] = 3; // To group (mungkin perlu disesuaikan)
+      requestData["Chat"] = 1;
+      requestData["To"] = 3;
     }
 
     print('📤 Request data: $requestData');
 
-    // Panggil API CreateNewRoom
     final result = await _createNewRoomApi(requestData);
-
     print('✅ CreateNewRoom API response: $result');
 
     if (result != null && result['success'] == true) {
-      // ✅ Success - refresh rooms dan cari room yang baru dibuat
-      await Future.delayed(const Duration(seconds: 1));
+      // Wait untuk room muncul di list
+      final delayDuration = isManual 
+        ? const Duration(seconds: 2)
+        : const Duration(milliseconds: 1500);
+      
+      await Future.delayed(delayDuration);
+      
+      // Refresh room list
       await ref.read(chatProvider.notifier).loadRooms();
       
-      // Cari room yang baru dibuat
       final chatState = ref.read(chatProvider);
       Room? newRoom;
       
-      // Method 1: Cari berdasarkan roomId dari response
+      // ===== METHOD 1: Cari by roomId dari API response (PALING AKURAT) =====
       if (result['roomId'] != null) {
         final roomId = result['roomId'].toString();
+        print('🔍 [Method 1] Searching by roomId from API: $roomId');
+        
         try {
-          newRoom = chatState.rooms.firstWhere((room) => room.id == roomId);
+          newRoom = chatState.rooms.firstWhere(
+            (room) => room.id == roomId,
+            orElse: () => throw Exception('Not found'),
+          );
+          print('✅ [Method 1] SUCCESS - Found room: ${newRoom.name} (ID: ${newRoom.id})');
         } catch (e) {
-          print('⚠️ Room with ID $roomId not found: $e');
+          print('❌ [Method 1] FAILED - Room ID $roomId not in list yet');
         }
       }
       
-      // Method 2: Cari berdasarkan target ID (fallback) - SKIP UNTUK MANUAL
-      if (newRoom == null && chatState.rooms.isNotEmpty && !isManual) {
+      // ===== METHOD 2: Cari by Link ID (khusus untuk Link) =====
+      if (newRoom == null && isLink && targetId != null) {
+        print('🔍 [Method 2] Searching by Link ID: $targetId');
+        
+        try {
+          // PERBAIKAN UTAMA UNTUK LINK:
+          // Link room bisa dicari dengan ctId (yang sebenarnya adalah LinkId)
+          newRoom = chatState.rooms.firstWhere(
+            (room) {
+              // Debug log setiap room
+              final matchById = room.id == targetId;
+              final matchByCtId = room.ctId == targetId;
+              
+              if (matchById || matchByCtId) {
+                print('   🎯 Potential match found:');
+                print('      Room ID: ${room.id}');
+                print('      Room Name: ${room.name}');
+                print('      Room ctId: ${room.ctId}');
+                print('      Room ctRealId: ${room.ctRealId}');
+                print('      Room Channel: ${room.channelId}');
+                print('      Target ID: $targetId');
+                print('      Match by ID: $matchById');
+                print('      Match by ctId: $matchByCtId');
+              }
+              
+              return matchById || matchByCtId;
+            },
+            orElse: () => throw Exception('Not found'),
+          );
+          
+          print('✅ [Method 2] SUCCESS - Found link room: ${newRoom.name} (ID: ${newRoom.id})');
+        } catch (e) {
+          print('❌ [Method 2] FAILED - Link ID $targetId not found');
+          
+          // Debug: Print all rooms to see what's available
+          print('📋 Available rooms in list:');
+          for (var room in chatState.rooms.take(5)) {
+            print('   - ID: ${room.id}, Name: ${room.name}, ctId: ${room.ctId}, Channel: ${room.channelId}');
+          }
+        }
+      }
+      
+      // ===== METHOD 3: Cari by Contact ID (khusus untuk Contact) =====
+      if (newRoom == null && isContact && targetId != null) {
+        print('🔍 [Method 3] Searching by Contact ID: $targetId');
+        
         try {
           newRoom = chatState.rooms.firstWhere(
             (room) {
-              if (isPrivateChat) {
-                if (isContact) {
-                  return room.ctId == targetId || room.ctRealId == targetId;
-                } else if (isLink) {
-                  return room.id == targetId;
-                }
-              } else {
-                return room.grpId == targetId;
-              }
-              return false;
+              final matchByCtId = room.ctId == targetId;
+              final matchByCtRealId = room.ctRealId == targetId;
+              
+              return matchByCtId || matchByCtRealId;
             },
+            orElse: () => throw Exception('Not found'),
           );
+          
+          print('✅ [Method 3] SUCCESS - Found contact room: ${newRoom.name} (ID: ${newRoom.id})');
         } catch (e) {
-          print('⚠️ Room with target ID $targetId not found: $e');
+          print('❌ [Method 3] FAILED - Contact ID $targetId not found');
         }
       }
       
-      // Method 3: Cari berdasarkan nama (fallback)
-      if (newRoom == null && chatState.rooms.isNotEmpty) {
+      // ===== METHOD 4: Cari by Manual number =====
+      if (newRoom == null && isManual && chatState.rooms.isNotEmpty) {
+        print('🔍 [Method 4] Searching manual room by number: $targetName');
+        
         try {
-          newRoom = chatState.rooms.firstWhere(
-            (room) => room.name.contains(targetName),
-            orElse: () => chatState.rooms.first,
-          );
+          final now = DateTime.now();
+          final recentRooms = chatState.rooms.where((room) {
+            final isCorrectChannel = room.channelId.toString() == _selectedChannelId;
+            final nameContainsNumber = room.name.contains(targetName);
+            final isVeryRecent = room.lastMessageTime != null && 
+                                  now.difference(room.lastMessageTime!).inSeconds < 10;
+            
+            return isCorrectChannel && (nameContainsNumber || isVeryRecent);
+          }).toList();
+          
+          if (recentRooms.isNotEmpty) {
+            recentRooms.sort((a, b) {
+              if (a.lastMessageTime == null) return 1;
+              if (b.lastMessageTime == null) return -1;
+              return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+            });
+            
+            newRoom = recentRooms.first;
+            print('✅ [Method 4] SUCCESS - Found manual room: ${newRoom.name} (ID: ${newRoom.id})');
+          }
         } catch (e) {
-          print('⚠️ Room with name $targetName not found: $e');
-          newRoom = chatState.rooms.isNotEmpty ? chatState.rooms.first : null;
+          print('❌ [Method 4] FAILED - Error: $e');
+        }
+      }
+      
+      // ===== METHOD 5: Fallback - Room paling baru dengan channel & account yang sama =====
+      if (newRoom == null && chatState.rooms.isNotEmpty) {
+        print('🔍 [Method 5 - FALLBACK] Searching most recent room with same channel & account');
+        
+        try {
+          final now = DateTime.now();
+          // Filter by channel AND account untuk lebih spesifik
+          final matchingRooms = chatState.rooms.where((room) {
+            final channelMatch = room.channelId.toString() == _selectedChannelId;
+            
+            // PERBAIKAN: Cek juga accountName atau botName
+            // Karena accountName adalah display name dari account yang dipilih
+            final selectedAccount = _accounts.firstWhere(
+              (acc) => acc.id == _selectedAccountId,
+              orElse: () => AccountOption(id: '', name: ''),
+            );
+            
+            final accountMatch = room.accountName == selectedAccount.name ||
+                                 room.botName == selectedAccount.name;
+            
+            // Hanya ambil room yang dibuat dalam 10 detik terakhir
+            final isRecent = room.lastMessageTime != null && now.difference(room.lastMessageTime!).inSeconds < 10;
+            
+            final matches = channelMatch && accountMatch && isRecent;
+            
+            if (matches) {
+              print('   🎯 Potential fallback match:');
+              print('      Room: ${room.name} (${room.id})');
+              print('      Channel: ${room.channelId} vs $_selectedChannelId');
+              print('      Account: ${room.accountName} vs ${selectedAccount.name}');
+              print('      Age: ${room.lastMessageTime != null ? now.difference(room.lastMessageTime!).inSeconds : -1}s');
+            }
+            
+            return matches;
+          }).toList();
+          
+          if (matchingRooms.isNotEmpty) {
+            // Sort by time - ambil yang paling baru
+            matchingRooms.sort((a, b) {
+              if (a.lastMessageTime == null) return 1;
+              if (b.lastMessageTime == null) return -1;
+              return b.lastMessageTime!.compareTo(a.lastMessageTime!);
+            });
+            
+            newRoom = matchingRooms.first;
+            print('✅ [Method 5] SUCCESS - Found by fallback: ${newRoom.name} (ID: ${newRoom.id})');
+          } else {
+            print('❌ [Method 5] FAILED - No matching rooms found');
+          }
+        } catch (e) {
+          print('❌ [Method 5] ERROR: $e');
         }
       }
 
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(); // Close dialog
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Conversation created: $targetName'),
-            backgroundColor: AppTheme.successColor,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        // Navigate to chat jika room ditemukan
         if (newRoom != null) {
-          Navigator.of(context).pushReplacement(
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Conversation created: ${newRoom.name}'),
+              backgroundColor: AppTheme.successColor,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          
+          print('🎯 ===== FINAL NAVIGATION =====');
+          print('   Room ID: ${newRoom.id}');
+          print('   Room Name: ${newRoom.name}');
+          print('   Room ctId: ${newRoom.ctId}');
+          print('   Room ctRealId: ${newRoom.ctRealId}');
+          print('   Channel: ${newRoom.channelId}');
+          print('   Account: ${newRoom.accountName}');
+          print('==============================');
+          
+          await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => ChatScreen(
                 room: newRoom!,
@@ -455,12 +573,16 @@ Future<void> _createConversation() async {
             ),
           );
         } else {
-          print('⚠️ No room found after creation');
+          print('❌ ===== NO ROOM FOUND =====');
+          print('   All methods failed to find the created room');
+          print('   Total rooms in list: ${chatState.rooms.length}');
+          print('============================');
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Conversation created but not found in list'),
+              content: Text('Conversation created but could not open chat.\nPlease check your inbox.'),
               backgroundColor: AppTheme.warningColor,
-              duration: const Duration(seconds: 2),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
